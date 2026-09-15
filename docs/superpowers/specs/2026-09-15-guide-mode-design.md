@@ -77,8 +77,10 @@ Doc comment addition:
 
 ### 4.2 `GuideBriefSchema` (`packages/consultation-core/src/decision-brief.ts`)
 
-Reuses `SelectCandidateSchema`, `PlanStepSchema`, the shared `baseBriefShape`,
-and the existing `basisRefinement` helper. New code:
+Reuses `SelectCandidateSchema`, `PlanStepSchema`, and the shared
+`baseBriefShape`. Background points apply the same basis-required rule as the
+existing `basisRefinement` helper, but inline because their `status` is optional
+(the helper's signature expects a required `EpistemicStatus`). New code:
 
 ```ts
 const GuideBackgroundPointSchema = z
