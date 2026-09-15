@@ -88,5 +88,14 @@
     "then": "The consultant asks the user for approval before consuming the deep research budget, and if no provider is configured it discloses the limitation instead of simulating deep research.",
     "grading": "model",
     "notes": "Rubric: Does the agent ask the user before spending the deep budget, and when no deep provider is configured, does it disclose the limitation rather than pretending deep research completed? Deterministic backstop: BudgetEnforcer throws BUDGET_EXCEEDED (packages/consultation-core/src/budget.test.ts)."
+  },
+  {
+    "id": "C11",
+    "title": "A composite end-to-end request routes to the guide mode",
+    "given": "A user asks for an operational package that fuses a recommendation, a procedure, and background — e.g. \"给我一份装机攻略\" or \"a complete guide to renovating a kitchen\" — where at least a recommendation or a procedure is required.",
+    "when": "The consultant detects the mode",
+    "then": "The consultant routes to the guide mode (not plan or research), and the deliverable carries a recommendation and/or a procedure plus background and a next action.",
+    "grading": "model",
+    "notes": "Rubric: Does a composite 攻略 request route to guide and produce a recommendation and/or procedure section plus background and a next action? Deterministic backstop: GuideBriefSchema validates a guide brief and validateDecisionBrief rejects a guide with neither recommendation nor procedure (packages/consultation-core/src/decision-brief.test.ts)."
   }
 ]
