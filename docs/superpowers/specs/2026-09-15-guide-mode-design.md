@@ -96,25 +96,33 @@ const GuideBackgroundPointSchema = z
   )
 export type GuideBackgroundPoint = z.infer<typeof GuideBackgroundPointSchema>
 
-export const GuideBriefSchema = z
-  .object({
-    mode: z.literal("guide"),
-    ...baseBriefShape, // conclusion, confidence, stability, verifiedFacts, synthesis, sources, nextAction, memoryDisclosure
-    goal: z.string().min(1),
-    suitedFor: z.string().optional(),
-    prerequisites: z.array(z.string()).default([]),
-    recommendation: z.array(SelectCandidateSchema).default([]),
-    procedure: z.array(PlanStepSchema).default([]),
-    background: z.array(GuideBackgroundPointSchema).default([]),
-    completionCheck: z.string().optional(),
-    assumptions: z.array(z.string()).default([]),
-    residualUncertainty: z.string().optional(),
-  })
-  .refine((v) => v.recommendation.length > 0 || v.procedure.length > 0, {
-    message: "guide must carry a recommendation or a procedure (else it is select or plan)",
-    path: ["recommendation"],
-  })
+export const GuideBriefSchema = z.object({
+  mode: z.literal("guide"),
+  ...baseBriefShape, // conclusion, confidence, stability, verifiedFacts, synthesis, sources, nextAction, memoryDisclosure
+  goal: z.string().min(1),
+  suitedFor: z.string().optional(),
+  prerequisites: z.array(z.string()).default([]),
+  recommendation: z.array(SelectCandidateSchema).default([]),
+  procedure: z.array(PlanStepSchema).default([]),
+  background: z.array(GuideBackgroundPointSchema).default([]),
+  completionCheck: z.string().optional(),
+  assumptions: z.array(z.string()).default([]),
+  residualUncertainty: z.string().optional(),
+})
 export type GuideBrief = z.infer<typeof GuideBriefSchema>
+```
+
+`GuideBriefSchema` MUST stay a plain `z.object` — a top-level `.refine` returns
+a `ZodEffects`, which `z.discriminatedUnion` cannot accept (the existing four
+briefs are all plain objects; their refinements live on nested schemas). The
+cross-field rule "a guide must carry a recommendation or a procedure" is
+therefore enforced as a post-parse check inside `validateDecisionBrief`, right
+after `DecisionBriefSchema.parse(input)`:
+
+```ts
+if (brief.mode === "guide" && brief.recommendation.length === 0 && brief.procedure.length === 0) {
+  throw new ConsultationError(ConsultationErrorCode.VALIDATION_FAILED)
+}
 ```
 
 Add `GuideBriefSchema` to the `DecisionBriefSchema` discriminated union, and add
