@@ -1,0 +1,27 @@
+{
+  "name": "consultation-agent-plugin",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Evidence-driven consultation agent plugin for OpenCode with a portable, user-approved memory core",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run script/build.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "integration": "bun run script/integration-opencode.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=22.5.0"
+  }
+}

@@ -1,0 +1,697 @@
+# Consultation Agent Plugin Architecture
+
+The living architecture specification for the consultation-agent plugin, describing the current implementation and mechanism. Harness: OpenCode. The core is harness-neutral; Codex, Senpi, and other hosts plug in through thin adapters. Change history lives in git, not in this document.
+
+## 1. Executive Decision
+
+Build an independent consultation plugin with a harness-neutral consultation core, a harness-neutral memory core, a local SQLite store, a local MCP interface, and a thin OpenCode adapter.
+
+The public experience is a single, concise, evidence-driven `consultant` primary agent with four modes (`select`, `verify`, `plan`, `research`). It answers simple questions briefly, produces a one-screen decision brief for decision questions and a readable research report for open-ended understanding questions, and distinguishes verified facts from synthesis.
+
+The memory system stores only user-approved experience packages. It does not automatically persist complete conversations. Canonical experience records remain independent of classification schemes, summarization models, embedding models, and storage indexes. Every derived view can be rebuilt.
+
+Implementation must occur in a separate repository or directory selected by the user. No plugin code belongs in the current oh-my-openagent repository.
+
+## 2. Product Goals
+
+1. Give concise, human-friendly answers — a decision brief for decision questions, a readable report for understanding questions.
+2. Resist rumors, correlated sources, marketing pressure, astroturfing, and unsupported consensus.
+3. Apply different evidence standards to different claim types and risk levels.
+4. Detect deliberate deception (paid shilling, coordinated smearing) in user-generated sources.
+5. Preserve token efficiency through bounded research and progressive memory disclosure.
+6. Accumulate user-approved experience without turning previous model conclusions into circular evidence.
+7. Keep the core portable across agent harnesses and model providers.
+8. Preserve provenance, revisions, deletion rights, and migration safety.
+
+## 3. Non-Goals
+
+The first version will not:
+
+- join or modify the oh-my-openagent product architecture;
+- support concurrent writers from multiple harnesses;
+- synchronize memory across machines;
+- create an account system or remote memory service;
+- save full transcripts (only inductive summaries of consultation records);
+- treat old recommendations as independent evidence;
+- provide professional medical, legal, financial, or safety decisions;
+- ship or require a separate `research-director` agent — deep research is a `research` mode of the consultant;
+- make every consultation use multiple subagents.
+
+## 4. Architecture Overview
+
+```mermaid
+flowchart TB
+    U[User] --> OA[OpenCode Adapter]
+    OA --> A[Consultant Agent]
+    A --> S[Consultation Skill]
+    S --> CC[Consultation Core]
+    CC --> MR[Memory Port]
+    MR --> MCP[Memory MCP]
+    MCP --> MC[Memory Core]
+    MC --> DB[(SQLite Canonical Ledger)]
+    MC --> IDX[Rebuildable Indexes]
+    CC --> SP[Search and Source Ports]
+```
+
+### 4.1 Proposed Repository Shape
+
+```text
+consultation-agent-plugin/
+├── packages/
+│   ├── consultation-core/
+│   ├── memory-core/
+│   ├── memory-sqlite/
+│   ├── memory-mcp/
+│   └── opencode-adapter/
+├── assets/
+│   ├── agents/consultant.md
+│   └── skills/consultation/SKILL.md
+├── evals/
+├── docs/
+└── package.json
+```
+
+This is one installable product with internal package boundaries. It is not a collection of separately configured user projects.
+
+### 4.2 Dependency Direction
+
+```text
+consultation-core  memory-core
+        ^              ^
+        |              |
+        +------ memory-sqlite
+        |              ^
+        +------ memory-mcp
+        |
+        +------ opencode-adapter
+```
+
+Core packages must not import OpenCode or the MCP SDK. Adapters translate host and transport concepts into core ports.
+
+## 5. Component Responsibilities
+
+### 5.1 Consultant Agent
+
+The `consultant` primary agent is the single entry point and owns interaction and final expression. It routes every question to one of four modes — `select`, `verify`, `plan`, or `research` — and a tier (fast, standard, or deep). It:
+
+- detects the mode from intent and chooses the tier;
+- identifies decision-changing missing information;
+- asks at most one to three initial questions when needed;
+- invokes search, memory, and the read-only team (explorer, analyst, critic, verifier);
+- retains final editorial control over delegated research;
+- returns a mode-specific decision brief or a readable research report;
+- recognizes natural-language memory intents.
+
+It does not directly implement persistence or source grading rules.
+
+### 5.2 Consultation Skill
+
+The reusable `consultation` skill defines the cognitive workflow:
+
+- claim decomposition;
+- evidence and source evaluation;
+- risk classification;
+- counter-evidence requirements;
+- decision preference handling;
+- confidence language;
+- short output structure;
+- memory preview and save behavior.
+
+The skill is reusable by agents other than `consultant`. The agent prompt may preload it, but the skill remains the authoritative workflow source.
+
+### 5.3 Consultation Core
+
+The consultation core provides deterministic contracts and policy helpers. It owns:
+
+- validated classifications and policy decisions;
+- consultation intensity rules;
+- risk rules;
+- evidence packet schemas;
+- fact, inference, preference, and prediction distinctions;
+- output contracts;
+- research budget enforcement;
+- source and memory provenance requirements;
+- ports for reasoning, search, memory, and clock.
+
+Reasoning remains model-driven. The core validates structured model output and enforces rules that must not depend on prompt compliance.
+
+### 5.4 Memory Core
+
+The memory core owns:
+
+- canonical experience schemas;
+- revision and status transitions;
+- progressive retrieval planning;
+- taxonomy and tag relationships;
+- provenance and validity rules;
+- sensitive-field policies;
+- forget and cascade-delete semantics;
+- import, export, and rebuild contracts.
+
+It does not know OpenCode sessions, MCP transports, or SQLite statements.
+
+### 5.5 Memory SQLite Adapter
+
+The SQLite adapter owns:
+
+- schema migrations;
+- transactions and idempotency;
+- single-writer enforcement;
+- canonical record persistence;
+- FTS indexes;
+- derived summaries and embedding records;
+- backup, recovery, and rebuild support.
+
+### 5.6 Memory MCP
+
+The local stdio MCP server exposes a stable cross-harness memory boundary. It remains thin and delegates all domain behavior to memory core.
+
+### 5.7 OpenCode Adapter
+
+The first adapter:
+
+- registers the `consultant` primary agent;
+- makes the consultation skill available;
+- registers or launches the bundled local memory MCP;
+- maps OpenCode session IDs into namespaced core IDs;
+- exposes model and provider configuration;
+- registers the four read-only team subagents (explorer, analyst, critic, verifier) and installs the `consultation-memory` browse command;
+- does not contain evidence, recommendation, or persistence logic.
+
+## 6. Consultation Workflow
+
+```mermaid
+flowchart TD
+    Q[User Question] --> MODE[Detect Mode: select / verify / plan / research]
+    MODE --> T[Choose Tier: fast / standard / deep]
+    T --> M[Recall Memory + Surface Pending Outcomes]
+    M --> C{Decision-Changing Info Missing?}
+    C -->|Yes| ASK[Ask 1-3 Questions]
+    C -->|No| D[Decompose Claims]
+    ASK --> D
+    D --> R[Gather + Grade Evidence via Channel Ladder]
+    R --> V{select/verify at standard/deep?}
+    V -->|Yes| IA[Verifier: Intent Audit]
+    V -->|No| X{Standard or Deep?}
+    IA --> X
+    X -->|Yes| CE[Critic Counter-Evidence / Hard Gate]
+    X -->|No| SYN[Synthesize]
+    CE --> SYN
+    SYN --> O[Mode-Specific Brief or Readable Report]
+    O --> SAVE[Auto-Save Consultation Record + Register Outcome]
+```
+
+### 6.1 Consultation Tiers
+
+#### Fast
+
+Use when the question is low-risk, directly verifiable, and minimally personalized.
+
+- Prefer a primary authoritative source.
+- Perform an exact or very small memory lookup.
+- Do not invoke a subagent by default.
+- Answer in one to several sentences when possible.
+
+#### Standard
+
+Use for comparisons, recommendations, personalization, or moderate inference.
+
+- Check source independence and provenance.
+- Search for counter-evidence.
+- Retrieve relevant experience and preferences progressively.
+- Use no subagent unless a specific capability gap exists.
+- Return a one-screen decision brief.
+
+#### Deep
+
+Use for high risk, strong source conflicts, missing primary evidence, inference-dominated conclusions, broad comparisons, or any research-mode question.
+
+- Ask the user before escalating.
+- Dispatch the full team (explorers, analysts, critic, verifier) and reconcile their independent findings.
+- Require supporting and opposing evidence, and run the intent audit on user-generated sources.
+- Keep final synthesis and output with the consultant agent.
+
+Deep work is done by the consultant's own team. There is no separate deep-research provider; the `research` mode (§8) is the deep, understanding-oriented path.
+
+### 6.2 Tier Decision Dimensions
+
+The router evaluates:
+
+1. potential harm from a wrong answer;
+2. availability of authoritative primary sources;
+3. conflict among reliable sources;
+4. dependence on personal context;
+5. proportion of synthesis versus direct evidence.
+
+## 7. Epistemic Model
+
+### 7.1 Claim Types
+
+Every consultation is decomposed at claim level, not only by domain:
+
+- verifiable fact;
+- causal or efficacy claim;
+- experiential judgment;
+- future prediction;
+- value preference and decision.
+
+The domain determines relevant sources. The claim type determines verification method.
+
+### 7.2 Source Evaluation
+
+Sources are graded relative to the claim using:
+
+- primary versus secondary status;
+- expertise or legal accountability for the claim;
+- transparent and reproducible method;
+- independence and original provenance;
+- commercial or ideological conflicts;
+- recency, region, and applicability;
+- independent support or contradiction.
+
+Grades are `high`, `medium`, `low`, and `lead_only`. Numerical trust percentages are prohibited unless backed by real calibrated data.
+
+Niche sources, forums, and social platforms are normally leads, counterexamples, or experience reports. Obscurity is never a credibility bonus.
+
+Reliability grading assumes honest-but-flawed sources. Deliberate deception (water armies, coordinated smearing, astroturfing) is graded separately by the `verifier` subagent as an intent audit: each source is annotated `clean`, `suspect_shill`, `suspect_smear`, or `unknown` from detectable signals (temporal bursts, cross-account phrase repetition, single-product accounts, rating-text mismatch, missing disclosure, reviewer target concentration, and others). Suspicion is graded with a stated basis, never ground truth. When manipulation is indicated or evidence is too thin to decide, the report discloses the contamination explicitly.
+
+### 7.3 Facts and Inference
+
+The selected reasoning policy is balanced:
+
+- verified facts and synthesized inferences must be presented separately;
+- every atom (claim, candidate, step) carries an epistemic status: `verified`, `refuted`, `inferred`, or `unverifiable`;
+- `inferred` and `unverifiable` must carry a `basis` recording the reasoning chain ("inferred Y from X") — a bare conclusion is forbidden;
+- multiple independent reports and a plausible mechanism may justify a provisional inference;
+- synthesis cannot create missing facts;
+- correlated reposts count as one source chain;
+- important conclusions require a counter-evidence pass;
+- insufficient evidence is an acceptable result.
+
+### 7.4 Risk Policy
+
+#### Low Risk
+
+Low cost, reversible, and unlikely to cause persistent harm. Weak evidence may support a cautious trial with clear stopping conditions.
+
+#### Medium Risk
+
+Meaningful cost or side effects. Ask for relevant context, require stronger evidence, and provide an exit strategy.
+
+#### High Risk
+
+Medical treatment, medication, vehicle safety, law, major financial consequences, or irreversible effects. Weak evidence cannot support a recommendation. The agent provides evidence and options but does not replace a qualified professional or make the decision for the user.
+
+Health threshold: recommend consulting a professional only on a hard trigger (medical intervention, prescription/OTC dosage, chronic-condition management, pregnancy or nursing, minors, interaction with an existing condition or medication, irreversible or high-risk body procedure). On a soft trigger — a health or body side effect with low evidence confidence — add one line suggesting a professional consult or starting low. Otherwise give the advice plainly; do not reflexively disclaim.
+
+### 7.5 Decision Model
+
+Evidence and preference are separate layers:
+
+- evidence establishes attributes and uncertainty;
+- user preferences assign decision weight;
+- missing preferences use explicit defaults;
+- outputs state what condition would change the recommendation;
+- the agent may conclude that there is no reliable unique winner.
+
+### 7.6 Confidence Model
+
+Use two qualitative dimensions:
+
+- **Evidence confidence:** high, medium, or low
+- **Recommendation stability:** stable, conditional, or provisional
+
+Do not output invented numerical confidence.
+
+## 8. Research Mode
+
+Deep, understanding-oriented investigation is a `research` mode of the consultant, not a separate agent or external provider. The consultant detects understanding-seeking intent (open-ended questions, "深度研究", topic surveys) and runs the mode with its own team:
+
+- decompose the question into sub-directions;
+- gather evidence with parallel explorers;
+- compare consensus, disagreements, and gaps;
+- form multiple hypotheses with confidence, actively seeking counterexamples;
+- run the critic as a hard gate over the hypotheses;
+- synthesize a readable report (bottom line up front, plain language, evidence and disagreements folded behind a disclosure).
+
+The research report is a validated contract (`ResearchBriefSchema`): a one-line bottom line, plain-language key points, an implications line, and confidence, with hypotheses, disagreements, residual uncertainty, and sources as folded detail. There is no separate deep-research provider or `research-director` agent.
+
+## 9. Canonical Memory Model
+
+### 9.1 Stored Entities
+
+| Entity | Purpose |
+|---|---|
+| `SessionExperience` | One user-approved experience package per host session |
+| `ExperienceItem` | A distinct topic inside a session package |
+| `Claim` | A proposition with time, region, and applicability |
+| `Evidence` | Source metadata and a necessary lawful excerpt |
+| `EvidenceLink` | Supports, refutes, qualifies, or supersedes a claim |
+| `Decision` | The conclusion, assumptions, preferences, and confidence at that time |
+| `Revision` | Why a later conclusion changed the previous state |
+| `UserPreference` | A user-confirmed stable preference or constraint |
+| `TaxonomyNode` | A versioned category node |
+| `TagMembership` | A many-to-many classification link |
+| `DerivedSummary` | A rebuildable summary with model and prompt version |
+
+### 9.2 Canonical Versus Derived Data
+
+Canonical data includes user-approved experience records, source metadata, necessary excerpts, decisions, preferences, and revision events.
+
+Derived data includes:
+
+- classifications;
+- tags;
+- summaries;
+- embeddings;
+- graph projections;
+- ranking caches.
+
+Derived data must record schema, model, prompt, and generation time. It must be safe to delete and rebuild without losing accepted experience.
+
+### 9.3 Revision States
+
+- `active`: eligible for normal retrieval and recommendation
+- `superseded`: retained for historical explanation
+- `refuted`: used only for contradiction and misinformation checks
+- `retired`: excluded from default retrieval
+- `forgotten`: canonical and derived content has been erased
+
+An old recommendation is a counter-hypothesis, not counter-evidence. Only its underlying source or recorded outcome can act as evidence.
+
+## 10. Memory Capture Protocol
+
+### 10.1 Natural-Language Intents
+
+The agent recognizes intent rather than fixed commands.
+
+Examples:
+
+- “Summarize what we learned” means preview only.
+- “Remember this experience” means preview, sensitive-field review, then commit.
+- “Forget that preference” means identify the target, confirm destructive scope, then erase.
+
+### 10.2 One Package Per Session
+
+A session has one `SessionExperience`, but that package may contain several topic-specific `ExperienceItem` records.
+
+Repeated saves:
+
+- update the same session package;
+- add a new item for a new topic;
+- create a revision for a changed conclusion;
+- remain idempotent under retries;
+- do not create duplicate ranking candidates.
+
+### 10.3 Save Preview
+
+The preview shows:
+
+- what conclusions and evidence will be saved;
+- applicable time, region, and conditions;
+- proposed categories and tags;
+- user preferences;
+- sensitive fields requiring explicit confirmation.
+
+The complete transcript is not saved by default.
+
+### 10.4 Auto-Save
+
+At the end of every consultation the consultant automatically saves the consultation record(s) — no user instruction required. The saved unit is one consultation: a question summary plus a conclusion summary, with the supporting claims, evidence (provenance and grade), and preferences. If a conversation held several distinct questions, each becomes its own record; if it was one question explored in depth, it is one record with a refined conclusion. Before saving, prior consultations are recalled; a very similar new consultation updates the prior record (conclusion changes go through a revision) instead of duplicating.
+
+Never saved: the full transcript, unverified search fragments, hidden chain-of-thought, duplicate sources, ordinary conversation, or credentials. Sensitive fields are excluded from auto-save and persist only after itemized confirmation.
+
+## 11. Memory Organization and Retrieval
+
+### 11.1 Hybrid Organization
+
+Use three overlapping structures:
+
+1. a small versioned top-level taxonomy with dynamic descendants;
+2. many-to-many tags and evidence relationships;
+3. global lexical and semantic indexes as a recall safety net.
+
+Cross-category experience is linked to multiple categories without copying canonical content.
+
+### 11.2 Progressive Disclosure
+
+Retrieval levels are:
+
+1. index title, time, status, and one-line summary;
+2. claim, applicability, and current decision;
+3. supporting and opposing evidence plus revision history;
+4. lawful source excerpt and full stored reasoning summary.
+
+The default query retrieves level 1 and only the necessary level 2 records. Levels 3 and 4 require explicit expansion by the agent or user.
+
+### 11.3 Hybrid Recall
+
+Candidate generation combines:
+
+- taxonomy branch selection;
+- SQLite FTS;
+- configurable embedding similarity;
+- support, refute, and revision relationships;
+- time, region, and applicability filters;
+- user preference relevance.
+
+Results are deduplicated by canonical identity and source provenance.
+
+Initial benchmark defaults:
+
+- return at most eight level-1 candidates;
+- expand at most three candidates without another decision;
+- cap injected memory at approximately 1,200 tokens for standard consultation;
+- broaden retrieval only when confidence is low, candidates conflict, or recall is insufficient.
+
+These are tuning defaults, not persistence or API contracts.
+
+### 11.4 Retrieval by Consultation Tier
+
+- Fast: exact or minimal lookup only
+- Standard: automatic taxonomy and hybrid recall
+- Deep: include prior disputes, refuted claims, and historical revisions as research leads
+
+The user can disable memory for a single consultation.
+
+If stored memory materially changes the recommendation, the answer must disclose which preferences or experience were used. Sensitive memory usage must always be disclosed.
+
+## 12. MCP Surface
+
+Keep the agent-facing surface small:
+
+1. `memory_recall`
+2. `memory_expand`
+3. `memory_prepare`
+4. `memory_commit`
+5. `memory_manage`
+
+Maintenance operations (export, import, migration, integrity checks, reindexing) and offline browsing of the consultation record (list, show, search, delete, forget) belong in the CLI rather than permanent agent tool definitions. While the memory MCP server holds the writer lock in a live session, the CLI cannot open the store concurrently — use it offline.
+
+The MCP transport is local stdio. The server contains no consultation policy and no model-specific reasoning.
+
+The memory server is registered globally on the host config (`config.mcp`), so it is agent-agnostic — any agent in the session can call the memory tools, not only the `consultant`. Memory is a shared service, not bound to one agent.
+
+## 13. Storage Architecture
+
+### 13.1 Default Paths
+
+Use XDG paths with configurable overrides:
+
+```text
+$XDG_DATA_HOME/consultation-agent/memory.sqlite3
+$XDG_STATE_HOME/consultation-agent/
+$XDG_CACHE_HOME/consultation-agent/
+```
+
+The database and user-controlled exports belong in data. Locks, pending enrichment state, and operational records belong in state. Rebuildable query caches belong in cache.
+
+The final product slug can change when the independent repository is named, but the config/data/state separation is fixed.
+
+### 13.2 SQLite Policy
+
+The first version uses SQLite because it provides local transactions, atomic commits, schema constraints, FTS, and crash recovery without a separate service.
+
+Required rules:
+
+- one active writer enforced by a lock;
+- multiple readers may be allowed by SQLite;
+- every save is transactional and idempotent;
+- foreign keys and integrity constraints are enabled;
+- canonical writes complete before deferred enrichment;
+- the database is not supported on network filesystems;
+- migrations create a backup and support recovery;
+- interrupted derived work remains retryable.
+
+### 13.3 Model Independence
+
+The summarization model and embedding model are configurable separately. The raw accepted record never depends on either model. A model change creates new derived artifacts and leaves canonical data untouched.
+
+## 14. Privacy, Deletion, and Source Safety
+
+### 14.1 Sensitive Data
+
+Sensitive fields are not persisted by default. If the user requests persistence, the preview lists each field separately and requires confirmation.
+
+Users can inspect, modify, retire, or erase stored preferences. The system must not create a sensitive profile through silent inference.
+
+### 14.2 Retire Versus Forget
+
+`retire` preserves audit history but removes a memory from normal retrieval.
+
+`forget` deletes canonical content and all derived summaries, embeddings, tags, and caches. Remaining relationships may retain only a content-free tombstone needed for structural integrity.
+
+### 14.3 External Sources
+
+Store by default:
+
+- URL or stable source identifier;
+- title, author or institution, publication date, and access date;
+- only the necessary lawful excerpt;
+- a content fingerprint;
+- how the source supported or challenged a claim.
+
+Do not mirror a complete page or paid report unless the user is authorized and explicitly requests it.
+
+### 14.4 Prompt Injection
+
+All external sources and remembered content are untrusted data, never instructions.
+
+The system must:
+
+- ignore embedded attempts to alter agent policy;
+- block requests to execute commands or expose local data;
+- prevent malicious source text from becoming a system instruction;
+- lower source trust when manipulation is detected;
+- warn the user for confirmed attacks or when a source must be excluded;
+- avoid repeating the full malicious payload.
+
+## 15. Failure Handling
+
+| Failure | Required Behavior |
+|---|---|
+| Memory MCP unavailable | Continue without memory and state that saving is unavailable |
+| Retrieval error | Do not claim that no prior experience exists |
+| Embedding unavailable | Fall back to taxonomy and FTS |
+| Search unavailable | State that current factual verification could not be completed |
+| Summary or classification fails | Keep the canonical record pending enrichment |
+| Writer lock held | Fail safely with a clear single-writer message |
+| Save request retried | Return the existing idempotent result |
+| Migration fails | Restore or retain the pre-migration database and stop |
+| Prompt injection detected | Block it, log a sanitized event, and notify according to severity |
+
+## 16. User-Facing Output Contract
+
+Output length adapts to difficulty.
+
+### Simple Question
+
+One to several sentences with the answer and a source when needed.
+
+### Complex Consultation
+
+The deliverable depends on the detected mode (the exact templates live in the `consultation` skill):
+
+- **select** — a candidate list: top pick or "no reliable unique winner", per-candidate evidence grade + contamination note + suits + trial advice, confidence, stability, switch conditions, and a trial next step.
+- **verify** — a true / false / unverifiable verdict, a per-claim verdict table (claim, status, evidence, basis), supporting vs opposing evidence, a contamination note if any, confidence, stability, and the next evidence-settling step.
+- **plan** — a goal + suitability, a step table (step, support, confidence, basis, risk, alternatives), a robustness-review note, an assumption list, a health note only on a threshold trigger, residual uncertainty, alternatives + switch conditions, confidence, stability, and the first concrete action.
+- **research** — a readable report: bottom line first (one plain sentence), plain-language key points, what it means for the user, and a confidence line, with evidence, disagreements, residual uncertainty, and sources folded behind a disclosure.
+
+Every mode ends with the next useful action, even when abstaining. The agent may state that no reliable unique winner exists.
+
+## 17. Verification Strategy
+
+### 17.1 Consultation Evaluation Cases
+
+- a simple authoritative fact routes to fast consultation;
+- multiple articles with one original source count as one chain;
+- official and independent measurements are reconciled by conditions;
+- a popular unsupported claim is not repeated as fact;
+- weak evidence can support only a low-risk, reversible trial;
+- high-risk advice does not replace a professional decision;
+- changing a user preference changes the ranking when expected;
+- insufficient evidence leads to honest abstention;
+- prompt injection is blocked and reported;
+- deep consultation asks before consuming the larger budget.
+
+### 17.2 Memory Evaluation Cases
+
+- cross-category experience is recalled;
+- a misclassified record remains discoverable through FTS or semantics;
+- semantically equivalent wording retrieves the same experience;
+- refuted memory never enters positive recommendation ranking;
+- material preference use is disclosed;
+- progressive disclosure stays within its token budget;
+- repeated session saves do not duplicate experience;
+- sensitive fields remain absent without confirmation;
+- forget removes canonical and derived content;
+- indexes rebuild after model changes;
+- interrupted enrichment does not damage canonical records;
+- a second writer cannot corrupt the database.
+
+### 17.3 Integration Verification
+
+Run a real isolated OpenCode instance and prove:
+
+- the plugin loads;
+- the consultant agent is selectable;
+- the skill instructions are active;
+- the local memory MCP starts;
+- preview does not persist;
+- commit persists and survives restart;
+- repeated commit updates one session package;
+- recall uses progressive disclosure;
+- no data is written into the plugin installation directory.
+
+## 18. First-Version Scope
+
+The first version includes:
+
+- independent plugin packaging;
+- the `consultant` OpenCode primary agent;
+- the reusable consultation skill;
+- consultation and memory core packages;
+- SQLite persistence with FTS;
+- configurable semantic retrieval;
+- five memory MCP operations;
+- one session experience package with topic items;
+- preview, commit, revise, retire, and forget;
+- evaluation fixtures and isolated OpenCode integration tests.
+
+Future versions may add:
+
+- Codex and Senpi adapters;
+- safe concurrent writers;
+- cross-device synchronization;
+- optional graph database projections;
+- scheduled outcome follow-up;
+- remote shared memory services.
+
+## 19. Industry and Platform Rationale
+
+The design follows these documented patterns:
+
+- OpenCode plugins can register tools, mutate configuration, and ship as npm packages or local plugin modules: <https://opencode.ai/docs/plugins>
+- OpenCode custom agents support primary and subagent modes with permission rules: <https://github.com/anomalyco/opencode/blob/dev/packages/web/src/content/docs/agents.mdx>
+- The MCP TypeScript SDK recommends stdio for local client-spawned servers and separates transports from server capabilities: <https://github.com/modelcontextprotocol/typescript-sdk/blob/v1.29.0/docs/server.md>
+- The XDG Base Directory specification separates configuration, durable data, state, cache, and runtime files: <https://specifications.freedesktop.org/basedir/latest/>
+- SQLite documents atomic commit behavior and crash recovery: <https://sqlite.org/atomiccommit.html>
+- SQLite WAL supports concurrent readers with a single writer, while retaining one-writer semantics: <https://www.sqlite.org/wal.html>
+- Letta documents tiered context and progressive loading rather than injecting all memory: <https://docs.letta.com/guides/core-concepts/memory/context-hierarchy/>
+- Graphiti preserves episode provenance and temporal validity for derived facts: <https://github.com/getzep/graphiti/blob/main/README.md>
+- LangMem distinguishes immediate and deferred memory formation: <https://langchain-ai.github.io/langmem/guides/delayed_processing/>
+- LangGraph stores use namespaces, metadata filters, and semantic search for long-term memory: <https://docs.langchain.com/oss/python/langgraph/stores>
+- Mem0 documents extracted, scoped memory and explicit memory operations: <https://docs.mem0.ai/core-concepts/how-it-works>
+
+The architecture borrows ideas, not runtime dependencies. The first version remains a small local TypeScript plugin rather than adopting Letta, LangGraph, Graphiti, or Mem0 as its application runtime.
+
+## 20. Pre-Implementation Input
+
+Before implementation begins, the user must provide:
+
+1. the independent repository URL or a local parent directory in which to create it;
+2. the final product and npm package name.
+
+The consultant's configured model is the default summarization model. An embedding model is optional; without one, retrieval remains functional through taxonomy, relationships, and FTS.
+
+No implementation should begin in the oh-my-openagent repository.

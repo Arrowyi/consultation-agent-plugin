@@ -1,0 +1,17 @@
+{
+  "name": "@consultation-agent/memory-core",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Harness-neutral canonical memory model: zod schemas, revision state machine, retrieval planning, provenance dedupe, injection/secret detection, and the MemoryStore port interface.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  }
+}

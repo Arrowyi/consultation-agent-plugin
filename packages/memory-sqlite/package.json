@@ -1,0 +1,21 @@
+{
+  "name": "@consultation-agent/memory-sqlite",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SQLite + FTS5 implementation of the MemoryStore port with schema migrations, single-writer lock, XDG paths, optional embeddings, and the consultation-memory CLI.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "bin": {
+    "consultation-memory": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@consultation-agent/memory-core": "workspace:*",
+    "zod": "^3.25.76"
+  }
+}

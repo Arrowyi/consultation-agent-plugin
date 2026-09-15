@@ -1,0 +1,23 @@
+{
+  "name": "@consultation-agent/memory-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Thin local stdio MCP server exposing the 5 consultation memory tools over a MemoryStore.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "bin": {
+    "consultation-memory-mcp": "./src/server.ts"
+  },
+  "dependencies": {
+    "@consultation-agent/memory-core": "workspace:*",
+    "@consultation-agent/memory-sqlite": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@consultation-agent/opencode-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Thin OpenCode plugin adapter that registers the consultant primary agent, the consultation-memory MCP server, and the consultation skill.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.18.18"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "types": ["bun"],
+    "baseUrl": ".",
+    "paths": {
+      "@consultation-agent/consultation-core": ["packages/consultation-core/src/index.ts"],
+      "@consultation-agent/memory-core": ["packages/memory-core/src/index.ts"],
+      "@consultation-agent/memory-sqlite": ["packages/memory-sqlite/src/index.ts"],
+      "@consultation-agent/memory-mcp": ["packages/memory-mcp/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/package.json", "evals/**/*.ts", "script/**/*.ts"]
+}

@@ -1,0 +1,110 @@
+[
+  {
+    "id": "M1",
+    "title": "Cross-category experience is recalled",
+    "given": "An experience item is tagged to multiple taxonomy nodes (cross-category) and committed.",
+    "when": "recall is run with a taxonomyNodeId filter matching any one of the item's categories",
+    "then": "The item appears in the candidates because tag membership links it to multiple categories without copying canonical content.",
+    "grading": "deterministic",
+    "notes": "Maps to packages/memory-sqlite/src/store.test.ts (recall) which exercises taxonomy branch selection and FTS recall."
+  },
+  {
+    "id": "M2",
+    "title": "A misclassified record remains discoverable through FTS",
+    "given": "An item is committed with a wrong or arbitrary taxonomyNodeIds classification but correct title and summary text.",
+    "when": "recall is run with text matching the item content and no taxonomy filter",
+    "then": "The FTS index finds the item by text even though its taxonomy classification is wrong.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/store.test.ts (\"an item misclassified in taxonomy is still found via FTS text match\")."
+  },
+  {
+    "id": "M3",
+    "title": "Semantically equivalent wording retrieves the same experience",
+    "given": "An experience was saved with one wording and an embedding provider is configured.",
+    "when": "recall is run with semantically equivalent but lexically different wording",
+    "then": "The same experience is retrieved via embedding cosine similarity, not only exact FTS matches.",
+    "grading": "model",
+    "notes": "Rubric: Does a paraphrased query retrieve the same item that an exact query retrieved, when an embedding provider is configured? Requires a live embedding model."
+  },
+  {
+    "id": "M4",
+    "title": "Refuted memory never enters positive recommendation ranking",
+    "given": "An item has its status set to \"refuted\" (or \"superseded\").",
+    "when": "recall is run at fast or standard tier (which include only \"active\" statuses)",
+    "then": "The refuted item is excluded from candidates and never appears in a positive recommendation ranking.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/store.test.ts (\"deep-tier recall includes superseded/refuted items, standard does not\") and packages/memory-core/src/retrieval-plan.test.ts (planRetrieval includeStatuses)."
+  },
+  {
+    "id": "M5",
+    "title": "Material preference use is disclosed",
+    "given": "A stored user preference materially changes a recommendation during a consultation.",
+    "when": "The consultant produces the answer using recall results that include that preference",
+    "then": "The answer discloses which preference or experience materially shaped the result via memoriesUsedDisclosure.",
+    "grading": "model",
+    "notes": "Rubric: Does the final answer explicitly disclose the preference or experience that materially shaped it? The disclosure channel (memoriesUsedDisclosure) is deterministic, but the agent's disclosure behavior needs a live model."
+  },
+  {
+    "id": "M6",
+    "title": "Progressive disclosure stays within its token budget",
+    "given": "A recall query targets a tier with a token budget (fast 300, standard 1200, deep 3000).",
+    "when": "recall runs and estimateTokens accumulates the injected memory",
+    "then": "The returned usedTokens does not exceed the tier budget and truncated is set when content is cut off.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-core/src/retrieval-plan.test.ts (planRetrieval, estimateTokens) and packages/memory-sqlite/src/store.test.ts (\"recall honors planRetrieval caps\")."
+  },
+  {
+    "id": "M7",
+    "title": "Repeated session saves do not duplicate experience",
+    "given": "The same host session is saved multiple times, including a package update with a new title.",
+    "when": "commit is called repeatedly with previewTokens from prepare",
+    "then": "There remains one SessionExperience and one item per topicKey, with no duplicate ranking candidates; replays with the same previewToken return created=false.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/store.test.ts (\"commit is idempotent\" and \"commit upserts the session package and items with no duplicate ranking candidates on repeated saves\")."
+  },
+  {
+    "id": "M8",
+    "title": "Sensitive fields remain absent without confirmation",
+    "given": "A prepared item includes sensitiveFields with confirmed=false.",
+    "when": "commit is attempted",
+    "then": "commit rejects with SENSITIVE_UNCONFIRMED naming each unconfirmed field, and no sensitive content is persisted.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/store.test.ts (\"unconfirmed sensitiveFields are rejected with SENSITIVE_UNCONFIRMED naming each field\")."
+  },
+  {
+    "id": "M9",
+    "title": "Forget removes canonical and derived content",
+    "given": "An item with derived summaries, embeddings, tags, and FTS rows has been committed.",
+    "when": "memory_manage forget is called for that item",
+    "then": "Canonical rows, derived summaries, embeddings, tag memberships, and FTS rows are all removed, and subsequent recall returns nothing for that item.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/store.test.ts (\"forget removes canonical rows + derived + FTS rows and subsequent recall returns nothing\")."
+  },
+  {
+    "id": "M10",
+    "title": "Indexes rebuild after model changes",
+    "given": "The embedding or summarization model is changed and derived indexes are stale.",
+    "when": "the consultation-memory CLI reindex command is run",
+    "then": "The FTS index (and derived embeddings) are dropped and rebuilt from canonical tables without losing accepted experience.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/cli.test.ts (consultation-memory CLI reindex)."
+  },
+  {
+    "id": "M11",
+    "title": "Interrupted enrichment does not damage canonical records",
+    "given": "A commit completes its canonical transaction but the deferred derived enrichment (summary or embedding) is interrupted.",
+    "when": "the store is reopened and recall is run",
+    "then": "The canonical experience item and its decision remain intact and retrievable; only the derived artifact is missing and retryable.",
+    "grading": "deterministic",
+    "notes": "Maps to packages/memory-sqlite/src/store.test.ts (commit transaction) which proves canonical writes complete in one transaction before deferred enrichment. The retryable-derived contract is part of the store design."
+  },
+  {
+    "id": "M12",
+    "title": "A second writer cannot corrupt the database",
+    "given": "One process has opened the store and holds the writer lock.",
+    "when": "a second process tries to open the store on the same stateDir",
+    "then": "The second open fails with MemoryError code WRITER_LOCKED naming the holding pid, and no concurrent write corruption is possible.",
+    "grading": "deterministic",
+    "notes": "Covered by packages/memory-sqlite/src/writer-lock.test.ts (acquireWriterLock second-opener fails)."
+  }
+]
