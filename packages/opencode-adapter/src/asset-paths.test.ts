@@ -79,6 +79,27 @@ describe("resolveAssetFromUrl fallback walk", () => {
     }
   })
 
+  it("resolves assets in a packaged install layout where assets/ sits beside dist/", () => {
+    const installRoot = mkdtempSync(join(tmpdir(), "install-layout-"))
+    const distDir = join(installRoot, "dist")
+    mkdirSync(distDir, { recursive: true })
+    const installedModule = join(distDir, "index.js")
+    writeFileSync(installedModule, "")
+    const agentsDir = join(installRoot, "assets", "agents")
+    mkdirSync(agentsDir, { recursive: true })
+    writeFileSync(join(agentsDir, "consultant.md"), "# installed consultant")
+    const installedModuleUrl = new URL(`file://${installedModule}`).href
+
+    try {
+      const resolved = resolveAssetFromUrl("agents/consultant.md", installedModuleUrl)
+
+      expect(resolved).toBe(join(installRoot, "assets", "agents", "consultant.md"))
+      expect(existsSync(resolved)).toBe(true)
+    } finally {
+      rmSync(installRoot, { recursive: true, force: true })
+    }
+  })
+
   it("returns the primary path even when no asset is found, so readFile gives a clear error", () => {
     // given — a layout with no assets anywhere
     const tmpRoot = mkdtempSync(join(tmpdir(), "asset-none-"))
