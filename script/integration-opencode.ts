@@ -8,7 +8,10 @@
  *       XDG_STATE_HOME / XDG_CACHE_HOME (and HOME) to subdirs of it for the
  *       opencode child process so the real user config/DB is never touched.
  *   (c) Write `<sandbox>/config/opencode/opencode.json` with a `file://`
- *       plugin entry pointing at the opencode-adapter source.
+ *       plugin entry. Defaults to the packaged `dist/index.js` (the artifact an
+ *       installed deployment runs); override with `CONSULTATION_PLUGIN_ENTRY`
+ *       (bare path or `file://` URL) to test another build, e.g. the adapter
+ *       source for development or an installed bundle.
  *   (d) Spawn `opencode serve --port <free>` (a free port is picked via a
  *       short-lived Bun.serve so health polling has a known target; --port 0
  *       is supported by opencode but parsing stdout for the assigned port is
@@ -96,6 +99,22 @@ async function gitStatusPorcelain(): Promise<string> {
   return text.trim()
 }
 
+function toFileUrl(entry: string): string {
+  return entry.startsWith("file://") ? entry : `file://${entry}`
+}
+
+/**
+ * The plugin entry under test: `CONSULTATION_PLUGIN_ENTRY` when set, else the
+ * packaged `dist/index.js` when it exists, else the adapter source.
+ */
+function resolvePluginEntry(): string {
+  const override = process.env.CONSULTATION_PLUGIN_ENTRY
+  if (override !== undefined && override.length > 0) return override
+  const packaged = join(repoRoot, "dist/index.js")
+  if (existsSync(packaged)) return packaged
+  return join(repoRoot, "packages/opencode-adapter/src/index.ts")
+}
+
 /**
  * Poll an HTTP URL until it responds with a 2xx status or the timeout elapses.
  */
@@ -153,12 +172,13 @@ async function main(): Promise<void> {
   const auth = `Basic ${btoa(`opencode:${password}`)}`
 
   // (c) Write the opencode config with the plugin entry.
-  const adapterEntry = join(repoRoot, "packages/opencode-adapter/src/index.ts")
+  const adapterEntry = resolvePluginEntry()
+  console.log(`integration: plugin entry = ${adapterEntry}`)
   const opencodeConfigDir = join(sandboxConfig, "opencode")
   mkdirSync(opencodeConfigDir, { recursive: true })
   const opencodeConfig = {
     $schema: "https://opencode.ai/config.json",
-    plugin: [`file://${adapterEntry}`],
+    plugin: [toFileUrl(adapterEntry)],
   }
   writeFileSync(join(opencodeConfigDir, "opencode.json"), `${JSON.stringify(opencodeConfig, null, 2)}\n`)
 
