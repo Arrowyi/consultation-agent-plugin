@@ -2,17 +2,18 @@
 
 An evidence-driven consultation agent plugin for [OpenCode](https://opencode.ai) with a portable, user-approved memory core.
 
-The public experience is a single `consultant` primary agent with four modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), and `research` (understand a topic deeply, delivered as a readable report). It separates verified facts from inference, audits user-generated sources for deliberate deception, and grades evidence. A local SQLite-backed memory system auto-saves consultation records (question + conclusion summaries), supports browse/edit/delete plus an outcome-feedback loop, and is shared across agents. Canonical records stay independent of classification, summarization, and embedding models.
+The public experience is a single `consultant` primary agent with five modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (a composite operational playbook for an end-to-end goal), and `research` (understand a topic deeply, delivered as a readable report). It separates verified facts from inference, audits user-generated sources for deliberate deception, and grades evidence. A local SQLite-backed memory system auto-saves consultation records (question + conclusion summaries), supports browse/edit/delete plus an outcome-feedback loop, and is shared across agents. Canonical records stay independent of classification, summarization, and embedding models.
 
 ## Usage
 
-Select the `consultant` agent and ask anything. The consultant detects what kind of question it is and routes to one of four modes — and it tells you which mode it picked plus a one-line reason (e.g. "这是个购买决策 → select") before answering:
+Select the `consultant` agent and ask anything. The consultant detects what kind of question it is and routes to one of five modes — and it tells you which mode it picked plus a one-line reason (e.g. "这是个购买决策 → select") before answering:
 
 | Mode | When it triggers | You get |
 |------|------------------|---------|
 | `select` | choosing among candidates — 买哪个、选课、选工具 | a candidate list with per-candidate evidence grade, contamination note, and trial advice |
 | `verify` | checking a claim or rumor — 这说法是不是真的 | a true / false / unverifiable verdict with a per-claim reasoning chain |
 | `plan` | an actionable plan — 健身、保养、学习路线 | a step plan with support level, basis, risk, alternatives, and a robustness review |
+| `guide` | a composite end-to-end operational package — 攻略、X入门、guide to X | an operational playbook: bottom line, suitability + prerequisites, a recommendation table, a procedure table, background/pitfalls, a completion check, and a next step |
 | `research` | understanding a topic deeply — 深度研究、调查一下、开放话题 | a readable report: bottom line first, plain-language key points, what it means, with evidence and disagreements folded away |
 
 Routing is two-axis: the **mode** (what to deliver) is detected from intent, and the **tier** (fast / standard / deep) is chosen from risk and complexity. Simple questions get a one-line answer; complex ones get the mode's brief.
