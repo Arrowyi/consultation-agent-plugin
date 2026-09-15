@@ -101,7 +101,7 @@ describe("buildRuntimeBindings", () => {
     expect(block).toContain("deepseek/deepseek-v4-pro")
     expect(block).toContain("Team subagents")
     expect(block).toContain("consultation-explorer")
-    expect(block).toContain("deepseek/deepseek-v4-flash")
+    expect(block).toContain("deepseek/deepseek-flash")
     expect(block).toContain("consultation-analyst")
     expect(block).toContain("opencode-go/qwen3.7-max")
   })
@@ -386,7 +386,7 @@ describe("registerExplorer", () => {
     }
     expect(explorer.mode).toBe("subagent")
     expect(explorer.prompt).toContain("# Explorer")
-    expect(explorer.model).toBe("deepseek/deepseek-v4-flash")
+    expect(explorer.model).toBe("deepseek/deepseek-flash")
     expect(explorer.permission.edit).toBe("deny")
   })
 

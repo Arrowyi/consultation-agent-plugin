@@ -58,9 +58,11 @@ export const ConsultationPluginConfigSchema = z.object({
 
 export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSchema>
 
+// explorer → canonical `deepseek-flash` id (legacy `deepseek-v4-flash` is retired);
+// consultant intentionally stays on `deepseek-v4-pro` until V4.1-Pro ships.
 export const MODEL_DEFAULTS = {
   consultant: "deepseek/deepseek-v4-pro",
-  explorer: "deepseek/deepseek-v4-flash",
+  explorer: "deepseek/deepseek-flash",
   analyst: "opencode-go/qwen3.7-max",
   critic: "opencode-go/glm-5.2",
   verifier: "opencode-go/qwen3.7-max",

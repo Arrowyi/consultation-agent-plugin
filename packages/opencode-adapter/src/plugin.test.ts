@@ -94,7 +94,7 @@ describe("createConsultationConfigHook", () => {
       expect(consultant.model).toBe("deepseek/deepseek-v4-pro")
       const explorer = config.agent?.["consultation-explorer"] as { mode: string; model: string }
       expect(explorer.mode).toBe("subagent")
-      expect(explorer.model).toBe("deepseek/deepseek-v4-flash")
+      expect(explorer.model).toBe("deepseek/deepseek-flash")
       const analyst = config.agent?.["consultation-analyst"] as { mode: string; model: string }
       expect(analyst.mode).toBe("subagent")
       expect(analyst.model).toBe("opencode-go/qwen3.7-max")

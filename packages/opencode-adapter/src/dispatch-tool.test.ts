@@ -37,7 +37,7 @@ describe("resolveRoleTarget", () => {
     const critic = resolveRoleTarget(config(), "critic")
 
     // then
-    expect(explorer).toEqual({ agentName: "consultation-explorer", model: "deepseek/deepseek-v4-flash" })
+    expect(explorer).toEqual({ agentName: "consultation-explorer", model: "deepseek/deepseek-flash" })
     expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.7-max" })
     expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.2" })
   })
