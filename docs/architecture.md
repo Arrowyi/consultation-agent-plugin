@@ -6,7 +6,7 @@ The living architecture specification for the consultation-agent plugin, describ
 
 Build an independent consultation plugin with a harness-neutral consultation core, a harness-neutral memory core, a local SQLite store, a local MCP interface, and a thin OpenCode adapter.
 
-The public experience is a single, concise, evidence-driven `consultant` primary agent with four modes (`select`, `verify`, `plan`, `research`). It answers simple questions briefly, produces a one-screen decision brief for decision questions and a readable research report for open-ended understanding questions, and distinguishes verified facts from synthesis.
+The public experience is a single, concise, evidence-driven `consultant` primary agent with five modes (`select`, `verify`, `plan`, `research`, `guide`). It answers simple questions briefly, produces a one-screen decision brief for decision questions, an operational playbook for composite end-to-end goals, and a readable research report for open-ended understanding questions, and distinguishes verified facts from synthesis.
 
 The memory system stores only user-approved experience packages. It does not automatically persist complete conversations. Canonical experience records remain independent of classification schemes, summarization models, embedding models, and storage indexes. Every derived view can be rebuilt.
 
@@ -92,7 +92,7 @@ Core packages must not import OpenCode or the MCP SDK. Adapters translate host a
 
 ### 5.1 Consultant Agent
 
-The `consultant` primary agent is the single entry point and owns interaction and final expression. It routes every question to one of four modes — `select`, `verify`, `plan`, or `research` — and a tier (fast, standard, or deep). It:
+The `consultant` primary agent is the single entry point and owns interaction and final expression. It routes every question to one of five modes — `select`, `verify`, `plan`, `research`, or `guide` — and a tier (fast, standard, or deep). It:
 
 - detects the mode from intent and chooses the tier;
 - identifies decision-changing missing information;
@@ -182,7 +182,7 @@ The first adapter:
 
 ```mermaid
 flowchart TD
-    Q[User Question] --> MODE[Detect Mode: select / verify / plan / research]
+    Q[User Question] --> MODE[Detect Mode: select / verify / plan / research / guide]
     MODE --> T[Choose Tier: fast / standard / deep]
     T --> M[Recall Memory + Surface Pending Outcomes]
     M --> C{Decision-Changing Info Missing?}
@@ -596,6 +596,7 @@ The deliverable depends on the detected mode (the exact templates live in the `c
 - **verify** — a true / false / unverifiable verdict, a per-claim verdict table (claim, status, evidence, basis), supporting vs opposing evidence, a contamination note if any, confidence, stability, and the next evidence-settling step.
 - **plan** — a goal + suitability, a step table (step, support, confidence, basis, risk, alternatives), a robustness-review note, an assumption list, a health note only on a threshold trigger, residual uncertainty, alternatives + switch conditions, confidence, stability, and the first concrete action.
 - **research** — a readable report: bottom line first (one plain sentence), plain-language key points, what it means for the user, and a confidence line, with evidence, disagreements, residual uncertainty, and sources folded behind a disclosure.
+- **guide** — a composite operational playbook: bottom line first, suitability and prerequisites, a recommendation table (option, evidence grade, contamination note, suits, trial advice), a procedure table (step, support, confidence, basis, risk, alternatives), background and pitfalls, a completion check, confidence, stability, evidence and disagreements folded behind a disclosure, and the first concrete action. Carries at least a recommendation or a procedure.
 
 Every mode ends with the next useful action, even when abstaining. The agent may state that no reliable unique winner exists.
 
@@ -612,7 +613,8 @@ Every mode ends with the next useful action, even when abstaining. The agent may
 - changing a user preference changes the ranking when expected;
 - insufficient evidence leads to honest abstention;
 - prompt injection is blocked and reported;
-- deep consultation asks before consuming the larger budget.
+- deep consultation asks before consuming the larger budget;
+- a composite end-to-end request routes to the guide mode and carries at least a recommendation or a procedure.
 
 ### 17.2 Memory Evaluation Cases
 
