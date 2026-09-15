@@ -1,6 +1,19 @@
 # Local Deployment Guide
 
-This guide covers installing the consultation-agent plugin into a local OpenCode setup. No build step is required for local use; Bun runs the TypeScript source directly.
+This guide covers installing the consultation-agent plugin into a local OpenCode setup.
+
+## Deployment Rule
+
+**Deploy only the packaged bundle. Never point an OpenCode config at this repo's source.**
+
+This project is distributed to other users, so a deployment must be reproducible from build artifacts alone: it may not depend on the repo checkout, its `node_modules`, or Bun's module cache. Concretely:
+
+- Build and install with `bun run install:local`; it builds `dist/`, stages `dist/` + `assets/` into the install prefix, and verifies the result.
+- Point the OpenCode `plugin` entry at the **installed** `dist/index.js`, never at `packages/opencode-adapter/src/index.ts`.
+- The installed bundle must stay self-contained: `script/build.ts` marks nothing external, and the memory MCP server resolves to the bundled `memory-mcp-server.js` sibling, so no `node_modules` ships with it.
+- Source-mode entries are for this repo's own test runs only (`bun test`, `bun run integration`), never for a working setup or a release.
+
+Any change that reintroduces an external runtime import, or a config entry pointing at source, violates this rule. `bun test` guards the resolution logic and `bun run integration` proves the installed artifact registers correctly.
 
 ## Prerequisites
 
@@ -19,54 +32,40 @@ cd consultation-agent-plugin
 bun install
 ```
 
-## Step 2: Add the Plugin to OpenCode
+## Step 2: Build, Install, and Register
 
-OpenCode loads plugins declared in its config file. Edit `~/.config/opencode/opencode.json` (create it if missing) and add a `plugin` array entry pointing at the adapter.
-
-### Source Mode (recommended for local development)
-
-Point the `file://` entry at the adapter's TypeScript source. Bun runs it directly, no build needed.
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "file:///absolute/path/to/consultation-agent-plugin/packages/opencode-adapter/src/index.ts"
-  ]
-}
-```
-
-Replace `absolute/path/to` with the real absolute path to your clone. For example, if you cloned into `/home/me/consultation-agent-plugin`:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "file:///home/me/consultation-agent-plugin/packages/opencode-adapter/src/index.ts"
-  ]
-}
-```
-
-### Dist Mode (for a bundled install)
-
-If you prefer a bundled artifact, run `bun run build` first, then point the entry at `dist/index.js`:
+Build the bundle and install it into a stable prefix:
 
 ```bash
-bun run build
+bun run install:local
 ```
+
+The installer stages `dist/` + `assets/` into the install root (default `~/.local/share/consultation-agent-plugin`; override with `CONSULTATION_INSTALL_DIR`), writes `package.json` + `build-meta.json` for provenance, and fails if any required file is missing. It prints the exact plugin entry to add to `~/.config/opencode/opencode.json` (create the file if missing):
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "file:///absolute/path/to/consultation-agent-plugin/dist/index.js"
-  ]
+  "plugin": ["file:///Users/you/.local/share/consultation-agent-plugin/dist/index.js"]
 }
 ```
 
-The build script bundles two entrypoints into `dist/`:
-- `dist/index.js` - the OpenCode adapter plugin
-- `dist/memory-mcp-server.js` - the memory MCP server (bundled when `packages/memory-mcp/src/server.ts` exists)
+Installed layout:
+
+```text
+<install root>/
+  dist/index.js               bundled adapter plugin (self-contained)
+  dist/memory-mcp-server.js   bundled memory MCP server (self-contained)
+  assets/agents/*.md          agent prompts (read at startup)
+  assets/skills/consultation/SKILL.md
+  package.json                provenance
+  build-meta.json             version / git sha / build time
+```
+
+Re-running `bun run install:local` rebuilds and replaces the installed bundle. Restart OpenCode afterwards to load it.
+
+### Development only: source mode
+
+For iterating on this repo (unit tests, the integration proof, or a throwaway session), a plugin entry may point at `packages/opencode-adapter/src/index.ts`. Bun runs TypeScript directly, so no build is needed, but this mode requires the repo checkout and its `node_modules` to be present. It must never be used for an installed deployment or a release.
 
 ## Step 3: Restart OpenCode
 
@@ -93,7 +92,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
   // the defaults below ship with the plugin and are tuned for cross-model
   // verification (consultant vs analyst vs critic vs verifier use different families).
   "agent_model": "deepseek/deepseek-v4-pro",
-  "explorer_model": "deepseek/deepseek-v4-flash",
+  "explorer_model": "deepseek/deepseek-flash",
   "analyst_model": "opencode-go/qwen3.7-max",
   "critic_model": "opencode-go/glm-5.2",
   "verifier_model": "opencode-go/qwen3.7-max",
@@ -150,7 +149,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 |-------|------|---------|-------------|
 | `agent_model` | string (optional) | `deepseek/deepseek-v4-pro` | Model for the `consultant` agent |
 | `explorer_agent` | string | `"consultation-explorer"` | Name of the search/gathering subagent |
-| `explorer_model` | string (optional) | `deepseek/deepseek-v4-flash` | Model for the explorer subagent |
+| `explorer_model` | string (optional) | `deepseek/deepseek-flash` | Model for the explorer subagent |
 | `analyst_agent` | string | `"consultation-analyst"` | Name of the analysis subagent |
 | `analyst_model` | string (optional) | `opencode-go/qwen3.7-max` | Model for the analyst subagent |
 | `critic_agent` | string | `"consultation-critic"` | Name of the adversarial critic subagent |
@@ -205,12 +204,20 @@ bun run integration
 
 This spawns an isolated OpenCode server in a temp sandbox (never touching your real config or DB), loads the plugin, and asserts the agent, MCP, and skill are registered. It prints a PASS/FAIL summary per assertion. If `opencode` is not on PATH, it prints SKIP and exits 0.
 
-## Running Tests, Typecheck, and Build
+By default it loads the packaged `dist/index.js`. To prove an installed bundle — the artifact the deployment rule requires — pass its path:
+
+```bash
+CONSULTATION_PLUGIN_ENTRY=~/.local/share/consultation-agent-plugin/dist/index.js bun run integration
+```
+
+## Running Tests, Typecheck, Build, and Install
 
 ```bash
 bun test                     # all unit tests (co-located *.test.ts, bun:test)
 bun run typecheck            # tsc --noEmit across the workspace
 bun run build                # bundle adapter + memory-mcp into dist/
+bun run install:local        # build, then install the bundle into the install prefix
+bun run integration          # isolated OpenCode integration proof (skips if opencode is absent)
 bun run evals/run-evals.ts   # print the evaluation checklist (no live model calls)
 ```
 
@@ -220,13 +227,21 @@ The evaluation fixtures under `evals/fixtures/` encode the architecture verifica
 
 1. **Remove the plugin entry** from your OpenCode config. Edit `~/.config/opencode/opencode.json` and remove the `file://` entry from the `plugin` array.
 
-2. **Remove the installed skill** (optional):
+2. **Remove the installed bundle:**
+
+   ```bash
+   rm -rf ~/.local/share/consultation-agent-plugin
+   ```
+
+   Or remove `$CONSULTATION_INSTALL_DIR` if you set one.
+
+3. **Remove the installed skill** (optional):
 
    ```bash
    rm -rf ~/.config/opencode/skills/consultation
    ```
 
-3. **Remove the plugin config file** (optional):
+4. **Remove the plugin config file** (optional):
 
    ```bash
    rm -f ~/.config/consultation-agent/config.jsonc
@@ -238,7 +253,7 @@ The evaluation fixtures under `evals/fixtures/` encode the architecture verifica
    rm -f "$XDG_CONFIG_HOME/consultation-agent/config.jsonc"
    ```
 
-4. **Remove the memory data, state, and cache** (optional, this deletes all stored experience):
+5. **Remove the memory data, state, and cache** (optional, this deletes all stored experience):
 
    ```bash
    rm -rf ~/.local/share/consultation-agent

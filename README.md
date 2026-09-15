@@ -65,18 +65,21 @@ Assets live under `assets/`:
 # 1. Install dependencies (Bun only)
 bun install
 
-# 2. Add the plugin to your OpenCode config
-#    Edit ~/.config/opencode/opencode.json and add the plugin entry:
-#    { "plugin": ["file:///absolute/path/to/consultation-agent-plugin/packages/opencode-adapter/src/index.ts"] }
-#
-#    See docs/deployment.md for the exact snippet and dist-mode alternative.
+# 2. Build and install the packaged bundle
+#    Stages dist/ + assets/ into ~/.local/share/consultation-agent-plugin
+#    and prints the plugin entry to use.
+bun run install:local
 
-# 3. Restart OpenCode
+# 3. Register the installed bundle
+#    Add the printed entry to ~/.config/opencode/opencode.json:
+#    { "plugin": ["file:///Users/you/.local/share/consultation-agent-plugin/dist/index.js"] }
 
-# 4. Select the "consultant" agent and ask a question
+# 4. Restart OpenCode
+
+# 5. Select the "consultant" agent and ask a question
 ```
 
-No build step is required for local deployment. Bun runs the TypeScript source directly. Run `bun run build` only when you want bundled `dist/` artifacts.
+**Deployment rule:** always deploy the packaged bundle. Never point an OpenCode config at `packages/opencode-adapter/src/index.ts` — this project ships to other users, so a deployment must not depend on the repo checkout or its `node_modules`. See [docs/deployment.md](docs/deployment.md#deployment-rule).
 
 ## Common Commands
 
@@ -85,6 +88,7 @@ bun install                  # install dependencies
 bun test                     # run all unit tests
 bun run typecheck            # tsc --noEmit (static gate)
 bun run build                # bundle adapter + memory-mcp server into dist/
+bun run install:local        # build, then install the bundle into the install prefix
 bun run integration          # isolated OpenCode integration proof (skips if opencode is absent)
 bun run evals/run-evals.ts   # print the evaluation checklist
 ```
