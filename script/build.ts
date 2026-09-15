@@ -16,7 +16,9 @@ import { join } from "node:path"
 
 const REPO_ROOT = join(import.meta.dir, "..")
 const DIST_DIR = join(REPO_ROOT, "dist")
-const EXTERNAL = ["@opencode-ai/plugin", "zod"]
+// Installed artifacts ship without node_modules, so keep this empty:
+// an external import here breaks a packaged install (docs/deployment.md).
+const EXTERNAL: string[] = []
 
 interface BuildJob {
   readonly entrypoint: string
