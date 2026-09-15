@@ -10,3 +10,6 @@ tmp/
 .omo/
 .opencode/
 .codegraph
+
+# isolated git worktrees
+.worktrees/
