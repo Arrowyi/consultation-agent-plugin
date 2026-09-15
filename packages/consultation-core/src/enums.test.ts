@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   ClaimKindSchema,
   ConfidenceSchema,
+  ConsultationModeSchema,
   RiskLevelSchema,
   SourceGradeSchema,
   StabilitySchema,
@@ -43,5 +44,10 @@ describe("enums", () => {
   it("StabilitySchema has stable/conditional/provisional", () => {
     // given // when // then
     expect(StabilitySchema.options).toEqual(["stable", "conditional", "provisional"]);
+  });
+
+  it("ConsultationModeSchema has the five modes", () => {
+    // given // when // then
+    expect(ConsultationModeSchema.options).toEqual(["select", "verify", "plan", "research", "guide"]);
   });
 });

@@ -20,8 +20,11 @@ export const StabilitySchema = z.enum(["stable", "conditional", "provisional"])
  * - plan: produce an actionable plan (lifestyle, fitness, learning).
  * - research: understand a topic deeply (open-ended investigation) — produces a
  *   readable research report, not a decision brief.
+ * - guide: composite operational package (recommendation + procedure +
+ *   background) for an end-to-end goal — produces an operational playbook, not
+ *   a single decision or a pure understanding report.
  */
-export const ConsultationModeSchema = z.enum(["select", "verify", "plan", "research"])
+export const ConsultationModeSchema = z.enum(["select", "verify", "plan", "research", "guide"])
 
 /**
  * Per-atom epistemic status. `inferred` and `unverifiable` must carry a basis
