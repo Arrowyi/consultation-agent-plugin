@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { basename } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { ConsultationPluginConfig } from "./plugin-config.ts"
@@ -30,23 +31,23 @@ export function resolveBunExecutable(): string {
 }
 
 /**
- * Resolve the filesystem path to the `@consultation-agent/memory-mcp`
- * server entry (`src/server.ts`).
- *
- * Primary: `import.meta.resolve("@consultation-agent/memory-mcp/package.json")`
- * then derive the sibling `src/server.ts`. Fallback: a relative URL
- * `../../memory-mcp/src/server.ts` from this module. The file may not
- * exist yet while a sibling agent builds it; this function only resolves
- * the path string and never fails at import time.
+ * Resolve the memory MCP server entry: bundled `memory-mcp-server.js`
+ * sibling first (installed layout), then the workspace `src/server.ts`,
+ * then the relative workspace fallback. Never throws.
  */
-export function resolveMemoryMcpServerEntry(): string {
+export function resolveMemoryMcpServerEntry(moduleUrl: string = import.meta.url): string {
+  const bundled = fileURLToPath(new URL("memory-mcp-server.js", moduleUrl))
+  if (existsSync(bundled)) return bundled
+
   try {
     const pkgUrl = import.meta.resolve("@consultation-agent/memory-mcp/package.json")
-    const serverUrl = new URL("src/server.ts", pkgUrl)
-    return fileURLToPath(serverUrl)
+    const fromPackage = fileURLToPath(new URL("src/server.ts", pkgUrl))
+    if (existsSync(fromPackage)) return fromPackage
   } catch {
-    return fileURLToPath(new URL("../../memory-mcp/src/server.ts", import.meta.url))
+    // workspace package unavailable (installed layout) — fall through
   }
+
+  return fileURLToPath(new URL("../../memory-mcp/src/server.ts", moduleUrl))
 }
 
 function buildEmbeddingEnv(

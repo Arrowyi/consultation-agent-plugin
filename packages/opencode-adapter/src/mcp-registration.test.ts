@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test"
-import { basename } from "node:path"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { basename, join } from "node:path"
 import {
   registerMemoryMcp,
   resolveBunExecutable,
@@ -49,13 +51,30 @@ describe("resolveBunExecutable", () => {
 })
 
 describe("resolveMemoryMcpServerEntry", () => {
-  it("returns a path ending with memory-mcp/src/server.ts", () => {
+  it("returns a path ending with memory-mcp/src/server.ts in the workspace layout", () => {
     // when
     const result = resolveMemoryMcpServerEntry()
 
     // then
     expect(typeof result).toBe("string")
     expect(result.endsWith("memory-mcp/src/server.ts")).toBe(true)
+  })
+
+  it("prefers the bundled memory-mcp-server.js sibling in an installed layout", () => {
+    const installRoot = mkdtempSync(join(tmpdir(), "mcp-entry-"))
+    const distDir = join(installRoot, "dist")
+    mkdirSync(distDir, { recursive: true })
+    const bundledServer = join(distDir, "memory-mcp-server.js")
+    writeFileSync(bundledServer, "")
+    const installedModuleUrl = new URL(`file://${join(distDir, "index.js")}`).href
+
+    try {
+      const result = resolveMemoryMcpServerEntry(installedModuleUrl)
+
+      expect(result).toBe(bundledServer)
+    } finally {
+      rmSync(installRoot, { recursive: true, force: true })
+    }
   })
 })
 
