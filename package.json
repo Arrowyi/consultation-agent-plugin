@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "bun run script/build.ts",
+    "install:local": "bun run script/install-local.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "integration": "bun run script/integration-opencode.ts"
