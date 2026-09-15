@@ -1,6 +1,6 @@
 ---
 name: consultation
-description: Evidence-driven consultation workflow for answering questions and producing decision briefs or readable research reports across four modes (select / verify / plan / research). Load when the user asks for a recommendation, comparison, product or option choice, rumor or claim verification, an actionable plan (lifestyle, fitness, learning, interpersonal), a deep-dive investigation or topic survey, personalized advice, or a second opinion — especially when evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer. Covers two-axis routing, claim decomposition, source grading, deliberate-deception intent audit, hidden-channel strategy, epistemic status labels, risk thresholds, counter-evidence passes, mode-specific decision briefs and research reports, and auto-save memory with an outcome loop.
+description: Evidence-driven consultation workflow for answering questions and producing decision briefs, operational playbooks, or readable research reports across five modes (select / verify / plan / research / guide). Load when the user asks for a recommendation, comparison, product or option choice, rumor or claim verification, an actionable plan (lifestyle, fitness, learning, interpersonal), a composite end-to-end operational guide (攻略, X入门, guide to X, how do I get started with X), a deep-dive investigation or topic survey, personalized advice, or a second opinion — especially when evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer. Covers two-axis routing, claim decomposition, source grading, deliberate-deception intent audit, hidden-channel strategy, epistemic status labels, risk thresholds, counter-evidence passes, mode-specific decision briefs and research reports, and auto-save memory with an outcome loop.
 ---
 
 # Consultation Skill
@@ -11,7 +11,7 @@ Define the authoritative cognitive workflow for evidence-driven consultation. Ro
 
 ## When to Use
 
-Load this skill when the user asks for a recommendation, comparison, or option choice (`select`); a check on a claim, rumor, or argument (`verify`); an actionable plan for lifestyle, fitness, body care, interpersonal, or learning goals (`plan`); a deep investigation or topic survey (`research`); personalized advice; or a second opinion — and whenever evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer.
+Load this skill when the user asks for a recommendation, comparison, or option choice (`select`); a check on a claim, rumor, or argument (`verify`); an actionable plan for lifestyle, fitness, body care, interpersonal, or learning goals (`plan`); a composite operational guide that fuses a recommendation, a procedure, and background for an end-to-end goal (攻略, X入门, guide to X, how do I get started with X) (`guide`); a deep investigation or topic survey (`research`); personalized advice; or a second opinion — and whenever evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer.
 
 ## Two-Axis Routing: Mode and Tier
 
@@ -22,6 +22,7 @@ Two independent decisions shape every consultation:
   - `verify`: render a verdict on a proposition (a claim, rumor, or argument is true, false, or unverifiable).
   - `plan`: produce an actionable plan (fitness, body care, interpersonal, learning).
   - `research`: understand a topic deeply (open-ended investigation, "深度研究", "调查一下", topic or technology surveys) — understanding-oriented, produces a readable report, not a decision.
+  - `guide`: produce a composite operational package — a curated recommendation, an actionable procedure, and the background/pitfalls — for an end-to-end goal (攻略, "X入门", "guide to X", "how do I get started with X"). Use it only when the request is composite and needs at least a recommendation or a procedure; a pure "which one" is `select`, a pure "how to" is `plan`, a pure "understand X" is `research`.
   If the mode is ambiguous, ask one clarifying question. Once detected, state the mode and a one-line reason to the user (e.g. "这是个购买决策 → select") before proceeding.
 - **Tier** (how deep to go) — `fast`, `standard`, or `deep`, from risk and complexity. Tier is orthogonal to mode: a `verify` can be fast (check one primary source) or deep (multi-channel plus intent audit).
 
@@ -40,6 +41,8 @@ Two independent decisions shape every consultation:
 11. Auto-save the session summary (sensitive fields excluded pending confirmation); register an outcome follow-up for select and plan.
 
 For `research` mode, follow the Research Mode section instead of producing a decision brief: decompose into sub-directions, gather with parallel explorers, form multiple hypotheses, gate them with the critic, and deliver a readable report.
+
+For `guide` mode, decompose claims across all three facets (recommendation, procedure, background) and run the same explore -> analyze -> critique loop; because the guide contains a recommendation, run the verifier's intent audit at standard and deep tiers, and have the critic apply the plan robustness review to the procedure section. A guide is composite and synthesis-heavy, so it routes to standard or deep, never fast. Deliver the operational playbook template below, keeping only the sections that carry content — a guide must carry at least a recommendation or a procedure.
 
 ## Team Orchestration
 
@@ -255,6 +258,36 @@ Next: <the first concrete action>.
 
 Next: <the next useful thing, e.g. a follow-up question or a related angle>.
 ```
+
+### guide: operational playbook
+
+```
+# <goal>攻略
+
+一句话结论: <what this guide gets you to + the single most important move/pick>.
+
+适合谁 / 不适合谁: <...>.  前置条件: <what to have ready before starting>.
+
+## 推荐清单（选什么）
+| 选项 | 证据等级 | 污染提示 | 适合 | 试用建议 |
+
+## 操作流程（怎么做）
+| 步骤 | 依据 | 信心 | 风险 | 替代 |
+
+## 背景与避坑（要懂什么）
+- <point>
+避坑: <...>
+
+## 验收标准
+<what "done" looks like>
+
+证据可信度 + 稳定性.  假设: <...>.  残留不确定性: <...>.
+<details><summary>证据、分歧与来源（点开）</summary> ... </details>
+
+Next: <first concrete action>.
+```
+
+Keep only the sections that carry content; a guide must carry at least a recommendation or a procedure.
 
 Always end with the next useful action, even when abstaining.
 
