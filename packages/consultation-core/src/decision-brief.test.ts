@@ -97,6 +97,33 @@ const researchBrief = {
   memoryDisclosure: [],
 }
 
+const guideBrief = {
+  mode: "guide",
+  conclusion: "Build the PC with the balanced parts list and assemble in order.",
+  goal: "Assemble a working mid-range gaming PC.",
+  suitedFor: "First-time builders with a mid-range budget.",
+  prerequisites: ["A clean workspace", "A Phillips screwdriver"],
+  recommendation: [
+    { option: "Mid-range GPU", evidenceGrade: "high", intent: "clean", trialAdvice: "Buy from a retailer with returns." },
+  ],
+  procedure: [
+    { step: "Seat the CPU.", support: "verified" },
+    { step: "Mount the cooler.", support: "inferred", basis: "Standard cooler mounting order." },
+  ],
+  background: [
+    { point: "Check part compatibility before buying.", status: "verified" },
+  ],
+  completionCheck: "The PC boots to BIOS.",
+  assumptions: ["Parts are compatible."],
+  confidence: "medium",
+  stability: "conditional",
+  verifiedFacts: ["The CPU must be seated before the cooler."],
+  synthesis: ["A balanced parts list fits a mid-range budget."],
+  sources: [{ title: "Source 1", grade: "high" }],
+  nextAction: "Order the parts list.",
+  memoryDisclosure: [],
+}
+
 function briefWith(base: Record<string, unknown>, override: Record<string, unknown>): unknown {
   return { ...base, ...override }
 }
@@ -226,6 +253,109 @@ describe("validateDecisionBrief: research", () => {
       validateDecisionBrief(briefWith(researchBrief, { keyPoints: [] }))
     }
     expect(validate).toThrow(ConsultationError)
+  })
+})
+
+describe("validateDecisionBrief: guide", () => {
+  test("accepts a maximal valid guide brief", () => {
+    const brief = validateDecisionBrief(guideBrief)
+    if (brief.mode !== "guide") throw new Error("expected guide mode")
+    expect(brief.recommendation).toHaveLength(1)
+    expect(brief.procedure).toHaveLength(2)
+    expect(brief.background).toHaveLength(1)
+  })
+
+  test("rejects a guide with neither recommendation nor procedure", () => {
+    const validate = (): void => {
+      validateDecisionBrief(briefWith(guideBrief, { recommendation: [], procedure: [] }))
+    }
+    expect(validate).toThrow(ConsultationError)
+  })
+
+  test("accepts a guide with only a procedure and no recommendation", () => {
+    const brief = validateDecisionBrief(briefWith(guideBrief, { recommendation: [] }))
+    if (brief.mode !== "guide") throw new Error("expected guide mode")
+    expect(brief.procedure.length).toBeGreaterThan(0)
+  })
+
+  test("accepts a guide with only a recommendation and no procedure", () => {
+    const brief = validateDecisionBrief(briefWith(guideBrief, { procedure: [] }))
+    if (brief.mode !== "guide") throw new Error("expected guide mode")
+    expect(brief.recommendation.length).toBeGreaterThan(0)
+  })
+
+  test("rejects an inferred background point without a basis", () => {
+    const validate = (): void => {
+      validateDecisionBrief(
+        briefWith(guideBrief, { background: [{ point: "This part is best.", status: "inferred" }] }),
+      )
+    }
+    expect(validate).toThrow(ConsultationError)
+  })
+
+  test("rejects an inferred procedure step without a basis", () => {
+    const validate = (): void => {
+      validateDecisionBrief(
+        briefWith(guideBrief, { procedure: [{ step: "Mount the cooler.", support: "inferred" }] }),
+      )
+    }
+    expect(validate).toThrow(ConsultationError)
+  })
+
+  test("defaults a recommendation candidate intent to unknown when omitted", () => {
+    const brief = validateDecisionBrief(
+      briefWith(guideBrief, { recommendation: [{ option: "GPU", evidenceGrade: "high" }] }),
+    )
+    if (brief.mode !== "guide") throw new Error("expected guide mode")
+    expect(brief.recommendation[0]?.intent).toBe("unknown")
+  })
+
+  test("rejects numeric confidence in a guide goal", () => {
+    const validate = (): void => {
+      validateDecisionBrief(briefWith(guideBrief, { goal: "A build that works 85% of the time" }))
+    }
+    expect(validate).toThrow("NUMERIC_CONFIDENCE")
+  })
+
+  test("rejects numeric confidence in a guide prerequisite", () => {
+    const validate = (): void => {
+      validateDecisionBrief(briefWith(guideBrief, { prerequisites: ["Success rate 85%"] }))
+    }
+    expect(validate).toThrow("NUMERIC_CONFIDENCE")
+  })
+
+  test("rejects numeric confidence in a guide background point", () => {
+    const validate = (): void => {
+      validateDecisionBrief(
+        briefWith(guideBrief, { background: [{ point: "Works 85% of the time", status: "verified" }] }),
+      )
+    }
+    expect(validate).toThrow("NUMERIC_CONFIDENCE")
+  })
+
+  test("rejects numeric confidence in a guide completion check", () => {
+    const validate = (): void => {
+      validateDecisionBrief(briefWith(guideBrief, { completionCheck: "Boots 85% of the time" }))
+    }
+    expect(validate).toThrow("NUMERIC_CONFIDENCE")
+  })
+
+  test("rejects numeric confidence in a guide recommendation option", () => {
+    const validate = (): void => {
+      validateDecisionBrief(
+        briefWith(guideBrief, { recommendation: [{ option: "85% option", evidenceGrade: "high" }] }),
+      )
+    }
+    expect(validate).toThrow("NUMERIC_CONFIDENCE")
+  })
+
+  test("rejects numeric confidence in a guide procedure step risk", () => {
+    const validate = (): void => {
+      validateDecisionBrief(
+        briefWith(guideBrief, { procedure: [{ step: "Mount the cooler.", support: "verified", risk: "85% injury risk" }] }),
+      )
+    }
+    expect(validate).toThrow("NUMERIC_CONFIDENCE")
   })
 })
 
