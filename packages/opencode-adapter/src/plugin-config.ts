@@ -2,6 +2,10 @@ import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { z } from "zod"
 
+import { stripJsonc } from "./jsonc.ts"
+
+export { stripJsonc }
+
 /**
  * Zod schema for the consultation-agent plugin config.
  *
@@ -14,6 +18,7 @@ const roleCapsSchema = z.object({
   analyst: z.number().int().min(0),
   critic: z.number().int().min(0),
   verifier: z.number().int().min(0),
+  writer: z.number().int().min(0).default(0),
 })
 
 export const ConsultationPluginConfigSchema = z.object({
@@ -28,6 +33,9 @@ export const ConsultationPluginConfigSchema = z.object({
   explorer_model: z.string().optional(),
   analyst_agent: z.string().default("consultation-analyst"),
   analyst_model: z.string().optional(),
+  writer_agent: z.string().default("consultation-writer"),
+  writer_model: z.string().optional(),
+  writer_enabled: z.boolean().default(true),
   team_caps: z
     .object({
       round_cap: z.number().int().positive(),
@@ -66,6 +74,7 @@ export const MODEL_DEFAULTS = {
   analyst: "opencode-go/qwen3.7-max",
   critic: "opencode-go/glm-5.2",
   verifier: "opencode-go/qwen3.7-max",
+  writer: "deepseek/deepseek-v4-pro",
 } as const
 
 export type ModelRole = keyof typeof MODEL_DEFAULTS
@@ -82,6 +91,8 @@ export function resolveRoleModel(config: ConsultationPluginConfig, role: ModelRo
       return config.critic_model ?? MODEL_DEFAULTS.critic
     case "verifier":
       return config.verifier_model ?? MODEL_DEFAULTS.verifier
+    case "writer":
+      return config.writer_model ?? MODEL_DEFAULTS.writer
   }
 }
 
@@ -96,6 +107,7 @@ export interface RoleCapsConfig {
   analyst: number
   critic: number
   verifier: number
+  writer: number
 }
 
 export interface TierRoleCapsConfig {
@@ -111,9 +123,9 @@ export const TEAM_CAPS_DEFAULTS: TeamCapsConfig = {
 }
 
 export const TIER_ROLE_CAPS_DEFAULTS: TierRoleCapsConfig = {
-  fast: { explorer: 5, analyst: 0, critic: 0, verifier: 0 },
-  standard: { explorer: 5, analyst: 1, critic: 1, verifier: 1 },
-  deep: { explorer: 5, analyst: 3, critic: 2, verifier: 2 },
+  fast: { explorer: 5, analyst: 0, critic: 0, verifier: 0, writer: 0 },
+  standard: { explorer: 5, analyst: 1, critic: 1, verifier: 1, writer: 1 },
+  deep: { explorer: 5, analyst: 3, critic: 2, verifier: 2, writer: 2 },
 }
 
 export const COST_GUARD_USD_DEFAULT = 10
@@ -138,119 +150,6 @@ export function resolveTierRoleCaps(config: ConsultationPluginConfig): TierRoleC
 
 export function resolveCostGuardUsd(config: ConsultationPluginConfig): number {
   return config.cost_guard_provider_usd ?? COST_GUARD_USD_DEFAULT
-}
-
-/**
- * Strip JSONC comments (`//` line and `/* *​/` block) and trailing commas
- * from a JSONC text so it can be parsed by `JSON.parse`.
- *
- * String contents are preserved: comment-like sequences inside string
- * values are not stripped. Comments are removed first, then trailing
- * commas are removed from the comment-free text, so a comma separated
- * from its closing brace by a comment is still caught.
- */
-export function stripJsonc(text: string): string {
-  return stripTrailingCommas(stripComments(text))
-}
-
-function stripComments(text: string): string {
-  let result = ""
-  let i = 0
-  let inString = false
-
-  while (i < text.length) {
-    const ch = text[i]
-
-    if (inString) {
-      result += ch
-      if (ch === "\\") {
-        if (i + 1 < text.length) {
-          result += text[i + 1]
-          i += 2
-          continue
-        }
-      }
-      if (ch === '"') {
-        inString = false
-      }
-      i++
-      continue
-    }
-
-    if (ch === '"') {
-      inString = true
-      result += ch
-      i++
-      continue
-    }
-
-    if (ch === "/" && i + 1 < text.length && text[i + 1] === "/") {
-      i += 2
-      while (i < text.length && text[i] !== "\n") i++
-      continue
-    }
-
-    if (ch === "/" && i + 1 < text.length && text[i + 1] === "*") {
-      i += 2
-      while (i < text.length && !(text[i] === "*" && i + 1 < text.length && text[i + 1] === "/")) {
-        i++
-      }
-      i += 2
-      continue
-    }
-
-    result += ch
-    i++
-  }
-
-  return result
-}
-
-function stripTrailingCommas(text: string): string {
-  let result = ""
-  let i = 0
-  let inString = false
-
-  while (i < text.length) {
-    const ch = text[i]
-
-    if (inString) {
-      result += ch
-      if (ch === "\\") {
-        if (i + 1 < text.length) {
-          result += text[i + 1]
-          i += 2
-          continue
-        }
-      }
-      if (ch === '"') {
-        inString = false
-      }
-      i++
-      continue
-    }
-
-    if (ch === '"') {
-      inString = true
-      result += ch
-      i++
-      continue
-    }
-
-    if (ch === ",") {
-      let j = i + 1
-      while (j < text.length && /\s/.test(text[j] ?? "")) j++
-      if (j < text.length && (text[j] === "}" || text[j] === "]")) {
-        i++
-        continue
-      }
-    }
-
-    result += ch
-    i++
-  }
-
-  return result
 }
 
 /**
