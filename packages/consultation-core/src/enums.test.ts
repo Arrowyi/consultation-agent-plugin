@@ -46,8 +46,15 @@ describe("enums", () => {
     expect(StabilitySchema.options).toEqual(["stable", "conditional", "provisional"]);
   });
 
-  it("ConsultationModeSchema has the five modes", () => {
+  it("ConsultationModeSchema has the six public modes", () => {
     // given // when // then
-    expect(ConsultationModeSchema.options).toEqual(["select", "verify", "plan", "research", "guide"]);
+    expect(ConsultationModeSchema.options).toEqual([
+      "select",
+      "verify",
+      "plan",
+      "research",
+      "guide",
+      "author",
+    ]);
   });
 });

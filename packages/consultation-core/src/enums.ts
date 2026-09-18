@@ -23,8 +23,10 @@ export const StabilitySchema = z.enum(["stable", "conditional", "provisional"])
  * - guide: composite operational package (recommendation + procedure +
  *   background) for an end-to-end goal — produces an operational playbook, not
  *   a single decision or a pure understanding report.
+ * - author: produce a structured authored document (tutorial, architecture,
+ *   explanation) from a section manifest and verified claims.
  */
-export const ConsultationModeSchema = z.enum(["select", "verify", "plan", "research", "guide"])
+export const ConsultationModeSchema = z.enum(["select", "verify", "plan", "research", "guide", "author"])
 
 /**
  * Per-atom epistemic status. `inferred` and `unverifiable` must carry a basis
