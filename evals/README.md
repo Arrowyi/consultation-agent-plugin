@@ -19,7 +19,7 @@ Every case is marked with one of two grading tiers:
 
 ## Files
 
-- `fixtures/consultation-cases.json` - 10 cases from architecture 17.1.
+- `fixtures/consultation-cases.json` - 14 cases from architecture 17.1.
 - `fixtures/memory-cases.json` - 12 cases from architecture 17.2.
 - `run-evals.ts` - The runner script.
 
@@ -81,5 +81,5 @@ id encodes the scenario, and the test file encodes the function under test.
 | M11 | packages/memory-sqlite/src/store.test.ts |
 | M12 | packages/memory-sqlite/src/writer-lock.test.ts |
 
-Model-graded cases (C3, C4, C5, C6, C7, C8, C10, M3, M5) have no test-file
+Model-graded cases (C3, C4, C5, C6, C7, C8, C10, C11, C12, C13, C14, M3, M5) have no test-file
 mapping by design.

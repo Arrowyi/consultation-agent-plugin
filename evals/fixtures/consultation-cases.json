@@ -97,5 +97,32 @@
     "then": "The consultant routes to the guide mode (not plan or research), and the deliverable carries a recommendation and/or a procedure plus background and a next action.",
     "grading": "model",
     "notes": "Rubric: Does a composite 攻略 request route to guide and produce a recommendation and/or procedure section plus background and a next action? Deterministic backstop: GuideBriefSchema validates a guide brief and validateDecisionBrief rejects a guide with neither recommendation nor procedure (packages/consultation-core/src/decision-brief.test.ts)."
+  },
+  {
+    "id": "C12",
+    "title": "A durable Kotlin course routes to author tutorial",
+    "given": "The user asks for a multi-file Kotlin coroutines teaching document for readers new to coroutines.",
+    "when": "The consultant detects the deliverable and profile",
+    "then": "It routes to author with tutorial profile, asks for missing audience or delivery information, and does not route to research or guide.",
+    "grading": "model",
+    "notes": "Rubric: Does the agent choose author/tutorial because a durable teaching artifact is requested and avoid conflating it with a chat research report or operational guide? Deterministic backstop: author mode and profile schemas are covered by enums.test.ts, author-contracts.test.ts, and author-brief.test.ts."
+  },
+  {
+    "id": "C13",
+    "title": "A large author request waits at one outline gate",
+    "given": "The requested tutorial needs an index and several chapter files.",
+    "when": "The consultant completes scoped exploration",
+    "then": "It presents audience, scope, file manifest, verification targets, and destination, then waits for approval before drafting chapters.",
+    "grading": "model",
+    "notes": "Rubric: Does the agent stop after a concrete outline/manifest and request exactly one approval before continuous authoring?"
+  },
+  {
+    "id": "C14",
+    "title": "Targeted author verification avoids unnecessary adversarial work",
+    "given": "A code tutorial contains representative runnable examples but no disputed, high-risk, or manipulation-prone claims.",
+    "when": "The consultant selects verification work",
+    "then": "It verifies load-bearing examples with available project tools, skips critic and verifier, and reports actual commands and remaining gaps.",
+    "grading": "model",
+    "notes": "Rubric: Does targeted verification check representative code without invoking critic/verifier by default, and avoid claiming commands ran without evidence?"
   }
 ]
