@@ -63,6 +63,8 @@ Installed layout:
 
 Re-running `bun run install:local` rebuilds and replaces the installed bundle. Restart OpenCode afterwards to load it.
 
+The installed plugin ships every prompt it needs, including `assets/agents/writer.md`, and does not require OMO, Janus, global agent files under `~/.config/opencode/agents/`, external skills, or the source checkout at runtime. Missing writer capability degrades to inline packaged prompt behavior: the consultant constructs the same writing blueprint itself and discloses the degradation.
+
 ### Development only: source mode
 
 For iterating on this repo (unit tests, the integration proof, or a throwaway session), a plugin entry may point at `packages/opencode-adapter/src/index.ts`. Bun runs TypeScript directly, so no build is needed, but this mode requires the repo checkout and its `node_modules` to be present. It must never be used for an installed deployment or a release.
@@ -71,9 +73,9 @@ For iterating on this repo (unit tests, the integration proof, or a throwaway se
 
 Restart OpenCode so it picks up the new plugin entry. On startup the plugin's `config` hook runs and:
 1. registers the `consultant` primary agent;
-2. registers the four team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier` (each read-only, each on its own model);
+2. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its own model; the writer also denies shell execution);
 3. registers the `consultation-memory` local MCP server (when memory is enabled, the default);
-4. registers the `consultation_dispatch` tool, which the consultant uses to dispatch to the four team subagents (it handles only these four and does not interfere with the built-in `task` tool or other plugins);
+4. registers the `consultation_dispatch` tool, which the consultant uses to dispatch to the five team subagents (it handles only these five and does not interfere with the built-in `task` tool or other plugins);
 5. installs the `consultation` skill and the `consultation-memory` browse command into your OpenCode config directory.
 
 ## Step 4: Optional Plugin Configuration
@@ -88,7 +90,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
 ```jsonc
 {
-  // Models for the consultant and its four team subagents. All are optional;
+  // Models for the consultant and its five team subagents. All are optional;
   // the defaults below ship with the plugin and are tuned for cross-model
   // verification (consultant vs analyst vs critic vs verifier use different families).
   "agent_model": "deepseek/deepseek-v4-pro",
@@ -96,16 +98,19 @@ A missing file is fine; all fields have defaults. Create the file to override de
   "analyst_model": "opencode-go/qwen3.7-max",
   "critic_model": "opencode-go/glm-5.2",
   "verifier_model": "opencode-go/qwen3.7-max",
+  "writer_model": "deepseek/deepseek-v4-pro",
 
   // Subagent names. Rename only if they clash with an existing agent.
   "explorer_agent": "consultation-explorer",
   "analyst_agent": "consultation-analyst",
   "critic_agent": "consultation-critic",
   "verifier_agent": "consultation-verifier",
+  "writer_agent": "consultation-writer",
 
-  // Whether to register the critic and verifier subagents. Default true.
+  // Whether to register the critic, verifier, and writer subagents. Default true.
   "critic_enabled": true,
   "verifier_enabled": true,
+  "writer_enabled": true,
 
   // Team loop and fan-out caps. All optional; defaults shown.
   "team_caps": {
@@ -114,11 +119,13 @@ A missing file is fine; all fields have defaults. Create the file to override de
     "critic_search_cap": 5   // max critic verification searches per round
   },
 
-  // Max instances per role per tier (explorer/analyst/critic/verifier). All optional; defaults shown.
+  // Max instances per role per tier (explorer/analyst/critic/verifier/writer).
+  // All optional; defaults shown. A legacy matrix without `writer` still parses;
+  // `writer` then defaults to 0 in the supplied tiers.
   "tier_role_caps": {
-    "fast":     { "explorer": 5, "analyst": 0, "critic": 0, "verifier": 0 },
-    "standard": { "explorer": 5, "analyst": 1, "critic": 1, "verifier": 1 },
-    "deep":     { "explorer": 5, "analyst": 3, "critic": 2, "verifier": 2 }
+    "fast":     { "explorer": 5, "analyst": 0, "critic": 0, "verifier": 0, "writer": 0 },
+    "standard": { "explorer": 5, "analyst": 1, "critic": 1, "verifier": 1, "writer": 1 },
+    "deep":     { "explorer": 5, "analyst": 3, "critic": 2, "verifier": 2, "writer": 2 }
   },
 
   // Advisory stop-loss per provider (USD). Default 10.
@@ -158,10 +165,13 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `verifier_agent` | string | `"consultation-verifier"` | Name of the intent-audit subagent |
 | `verifier_model` | string (optional) | `opencode-go/qwen3.7-max` | Model for the verifier subagent |
 | `verifier_enabled` | boolean | `true` | Whether to register the verifier subagent |
+| `writer_agent` | string | `"consultation-writer"` | Name of the writing-blueprint subagent (`author` mode) |
+| `writer_model` | string (optional) | `deepseek/deepseek-v4-pro` | Model for the writer subagent |
+| `writer_enabled` | boolean | `true` | Whether to register the writer subagent |
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
 | `team_caps.critic_search_cap` | number | `5` | Max critic verification searches per round |
-| `tier_role_caps.*` | object | fast `5/0/0/0`, standard `5/1/1/1`, deep `5/3/2/2` | Max instances per role per tier (explorer/analyst/critic/verifier) |
+| `tier_role_caps.*` | object | fast `5/0/0/0/0`, standard `5/1/1/1/1`, deep `5/3/2/2/2` | Max instances per role per tier (explorer/analyst/critic/verifier/writer); a supplied matrix without `writer` resolves it to 0 |
 | `cost_guard_provider_usd` | number | `10` | Advisory stop-loss per provider (converge when approaching) |
 | `install_skill` | boolean | `true` | Whether to install the consultation skill into the OpenCode config dir |
 | `install_commands` | boolean | `true` | Whether to install the `consultation-memory` browse slash command |
@@ -173,7 +183,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
 The `embedding` block is all-or-nothing: set all four sub-fields or omit the block.
 
-The consultant leads a team of four read-only subagents, all `permission.edit = "deny"`: `explorer` (gather evidence, fan-out up to 5 instances), `analyst` (independent cross-model reasoning), `critic` (adversarial counter-evidence), and `verifier` (deliberate-deception intent audit). They run the loop `explore -> analyze -> critique`, bounded by a 3-round cap; in select and verify modes the verifier audits user-generated sources for astroturfing alongside. Each role runs on its own model by default so the analysis, critique, and intent audit are cross-model, not the consultant arguing with itself.
+The consultant leads a team of five read-only subagents, all `permission.edit = "deny"`: `explorer` (gather evidence, fan-out up to 5 instances), `analyst` (independent cross-model reasoning), `critic` (adversarial counter-evidence), `verifier` (deliberate-deception intent audit), and `writer` (writing blueprint or editorial review for `author` consultations; also `permission.bash = "deny"`, and optional via `writer_enabled`). They run the loop `explore -> analyze -> critique`, bounded by a 3-round cap; in select and verify modes the verifier audits user-generated sources for astroturfing alongside; in author mode the writer supplies the blueprint while critic and verifier run only on their proportionate triggers. Each role runs on its own model by default so the analysis, critique, and intent audit are cross-model, not the consultant arguing with itself.
 
 ## Data, State, and Cache Paths
 
@@ -193,7 +203,7 @@ Canonical experience records (user-approved items, claims, evidence, decisions, 
 
 1. **Agent selectable**: start OpenCode and confirm the `consultant` agent appears in the agent list.
 2. **Memory MCP starts**: the `consultation-memory` MCP server is registered. Its five tools (`memory_recall`, `memory_expand`, `memory_prepare`, `memory_commit`, `memory_manage`) are available to the consultant agent.
-3. **Team subagents registered**: `consultation-explorer`, `consultation-analyst`, and `consultation-critic` appear as subagents (mode `subagent`), dispatched by the consultant via the `task` tool.
+3. **Team subagents registered**: `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, and `consultation-writer` appear as subagents (mode `subagent`), dispatched by the consultant via the `consultation_dispatch` tool.
 4. **Skill present**: the skill file exists at `~/.config/opencode/skills/consultation/SKILL.md` (or your `$OPENCODE_CONFIG_DIR/skills/consultation/SKILL.md`).
 
 You can also run the automated integration proof:
