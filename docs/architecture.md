@@ -6,7 +6,7 @@ The living architecture specification for the consultation-agent plugin, describ
 
 Build an independent consultation plugin with a harness-neutral consultation core, a harness-neutral memory core, a local SQLite store, a local MCP interface, and a thin OpenCode adapter.
 
-The public experience is a single, concise, evidence-driven `consultant` primary agent with five modes (`select`, `verify`, `plan`, `research`, `guide`). It answers simple questions briefly, produces a one-screen decision brief for decision questions, an operational playbook for composite end-to-end goals, and a readable research report for open-ended understanding questions, and distinguishes verified facts from synthesis.
+The public experience is a single, concise, evidence-driven `consultant` primary agent with six modes (`select`, `verify`, `plan`, `research`, `guide`, `author`). It answers simple questions briefly, produces a one-screen decision brief for decision questions, an operational playbook for composite end-to-end goals, a readable research report for open-ended understanding questions, and a durable technical document (tutorial, architecture analysis, or technical explanation) behind one outline-approval gate, and distinguishes verified facts from synthesis.
 
 The memory system stores only user-approved experience packages. It does not automatically persist complete conversations. Canonical experience records remain independent of classification schemes, summarization models, embedding models, and storage indexes. Every derived view can be rebuilt.
 
@@ -92,14 +92,14 @@ Core packages must not import OpenCode or the MCP SDK. Adapters translate host a
 
 ### 5.1 Consultant Agent
 
-The `consultant` primary agent is the single entry point and owns interaction and final expression. It routes every question to one of five modes — `select`, `verify`, `plan`, `research`, or `guide` — and a tier (fast, standard, or deep). It:
+The `consultant` primary agent is the single entry point and owns interaction and final expression. It routes every question to one of six modes — `select`, `verify`, `plan`, `research`, `guide`, or `author` — and a tier (fast, standard, or deep; `author` never uses fast). It:
 
 - detects the mode from intent and chooses the tier;
 - identifies decision-changing missing information;
 - asks at most one to three initial questions when needed;
-- invokes search, memory, and the read-only team (explorer, analyst, critic, verifier);
+- invokes search, memory, and the read-only team (explorer, analyst, critic, verifier, writer);
 - retains final editorial control over delegated research;
-- returns a mode-specific decision brief or a readable research report;
+- returns a mode-specific decision brief, a readable research report, or an authored document delivery;
 - recognizes natural-language memory intents.
 
 It does not directly implement persistence or source grading rules.
@@ -175,14 +175,14 @@ The first adapter:
 - registers or launches the bundled local memory MCP;
 - maps OpenCode session IDs into namespaced core IDs;
 - exposes model and provider configuration;
-- registers the four read-only team subagents (explorer, analyst, critic, verifier) and installs the `consultation-memory` browse command;
+- registers the five read-only team subagents (explorer, analyst, critic, verifier, writer — the writer additionally denies shell execution and is optional via `writer_enabled`) and installs the `consultation-memory` browse command;
 - does not contain evidence, recommendation, or persistence logic.
 
 ## 6. Consultation Workflow
 
 ```mermaid
 flowchart TD
-    Q[User Question] --> MODE[Detect Mode: select / verify / plan / research / guide]
+    Q[User Question] --> MODE[Detect Mode: select / verify / plan / research / guide / author]
     MODE --> T[Choose Tier: fast / standard / deep]
     T --> M[Recall Memory + Surface Pending Outcomes]
     M --> C{Decision-Changing Info Missing?}
@@ -200,6 +200,17 @@ flowchart TD
     SYN --> O[Mode-Specific Brief or Readable Report]
     O --> SAVE[Auto-Save Consultation Record + Register Outcome]
 ```
+
+`author` consultations run a dedicated state machine behind one outline-approval gate:
+
+```text
+route -> intake (audience/delivery/scope) -> explore load-bearing claims
+-> writer blueprint -> outline + file manifest -> one approval
+-> continuous authoring -> proportionate verification -> cross-file check
+-> final AuthorBrief -> memory summary
+```
+
+In this mode the adversarial roles are proportionate, never default: the critic runs only for `strict` verification, conflicting evidence, high-risk material, or a failed execution that challenges the explanation; the verifier runs only for user-generated product claims or manipulation-prone evidence. The consultant primary writes all artifact files and runs executable verification; every subagent stays read-only.
 
 ### 6.1 Consultation Tiers
 
@@ -227,7 +238,7 @@ Use for comparisons, recommendations, personalization, or moderate inference.
 Use for high risk, strong source conflicts, missing primary evidence, inference-dominated conclusions, broad comparisons, or any research-mode question.
 
 - Ask the user before escalating.
-- Dispatch the full team (explorers, analysts, critic, verifier) and reconcile their independent findings.
+- Dispatch the full team (explorers, analysts, critic, verifier; `author` consultations add up to two writers and keep critic/verifier proportional) and reconcile their independent findings.
 - Require supporting and opposing evidence, and run the intent audit on user-generated sources.
 - Keep final synthesis and output with the consultant agent.
 
@@ -242,6 +253,28 @@ The router evaluates:
 3. conflict among reliable sources;
 4. dependence on personal context;
 5. proportion of synthesis versus direct evidence.
+
+### 6.3 Team Roles and Tier Caps
+
+The consultant leads five read-only subagent roles, dispatched through the adapter's `consultation_dispatch` tool:
+
+| Role | Purpose |
+|---|---|
+| `explorer` | gather and grade evidence (fan-out up to 5 instances) |
+| `analyst` | independent cross-model reasoning over evidence |
+| `critic` | adversarial counter-evidence pass; hard gate over research hypotheses |
+| `verifier` | deliberate-deception intent audit of user-generated sources |
+| `writer` | writing blueprint or editorial review for `author` consultations (edit and shell denied) |
+
+Per-tier instance caps (`TIER_ROLE_CAPS`, mirrored by the adapter's validated `tier_role_caps` config):
+
+| Tier | explorer | analyst | critic | verifier | writer |
+|---|---|---|---|---|---|
+| fast | 5 | 0 | 0 | 0 | 0 |
+| standard | 5 | 1 | 1 | 1 | 1 |
+| deep | 5 | 3 | 2 | 2 | 2 |
+
+`author` never runs at fast tier. The writer is optional (`writer_enabled`, default true); when it is disabled or unavailable, the consultant constructs the same writing blueprint inline and discloses the degradation. A legacy custom cap matrix without `writer` still parses and resolves `writer` to 0.
 
 ## 7. Epistemic Model
 
@@ -597,6 +630,7 @@ The deliverable depends on the detected mode (the exact templates live in the `c
 - **plan** — a goal + suitability, a step table (step, support, confidence, basis, risk, alternatives), a robustness-review note, an assumption list, a health note only on a threshold trigger, residual uncertainty, alternatives + switch conditions, confidence, stability, and the first concrete action.
 - **research** — a readable report: bottom line first (one plain sentence), plain-language key points, what it means for the user, and a confidence line, with evidence, disagreements, residual uncertainty, and sources folded behind a disclosure.
 - **guide** — a composite operational playbook: bottom line first, suitability and prerequisites, a recommendation table (option, evidence grade, contamination note, suits, trial advice), a procedure table (step, support, confidence, basis, risk, alternatives), background and pitfalls, a completion check, confidence, stability, evidence and disagreements folded behind a disclosure, and the first concrete action. Carries at least a recommendation or a procedure.
+- **author** — a durable document delivery: audience, scope, delivery (`inline` / `single_file` / `multi_file`), and verification (`light` / `targeted` / `strict`) header; the approved document map (file/section, purpose, prerequisites, verification target); the artifact result (inline content or approved relative paths); a verification summary of what was actually checked plus residual uncertainty; and the first reading or review action. One primary profile (`tutorial`, `architecture`, `explanation`) controls the outline and quality checks, and large documents are delivered behind one outline-approval gate. AuthorBrief is the validation/memory unit; authored files are caller-approved side products referenced by the brief, not stored in memory.
 
 Every mode ends with the next useful action, even when abstaining. The agent may state that no reliable unique winner exists.
 
@@ -614,7 +648,10 @@ Every mode ends with the next useful action, even when abstaining. The agent may
 - insufficient evidence leads to honest abstention;
 - prompt injection is blocked and reported;
 - deep consultation asks before consuming the larger budget;
-- a composite end-to-end request routes to the guide mode and carries at least a recommendation or a procedure.
+- a composite end-to-end request routes to the guide mode and carries at least a recommendation or a procedure;
+- a durable tutorial or course request routes to the author mode with the correct profile instead of research or guide;
+- a large author request presents an outline and file manifest and waits for exactly one approval before drafting chapters;
+- targeted author verification checks representative code without invoking the critic or verifier by default.
 
 ### 17.2 Memory Evaluation Cases
 
