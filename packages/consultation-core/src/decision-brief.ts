@@ -1,41 +1,14 @@
 import { z, ZodError } from "zod"
 
+import { AuthorBriefSchema, assertValidAuthorDelivery, authorTexts } from "./author-brief.ts"
+import { baseBriefShape, basisRefinement } from "./brief-base.ts"
 import {
   ConfidenceSchema,
   EpistemicStatusSchema,
   SourceGradeSchema,
   SourceIntentSchema,
-  StabilitySchema,
-  type EpistemicStatus,
 } from "./enums.ts"
 import { ConsultationError, ConsultationErrorCode } from "./errors.ts"
-
-const BriefSourceSchema = z.object({
-  title: z.string(),
-  url: z.string().optional(),
-  grade: SourceGradeSchema,
-})
-
-const baseBriefShape = {
-  conclusion: z.string().min(1),
-  confidence: ConfidenceSchema,
-  stability: StabilitySchema,
-  verifiedFacts: z.array(z.string()).default([]),
-  synthesis: z.array(z.string()).default([]),
-  sources: z.array(BriefSourceSchema).min(1).max(5),
-  nextAction: z.string().min(1),
-  memoryDisclosure: z.array(z.string()).default([]),
-} as const
-
-function requiresBasis(status: EpistemicStatus): boolean {
-  return status === "inferred" || status === "unverifiable"
-}
-
-function basisRefinement<T extends { basis?: string }>(
-  status: (value: T) => EpistemicStatus,
-): (value: T) => boolean {
-  return (value) => !requiresBasis(status(value)) || (value.basis !== undefined && value.basis.length > 0)
-}
 
 export const SelectCandidateSchema = z.object({
   option: z.string().min(1),
@@ -165,6 +138,7 @@ export const DecisionBriefSchema = z.discriminatedUnion("mode", [
   PlanBriefSchema,
   ResearchBriefSchema,
   GuideBriefSchema,
+  AuthorBriefSchema,
 ])
 export type DecisionBrief = z.infer<typeof DecisionBriefSchema>
 
@@ -235,6 +209,8 @@ function briefTexts(brief: DecisionBrief): string[] {
       if (step.basis !== undefined) texts.push(step.basis)
       if (step.risk !== undefined) texts.push(step.risk)
     }
+  } else if (brief.mode === "author") {
+    texts.push(...authorTexts(brief))
   } else {
     texts.push(...brief.keyPoints, ...brief.disagreements, ...brief.residualUncertainty)
     if (brief.soWhat !== undefined) texts.push(brief.soWhat)
@@ -250,6 +226,7 @@ function briefTexts(brief: DecisionBrief): string[] {
 export function validateDecisionBrief(input: unknown): DecisionBrief {
   try {
     const brief = DecisionBriefSchema.parse(input)
+    if (brief.mode === "author") assertValidAuthorDelivery(brief)
     if (brief.mode === "guide" && brief.recommendation.length === 0 && brief.procedure.length === 0) {
       throw new ConsultationError(ConsultationErrorCode.VALIDATION_FAILED)
     }
