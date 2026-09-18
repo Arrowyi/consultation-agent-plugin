@@ -29,6 +29,7 @@ export const REQUIRED_INSTALLED_FILES = [
   "assets/agents/consultation-critic.md",
   "assets/agents/consultation-verifier.md",
   "assets/agents/explorer.md",
+  "assets/agents/writer.md",
   "assets/skills/consultation/SKILL.md",
 ]
 
@@ -132,4 +133,6 @@ async function main(): Promise<void> {
   console.log(`  CONSULTATION_PLUGIN_ENTRY=${entry} bun run integration`)
 }
 
-await main()
+if (import.meta.main) {
+  await main()
+}
