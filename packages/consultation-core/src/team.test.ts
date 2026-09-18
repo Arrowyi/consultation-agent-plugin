@@ -2,10 +2,11 @@ import { describe, expect, it } from "bun:test"
 
 import {
   DEFAULT_TEAM_CAPS,
-  TIER_ROLE_CAPS,
+  TeamRoleSchema,
   initialState,
   isConverged,
   nextAction,
+  tierRoleCaps,
   withCritique,
   type ConsultationState,
   type CritiqueDraft,
@@ -108,12 +109,19 @@ describe("isConverged", () => {
   })
 })
 
-describe("TIER_ROLE_CAPS", () => {
-  it("encodes the tier matrix", () => {
+describe("TeamRoleSchema", () => {
+  it("lists every team role including writer", () => {
     // given // when // then
-    expect(TIER_ROLE_CAPS.fast).toEqual({ explorer: 5, analyst: 0, critic: 0, verifier: 0 })
-    expect(TIER_ROLE_CAPS.standard).toEqual({ explorer: 5, analyst: 1, critic: 1, verifier: 1 })
-    expect(TIER_ROLE_CAPS.deep).toEqual({ explorer: 5, analyst: 3, critic: 2, verifier: 2 })
+    expect(TeamRoleSchema.options).toEqual(["explorer", "analyst", "critic", "verifier", "writer"])
+  })
+})
+
+describe("tierRoleCaps", () => {
+  it("encodes the tier matrix including writer", () => {
+    // given // when // then
+    expect(tierRoleCaps("fast")).toEqual({ explorer: 5, analyst: 0, critic: 0, verifier: 0, writer: 0 })
+    expect(tierRoleCaps("standard")).toEqual({ explorer: 5, analyst: 1, critic: 1, verifier: 1, writer: 1 })
+    expect(tierRoleCaps("deep")).toEqual({ explorer: 5, analyst: 3, critic: 2, verifier: 2, writer: 2 })
   })
 })
 

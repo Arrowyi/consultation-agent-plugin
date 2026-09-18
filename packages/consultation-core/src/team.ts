@@ -5,7 +5,7 @@ import { ConfidenceSchema, SourceGradeSchema, TierSchema, type Tier } from "./en
 import { DecomposedClaimSchema } from "./research-contracts.ts"
 import { GradedSourceSchema } from "./research-contracts.ts"
 
-export const TeamRoleSchema = z.enum(["explorer", "analyst", "critic", "verifier"])
+export const TeamRoleSchema = z.enum(["explorer", "analyst", "critic", "verifier", "writer"])
 export type TeamRole = z.infer<typeof TeamRoleSchema>
 
 export const TeamPhaseSchema = z.enum(["explore", "analyze", "critique", "synthesize"])
@@ -29,12 +29,13 @@ export interface RoleCaps {
   analyst: number
   critic: number
   verifier: number
+  writer: number
 }
 
 export const TIER_ROLE_CAPS: Record<Tier, RoleCaps> = {
-  fast: { explorer: 5, analyst: 0, critic: 0, verifier: 0 },
-  standard: { explorer: 5, analyst: 1, critic: 1, verifier: 1 },
-  deep: { explorer: 5, analyst: 3, critic: 2, verifier: 2 },
+  fast: { explorer: 5, analyst: 0, critic: 0, verifier: 0, writer: 0 },
+  standard: { explorer: 5, analyst: 1, critic: 1, verifier: 1, writer: 1 },
+  deep: { explorer: 5, analyst: 3, critic: 2, verifier: 2, writer: 2 },
 }
 
 export function tierRoleCaps(tier: Tier): RoleCaps {
