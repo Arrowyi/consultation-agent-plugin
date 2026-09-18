@@ -106,6 +106,54 @@ describe("createConsultationConfigHook", () => {
     }
   })
 
+  it("registers the writer subagent by default", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    process.env.HOME = tmpHome
+    delete process.env.CONSULTATION_CONFIG
+    delete process.env.XDG_CONFIG_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      const writer = config.agent?.["consultation-writer"] as { mode: string; permission: { edit: string; bash: string } }
+      expect(writer.mode).toBe("subagent")
+      expect(writer.permission).toEqual({ edit: "deny", bash: "deny" })
+    } finally {
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it("omits the writer subagent when writer_enabled=false", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-writeroff-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, '{\n  "writer_enabled": false}')
+    process.env.HOME = tmpHome
+    process.env.CONSULTATION_CONFIG = configPath
+    delete process.env.XDG_CONFIG_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      expect(config.agent?.["consultation-writer"]).toBeUndefined()
+    } finally {
+      rmSync(tmpHome, { recursive: true, force: true })
+      rmSync(tmpConfigDir, { recursive: true, force: true })
+    }
+  })
+
   it("still registers explorer and analyst when critic_enabled=false", async () => {
     // given
     const tmpHome = makeTempHome()

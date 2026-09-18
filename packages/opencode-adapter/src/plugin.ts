@@ -6,6 +6,7 @@ import {
   registerExplorer,
   registerAnalyst,
   registerVerifier,
+  registerWriter,
 } from "./agent-registration.ts"
 import { createConsultationDispatchTool } from "./dispatch-tool.ts"
 import { registerMemoryMcp } from "./mcp-registration.ts"
@@ -40,6 +41,10 @@ export function createConsultationConfigHook(
 
     if (pluginConfig.verifier_enabled) {
       await registerVerifier(config, pluginConfig)
+    }
+
+    if (pluginConfig.writer_enabled) {
+      await registerWriter(config, pluginConfig)
     }
 
     if (pluginConfig.memory_enabled) {
