@@ -4,6 +4,7 @@ import {
   registerConsultationCritic,
   registerExplorer,
   registerAnalyst,
+  registerWriter,
   buildRuntimeBindings,
   injectRuntimeBindings,
 } from "./agent-registration.ts"
@@ -20,6 +21,8 @@ function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): Consulta
     analyst_agent: "consultation-analyst",
     verifier_agent: "consultation-verifier",
     verifier_enabled: true,
+    writer_agent: "consultation-writer",
+    writer_enabled: true,
     ...overrides,
   }
 }
@@ -117,9 +120,9 @@ describe("buildRuntimeBindings", () => {
     expect(block).toContain("round_cap=3")
     expect(block).toContain("explorer<=5")
     expect(block).toContain("critic_searches<=5")
-    expect(block).toContain("fast(e5,a0,c0,v0)")
-    expect(block).toContain("standard(e5,a1,c1,v1)")
-    expect(block).toContain("deep(e5,a3,c2,v2)")
+    expect(block).toContain("fast(e5,a0,c0,v0,w0)")
+    expect(block).toContain("standard(e5,a1,c1,v1,w1)")
+    expect(block).toContain("deep(e5,a3,c2,v2,w2)")
     expect(block).toContain("~$10 per provider")
   })
 
@@ -144,9 +147,9 @@ describe("buildRuntimeBindings", () => {
     // given
     const config = makeConfig({
       tier_role_caps: {
-        fast: { explorer: 5, analyst: 0, critic: 0, verifier: 0 },
-        standard: { explorer: 5, analyst: 2, critic: 1, verifier: 1 },
-        deep: { explorer: 5, analyst: 4, critic: 3, verifier: 2 },
+        fast: { explorer: 5, analyst: 0, critic: 0, verifier: 0, writer: 0 },
+        standard: { explorer: 5, analyst: 2, critic: 1, verifier: 1, writer: 0 },
+        deep: { explorer: 5, analyst: 4, critic: 3, verifier: 2, writer: 0 },
       },
     })
 
@@ -154,8 +157,8 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("standard(e5,a2,c1,v1)")
-    expect(block).toContain("deep(e5,a4,c3,v2)")
+    expect(block).toContain("standard(e5,a2,c1,v1,w0)")
+    expect(block).toContain("deep(e5,a4,c3,v2,w0)")
   })
 
   it("says critic DISABLED when critic_enabled is false", () => {
@@ -167,6 +170,28 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(block).toContain("critic DISABLED by configuration")
+  })
+
+  it("reports writer enabled state in team subagents", () => {
+    // given
+    const config = makeConfig({ writer_model: "test/writer-model" })
+
+    // when
+    const block = buildRuntimeBindings(config, "oc-ns")
+
+    // then
+    expect(block).toContain("writer `consultation-writer` (test/writer-model)")
+  })
+
+  it("says writer DISABLED when writer_enabled is false", () => {
+    // given
+    const config = makeConfig({ writer_enabled: false })
+
+    // when
+    const block = buildRuntimeBindings(config, "oc-ns")
+
+    // then
+    expect(block).toContain("writer DISABLED by configuration")
   })
 })
 
@@ -309,7 +334,7 @@ describe("registerConsultationCritic", () => {
     expect(critic.prompt).toContain("# Consultation Critic")
     expect(critic.prompt).toContain("counterEvidence")
     expect(critic.description).toContain("counter-evidence")
-    expect(critic.permission.edit).toBe("deny")
+    expect(critic.permission).toEqual({ edit: "deny" })
   })
 
   it("sets the critic model when critic_model is configured", async () => {
@@ -387,7 +412,7 @@ describe("registerExplorer", () => {
     expect(explorer.mode).toBe("subagent")
     expect(explorer.prompt).toContain("# Explorer")
     expect(explorer.model).toBe("deepseek/deepseek-flash")
-    expect(explorer.permission.edit).toBe("deny")
+    expect(explorer.permission).toEqual({ edit: "deny" })
   })
 
   it("overrides the explorer model from explorer_model", async () => {
@@ -423,7 +448,7 @@ describe("registerAnalyst", () => {
     expect(analyst.mode).toBe("subagent")
     expect(analyst.prompt).toContain("# Analyst")
     expect(analyst.model).toBe("opencode-go/qwen3.7-max")
-    expect(analyst.permission.edit).toBe("deny")
+    expect(analyst.permission).toEqual({ edit: "deny" })
   })
 
   it("overrides the analyst model from analyst_model", async () => {
@@ -437,5 +462,23 @@ describe("registerAnalyst", () => {
     // then
     const analyst = config.agent?.["consultation-analyst"] as { model: string }
     expect(analyst.model).toBe("test/analyst-model")
+  })
+})
+
+describe("registerWriter", () => {
+  it("installs a shell-free read-only writer", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerWriter(config, pluginConfig)
+
+    // then
+    expect(config.agent?.["consultation-writer"]).toMatchObject({
+      mode: "subagent",
+      model: "deepseek/deepseek-v4-pro",
+      permission: { edit: "deny", bash: "deny" },
+    })
   })
 })

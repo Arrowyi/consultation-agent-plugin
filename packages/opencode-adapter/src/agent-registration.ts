@@ -23,7 +23,7 @@ interface SubagentEntry {
   description: string
   prompt: string
   model: string
-  permission: { edit: string }
+  permission: Record<string, string>
 }
 
 const RUNTIME_BINDINGS_PLACEHOLDER = /<!--\s*RUNTIME-BINDINGS[\s\S]*?-->/
@@ -39,6 +39,9 @@ const CRITIC_DESCRIPTION =
 
 const VERIFIER_DESCRIPTION =
   "Intent-audit specialist. Audits user-generated sources for deliberate deception (paid shilling, coordinated smear campaigns, astroturfing) using text, account, temporal, rating-distribution, and platform-marker signals, and returns per-source intent annotations. Dispatched by the consultant for select and verify consultations at standard and deep tiers."
+
+const WRITER_DESCRIPTION =
+  "Read-only writing specialist. Produces a writing blueprint or editorial review from the supplied evidence packet without researching missing facts, executing commands, writing files, or overriding the consultant's final editorial control. Dispatched by the consultant for author consultations."
 
 /**
  * Build the runtime bindings block that the adapter injects into the
@@ -71,6 +74,11 @@ export function buildRuntimeBindings(
       ? `verifier \`${pluginConfig.verifier_agent}\` (${resolveRoleModel(pluginConfig, "verifier")})`
       : "verifier DISABLED by configuration",
   )
+  roleParts.push(
+    pluginConfig.writer_enabled
+      ? `writer \`${pluginConfig.writer_agent}\` (${resolveRoleModel(pluginConfig, "writer")})`
+      : "writer DISABLED by configuration",
+  )
   const teamLine = `- Team subagents: ${roleParts.join(", ")}`
 
   const caps = resolveTeamCaps(pluginConfig)
@@ -78,7 +86,7 @@ export function buildRuntimeBindings(
   const costGuard = resolveCostGuardUsd(pluginConfig)
 
   const capsLine = `- Team caps: round_cap=${caps.round_cap}, explorer<=${caps.explorer_cap}, critic_searches<=${caps.critic_search_cap} per round`
-  const tierMatrixLine = `- Tier role caps: fast(e${tiers.fast.explorer},a${tiers.fast.analyst},c${tiers.fast.critic},v${tiers.fast.verifier}) standard(e${tiers.standard.explorer},a${tiers.standard.analyst},c${tiers.standard.critic},v${tiers.standard.verifier}) deep(e${tiers.deep.explorer},a${tiers.deep.analyst},c${tiers.deep.critic},v${tiers.deep.verifier})`
+  const tierMatrixLine = `- Tier role caps: fast(e${tiers.fast.explorer},a${tiers.fast.analyst},c${tiers.fast.critic},v${tiers.fast.verifier},w${tiers.fast.writer}) standard(e${tiers.standard.explorer},a${tiers.standard.analyst},c${tiers.standard.critic},v${tiers.standard.verifier},w${tiers.standard.writer}) deep(e${tiers.deep.explorer},a${tiers.deep.analyst},c${tiers.deep.critic},v${tiers.deep.verifier},w${tiers.deep.writer})`
   const costLine = `- Cost guard: ~$${costGuard} per provider (advisory, converge when approaching)`
 
   const namespaceLine = `- Memory namespace: \`${namespace}\``
@@ -139,7 +147,7 @@ export async function registerConsultantAgent(
  */
 async function registerReadOnlySubagent(
   config: MutableConfig,
-  options: { name: string; description: string; assetFile: string; model: string },
+  options: { name: string; description: string; assetFile: string; model: string; denyBash?: boolean },
 ): Promise<void> {
   if (config.agent?.[options.name]) return
 
@@ -150,7 +158,7 @@ async function registerReadOnlySubagent(
     description: options.description,
     prompt: body,
     model: options.model,
-    permission: { edit: "deny" },
+    permission: options.denyBash ? { edit: "deny", bash: "deny" } : { edit: "deny" },
   }
 
   if (!config.agent) config.agent = {}
@@ -202,5 +210,18 @@ export async function registerVerifier(
     description: VERIFIER_DESCRIPTION,
     assetFile: "agents/consultation-verifier.md",
     model: resolveRoleModel(pluginConfig, "verifier"),
+  })
+}
+
+export async function registerWriter(
+  config: MutableConfig,
+  pluginConfig: ConsultationPluginConfig,
+): Promise<void> {
+  await registerReadOnlySubagent(config, {
+    name: pluginConfig.writer_agent,
+    description: WRITER_DESCRIPTION,
+    assetFile: "agents/writer.md",
+    model: resolveRoleModel(pluginConfig, "writer"),
+    denyBash: true,
   })
 }
