@@ -35,11 +35,13 @@ describe("resolveRoleTarget", () => {
     const explorer = resolveRoleTarget(config(), "explorer")
     const analyst = resolveRoleTarget(config(), "analyst")
     const critic = resolveRoleTarget(config(), "critic")
+    const writer = resolveRoleTarget(config(), "writer")
 
     // then
     expect(explorer).toEqual({ agentName: "consultation-explorer", model: "deepseek/deepseek-flash" })
     expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.7-max" })
     expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.2" })
+    expect(writer).toEqual({ agentName: "consultation-writer", model: "deepseek/deepseek-v4-pro" })
   })
 
   it("honors model overrides", () => {
@@ -51,6 +53,20 @@ describe("resolveRoleTarget", () => {
 
     // then
     expect(analyst.model).toBe("test/analyst")
+  })
+
+  it("resolves the configured writer target", () => {
+    // given
+    const cfg = config({
+      writer_agent: "custom-writer",
+      writer_model: "provider/writer-model",
+    })
+
+    // when
+    const writer = resolveRoleTarget(cfg, "writer")
+
+    // then
+    expect(writer).toEqual({ agentName: "custom-writer", model: "provider/writer-model" })
   })
 })
 

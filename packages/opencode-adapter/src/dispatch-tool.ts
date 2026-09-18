@@ -2,11 +2,11 @@ import { tool, type ToolContext, type ToolDefinition, type PluginInput } from "@
 import { loadPluginConfig, resolveRoleModel, type ConsultationPluginConfig } from "./plugin-config.ts"
 
 /**
- * The four roles the consultant may dispatch. Each maps to one of our own
+ * The five roles the consultant may dispatch. Each maps to one of our own
  * subagents; this tool never touches any other agent, the built-in `task`
  * tool, or any other plugin's dispatch mechanism.
  */
-export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier"] as const
+export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer"] as const
 export type DispatchRole = (typeof DISPATCH_ROLES)[number]
 
 export interface RoleTarget {
@@ -27,6 +27,8 @@ export function resolveRoleTarget(
       return { agentName: config.critic_agent, model: resolveRoleModel(config, "critic") }
     case "verifier":
       return { agentName: config.verifier_agent, model: resolveRoleModel(config, "verifier") }
+    case "writer":
+      return { agentName: config.writer_agent, model: resolveRoleModel(config, "writer") }
   }
 }
 
@@ -83,10 +85,11 @@ export interface DispatchClient {
 /**
  * Build the `consultation_dispatch` tool.
  *
- * It dispatches ONLY to the three consultation subagents (`explorer`,
- * `analyst`, `critic`) using the raw OpenCode client session API, pinning both
- * the agent and its configured model. It is additive: it neither shadows nor
- * interferes with the built-in `task` tool or any other plugin's tools.
+ * It dispatches ONLY to the five consultation subagents (`explorer`,
+ * `analyst`, `critic`, `verifier`, `writer`) using the raw OpenCode client
+ * session API, pinning both the agent and its configured model. It is additive:
+ * it neither shadows nor interferes with the built-in `task` tool or any other
+ * plugin's tools.
  *
  * Sync-only in v1: `session.prompt` blocks until the subagent's turn completes
  * and returns the final assistant text. The consultant fans out by issuing
@@ -97,7 +100,7 @@ export function createConsultationDispatchTool(client: PluginInput["client"]): T
 
   return tool({
     description:
-      "Dispatch work to one of the consultation team subagents (explorer, analyst, critic, verifier) and get its result. Dispatch ONLY to these four roles; never use it for any other agent.",
+      "Dispatch work to one of the consultation team subagents (explorer, analyst, critic, verifier, writer) and get its result. Dispatch ONLY to these five roles; never use it for any other agent.",
     args: {
       role: tool.schema.enum(DISPATCH_ROLES),
       prompt: tool.schema.string(),
