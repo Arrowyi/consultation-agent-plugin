@@ -1,17 +1,17 @@
 ---
 name: consultation
-description: Evidence-driven consultation workflow for answering questions and producing decision briefs, operational playbooks, or readable research reports across five modes (select / verify / plan / research / guide). Load when the user asks for a recommendation, comparison, product or option choice, rumor or claim verification, an actionable plan (lifestyle, fitness, learning, interpersonal), a composite end-to-end operational guide (攻略, X入门, guide to X, how do I get started with X), a deep-dive investigation or topic survey, personalized advice, or a second opinion — especially when evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer. Covers two-axis routing, claim decomposition, source grading, deliberate-deception intent audit, hidden-channel strategy, epistemic status labels, risk thresholds, counter-evidence passes, mode-specific decision briefs and research reports, and auto-save memory with an outcome loop.
+description: Evidence-driven consultation workflow producing decision briefs, operational playbooks, research reports, or durable technical documents across six modes (select / verify / plan / research / guide / author). Load when the user asks for a recommendation or option choice, rumor or claim verification, an actionable plan (fitness, learning), a composite operational guide (攻略, X入门, guide to X), a deep-dive investigation, a durable tutorial, course, architecture analysis, or technical explanation document (教程, 课程, 架构分析, write-up), personalized advice, or a second opinion — especially when evidence quality, source reliability, astroturfing, or risk level affects the answer. Covers two-axis routing, claim decomposition, source grading, deception intent audit, channel strategy, epistemic status, risk thresholds, counter-evidence passes, mode-specific briefs, the author workflow (profiles, outline gate, delivery/verification axes, writer blueprint, staged permissions), and auto-save memory with an outcome loop.
 ---
 
 # Consultation Skill
 
 ## Purpose
 
-Define the authoritative cognitive workflow for evidence-driven consultation. Route every question to one of four modes (select, verify, plan, research), decompose it into claims, grade evidence, audit user-generated sources for deliberate deception, classify risk, run counter-evidence checks, label every atom with an epistemic status, and produce a concise mode-specific decision brief or a readable research report. Reusable by any agent, not only `consultant`.
+Define the authoritative cognitive workflow for evidence-driven consultation. Route every question to one of six modes (select, verify, plan, research, guide, author), decompose it into claims, grade evidence, audit user-generated sources for deliberate deception, classify risk, run counter-evidence checks, label every atom with an epistemic status, and produce a concise mode-specific decision brief, a readable research report, or a durable technical document behind one outline-approval gate. Reusable by any agent, not only `consultant`.
 
 ## When to Use
 
-Load this skill when the user asks for a recommendation, comparison, or option choice (`select`); a check on a claim, rumor, or argument (`verify`); an actionable plan for lifestyle, fitness, body care, interpersonal, or learning goals (`plan`); a composite operational guide that fuses a recommendation, a procedure, and background for an end-to-end goal (攻略, X入门, guide to X, how do I get started with X) (`guide`); a deep investigation or topic survey (`research`); personalized advice; or a second opinion — and whenever evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer.
+Load this skill when the user asks for a recommendation, comparison, or option choice (`select`); a check on a claim, rumor, or argument (`verify`); an actionable plan for lifestyle, fitness, body care, interpersonal, or learning goals (`plan`); a composite operational guide that fuses a recommendation, a procedure, and background for an end-to-end goal (攻略, X入门, guide to X, how do I get started with X) (`guide`); a deep investigation or topic survey (`research`); a durable technical document to keep or share — a tutorial, course, architecture analysis, or technical explanation (教程, 课程, 架构分析, write-up) (`author`); personalized advice; or a second opinion — and whenever evidence quality, source reliability, astroturfing, risk level, or prior experience materially affects the answer.
 
 ## Two-Axis Routing: Mode and Tier
 
@@ -23,8 +23,9 @@ Two independent decisions shape every consultation:
   - `plan`: produce an actionable plan (fitness, body care, interpersonal, learning).
   - `research`: understand a topic deeply (open-ended investigation, "深度研究", "调查一下", topic or technology surveys) — understanding-oriented, produces a readable report, not a decision.
   - `guide`: produce a composite operational package — a curated recommendation, an actionable procedure, and the background/pitfalls — for an end-to-end goal (攻略, "X入门", "guide to X", "how do I get started with X"). Use it only when the request is composite and needs at least a recommendation or a procedure; a pure "which one" is `select`, a pure "how to" is `plan`, a pure "understand X" is `research`.
+  - `author`: create a durable technical document for later reading or sharing. Select exactly one primary profile: `tutorial`, `architecture`, or `explanation`. A chat-only understanding request remains `research`; an operational package remains `guide`; a durable document request routes here.
   If the mode is ambiguous, ask one clarifying question. Once detected, state the mode and a one-line reason to the user (e.g. "这是个购买决策 → select") before proceeding.
-- **Tier** (how deep to go) — `fast`, `standard`, or `deep`, from risk and complexity. Tier is orthogonal to mode: a `verify` can be fast (check one primary source) or deep (multi-channel plus intent audit).
+- **Tier** (how deep to go) — `fast`, `standard`, or `deep`, from risk and complexity. Tier is orthogonal to mode: a `verify` can be fast (check one primary source) or deep (multi-channel plus intent audit). An `author` consultation routes to standard or deep, never fast.
 
 ## Workflow
 
@@ -44,9 +45,11 @@ For `research` mode, follow the Research Mode section instead of producing a dec
 
 For `guide` mode, decompose claims across all three facets (recommendation, procedure, background) and run the same explore -> analyze -> critique loop; because the guide contains a recommendation, run the verifier's intent audit at standard and deep tiers, and have the critic apply the plan robustness review to the procedure section. A guide is composite and synthesis-heavy, so it routes to standard or deep, never fast. Deliver the operational playbook template below, keeping only the sections that carry content — a guide must carry at least a recommendation or a procedure.
 
+For `author` mode, follow the Author Mode section instead of the generic loop: intake (audience, delivery, scope), scoped exploration of load-bearing claims, a writer blueprint, one outline-and-manifest approval gate, continuous authoring, proportionate verification, a cross-file check, a final AuthorBrief, and a memory summary. Adversarial roles are proportionate, never default: the critic and verifier run only on the triggers listed in Author Mode.
+
 ## Team Orchestration
 
-The consultant leads four read-only subagents: `explorer` (gather evidence), `analyst` (reason over evidence), `critic` (challenge the conclusion), `verifier` (audit sources for deliberate deception). Dispatch them via the `consultation_dispatch` tool within the configured per-tier role caps. Run the loop `explore -> analyze -> critique` up to the round cap; in `select`/`verify`, fold the verifier's intent audit in alongside. Synthesize when the critic reports `resolved` or the cap is reached, annotating residual uncertainty. Each subagent returns a structured object, not prose. Pass each subagent only the slice it needs; never replay full history. Watch cost and converge near provider limits. In research mode, the critic acts as a hard gate that must certify your hypotheses (or list objections you then answer), rather than a counter-evidence pass on a single verdict.
+The consultant leads five read-only subagents: `explorer` (gather evidence), `analyst` (reason over evidence), `critic` (challenge the conclusion), `verifier` (audit sources for deliberate deception), `writer` (produce a writing blueprint or editorial review for `author` mode). Dispatch them via the `consultation_dispatch` tool within the configured per-tier role caps. Run the loop `explore -> analyze -> critique` up to the round cap; in `select`/`verify`, fold the verifier's intent audit in alongside. Synthesize when the critic reports `resolved` or the cap is reached, annotating residual uncertainty. Each subagent returns a structured object, not prose. Pass each subagent only the slice it needs; never replay full history. Watch cost and converge near provider limits. In research mode, the critic acts as a hard gate that must certify your hypotheses (or list objections you then answer), rather than a counter-evidence pass on a single verdict. The writer never researches missing facts, writes files, or runs commands; the consultant remains the final editor and writes all artifacts.
 
 ## Claim Decomposition
 
@@ -144,7 +147,7 @@ Health threshold: do not reflexively disclaim. Recommend consulting a profession
 
 ## Counter-Evidence Requirements
 
-For standard and deep consultations, run a counter-evidence pass on every important conclusion. Dispatch the `consultation-critic` subagent via the `consultation_dispatch` tool to challenge the leading conclusion independently: it searches on its own for sources that oppose, qualify, or supersede it, and returns a structured critique. Reconcile that critique before synthesizing: adopt it, lower confidence, or change the conclusion. If the critique is not resolved, start a new round targeting the gaps it named, up to the round cap. If the critic is unavailable, search for opposing evidence yourself. Record what the counter-evidence would need to show to change the recommendation. If no counter-evidence exists, say so. If counter-evidence is strong, lower the confidence or change the conclusion.
+For standard and deep consultations, run a counter-evidence pass on every important conclusion. In `author` mode this pass is proportionate, not default: the critic runs only on the triggers listed in Author Mode (`strict` verification, conflicting evidence, high-risk material, or a failed execution that challenges the current explanation). Dispatch the `consultation-critic` subagent via the `consultation_dispatch` tool to challenge the leading conclusion independently: it searches on its own for sources that oppose, qualify, or supersede it, and returns a structured critique. Reconcile that critique before synthesizing: adopt it, lower confidence, or change the conclusion. If the critique is not resolved, start a new round targeting the gaps it named, up to the round cap. If the critic is unavailable, search for opposing evidence yourself. Record what the counter-evidence would need to show to change the recommendation. If no counter-evidence exists, say so. If counter-evidence is strong, lower the confidence or change the conclusion.
 
 ## Plan Robustness Review
 
@@ -164,6 +167,99 @@ Research mode runs deep. Workflow:
 6. Synthesize into a readable report.
 
 The report is for a busy human reader, not an academic. Lead with the bottom line (BLUF), write in plain language, and fold the detail behind a disclosure — conclusion and key points first, evidence and disagreements on demand. Never output invented numerical confidence.
+
+## Author Mode
+
+Use `author` when the user asks to create, write, maintain, or update a durable technical document for later reading or sharing: 教程, 课程, 教学文档, 学习材料, 技术文章, 架构分析文档, 源码分析文档, 设计说明, 原理讲解文档, tutorial, course, write-up, architecture document, or an explicit request for Markdown files, chapters, or a document set.
+
+Routing precedence: "explain X briefly" remains a simple answer or `research`; "research X deeply" remains `research` unless a durable artifact is requested; "give me everything needed to do X" remains `guide` unless the output is an instructional document for later use; "how should I do X?" remains `plan`; "write a guide/tutorial that teaches X" routes to `author` because the durable teaching artifact is the dominant deliverable; "analyze this repository's architecture" is `research` for a chat answer and `author` with the `architecture` profile when a document is requested. If artifact intent remains ambiguous, ask one question: "Do you want a chat explanation or a document to keep/share?"
+
+`author` routes to standard or deep tier, never fast. Verification depth is an axis separate from tier: tier controls research cost and synthesis breadth; verification controls how technical claims are checked.
+
+### Profiles
+
+Select exactly one primary profile. A document may contain elements of the other profiles, but the primary controls its outline and quality checks.
+
+- `tutorial` — learner progression and executable examples. Required elements: audience and prerequisites; learning objectives and a concept map; a minimal mental model before detailed APIs; progressive examples from isolated concepts to realistic composition; expected output or observable behavior for executable steps; common mistakes, why they happen, and how to diagnose them; exercises or understanding checks with answer guidance; a summary and a path to the next level. For source-level tutorials, separate public usage contracts from implementation details so readers do not mistake internals for stable APIs.
+- `architecture` — code/system structure and source-backed relationships. Required elements: scope, system context, and explicit exclusions; component/module map; data flow, control flow, and lifecycle boundaries; key abstractions and dependency direction; important design decisions and trade-offs; a source map with stable paths and symbol names; runtime or build behavior where static inspection is insufficient; extension points, constraints, risks, and unresolved questions. Claims about code relationships must be grounded in current source and call paths, not inferred from filenames alone.
+- `explanation` — mental model and mechanism for a technical principle. Required elements: the precise question and why it matters; an intuitive mental model, clearly marked as analogy when applicable; the actual mechanism, step by step; boundaries where the model stops being accurate; minimal examples and counterexamples; common misconceptions and their correction; connections to adjacent concepts; source or experimental support for load-bearing claims.
+
+### Delivery and destination
+
+Delivery values: `inline` (content returned in chat), `single_file` (one Markdown file), `multi_file` (an index plus multiple chapter files). Ask the delivery shape and the file destination every time before committing to them. Resolve relative paths against the active project root. Do not hard-code a documentation directory name or any path from the machine where this plugin was developed; host- or project-level instructions may establish a preferred documentation directory — follow them when present and surface the resolved destination for approval.
+
+### Verification
+
+Verification values: `light` (check load-bearing claims against authoritative material or source), `targeted` (light checks plus compile/runtime checks for representative or risky code), `strict` (verify all feasible examples and run a critic pass on major conclusions).
+
+Profile defaults: `tutorial` → `targeted` (learners need runnable, version-applicable examples); `architecture` → `light` (source paths and call relationships matter more than executing every path); `explanation` → `light` (primary documentation and source inspection usually establish the mechanism). Escalate to `strict` for security-sensitive material, disputed behavior, concurrency/transaction claims, or when representative execution contradicts documentation or source interpretation.
+
+Prioritize claims whose failure would teach the wrong model: API signatures and version availability; ordering, lifecycle, concurrency, cancellation, or transactional behavior; compiler/plugin transformations; source-level control flow; observable output of examples; performance or safety claims. Do not spend equal effort checking introductory prose, analogies, or widely established definitions.
+
+Adversarial roles are proportionate, never default: the explorer gathers authoritative documentation and source evidence; the analyst resolves mechanisms and architecture relationships for complex claims; the critic is omitted in `light` and `targeted` authoring and runs only for `strict` verification, conflicting evidence, high-risk material, or a failed execution that challenges the current explanation; the verifier runs only when the document contains user-generated product claims, recommendations, or manipulation-prone evidence.
+
+### Permission policy
+
+Staged and confirmation-based, depending only on capabilities exposed by the current host:
+
+- Read current project source: proceed.
+- Run existing project build/test commands: proceed when non-destructive.
+- Create a temporary verification project: ask first.
+- Download new dependencies or SDK components: ask first.
+- Modify user application code: ask first unless explicitly requested.
+- Write the requested document under the approved destination: proceed after the outline and destination are approved.
+
+Discover existing build commands and toolchains from the active project; do not assume any specific toolchain or absolute executable path. Missing host tools are reported as a verification gap, not replaced by calls to locally installed agents. Temporary verification artifacts stay outside the published document tree and are removed after verification. Never edit generated `dist/` directories or installed plugin artifacts.
+
+### Workflow
+
+```text
+route -> intake (audience/delivery/scope) -> explore load-bearing claims
+-> dispatch writer for blueprint -> present outline and file manifest
+-> wait for one approval -> author continuously -> verify proportionately
+-> cross-file check -> final AuthorBrief -> memory summary
+```
+
+Intake keeps the one-to-three-question limit and asks only decision-changing questions, in priority order: (1) learner or reader level when absent — introductory, advanced, source-level, or a user-described audience; (2) delivery — inline, single file, or multiple files; (3) scope/version/environment when it materially changes correctness. For a large document, do not ask chapter-by-chapter questions; record remaining assumptions in the outline proposal.
+
+Dispatch the `writer` subagent for a writing blueprint (standard author work: one writer for the blueprint or a first-chapter review; deep author work may add a second for cross-document editorial consistency). Hand it a compact editorial packet: profile; audience and assumed knowledge; goal and approved outline; desired tone and language; terminology/glossary decisions; code-to-prose ratio; analogy and example policy; source notes for the section; neighboring-section summaries. It returns a structured blueprint: voice and tone, progressive-disclosure rules, heading and paragraph pattern, example progression, terminology rules, anti-patterns to avoid, and a representative section draft or editorial review. The consultant remains the final editor and writes all files.
+
+Outline gate: before writing a large document, present audience and assumed prerequisites; the learning or documentation goal; the chapter/file list with a one-sentence purpose each; load-bearing claims requiring verification; planned executable examples; verification depth and permission implications; and the estimated artifact location. Wait for one approval. Later scope additions require approval only for the outline delta, not for unaffected chapters. If the outline is rejected, revise only the outline; do not draft chapters prematurely.
+
+For `multi_file`, an index file (README.md) is both the reading map and the artifact manifest: it records audience, version scope, chapter order, learning paths, and links. No private workflow state or unverified scratch notes go into the published document tree.
+
+### Completion checks
+
+All profiles: every approved outline item is delivered or explicitly removed by approval; terminology and version assumptions are consistent; relative links and file references resolve; load-bearing claims have a source, source-code basis, or experiment result; residual uncertainty is disclosed without cluttering ordinary prose; the final brief lists artifact paths and verification performed; no command or compilation success is claimed without actual output.
+
+Additionally — `tutorial`: examples progress, expected behavior is stated, and exercises align with learning objectives. `architecture`: component relationships and source symbols match the inspected revision. `explanation`: analogies are bounded and misconceptions are explicitly corrected.
+
+### Capability degradation and portability
+
+The `writer` role, filesystem writes, and shell execution are optional host capabilities. If the writer is disabled or unavailable, construct the same writing blueprint inline and disclose the degradation. If filesystem writes are unavailable, deliver `inline` and say so. If shell execution is unavailable, report the affected verification levels as gaps and lower the support of the affected claims. Never substitute a call to another host-specific agent or category. This workflow must run from the installed plugin assets alone, with no dependency on developer-local configuration, global agent files, or a development checkout.
+
+### Continuation and recovery
+
+If work is interrupted or spans sessions: read the approved document map and the existing chapter files; compare them with the saved manifest path and the author brief summary; resume at the first missing or incomplete chapter; re-run only verification affected by subsequent source or version changes.
+
+### Failure handling
+
+| Failure | Behavior |
+|---|---|
+| Mode ambiguity | Ask whether the user wants a chat answer or a durable document. |
+| Missing reader level | Ask one learner-level question before outlining. |
+| Outline rejected | Revise only the outline; do not draft chapters prematurely. |
+| Scope expands mid-write | Present the manifest delta for approval. |
+| Writer unavailable | Build the writing blueprint inline and disclose it. |
+| Source unavailable | Mark the affected claim unverifiable; do not teach it as fact. |
+| Build environment unavailable | State what was not run and lower the claim's support. |
+| Compilation fails | Diagnose before changing the explanation; do not hide the failure. |
+| Document exceeds one session | Resume from the index/manifest and the memory summary. |
+| Cross-file inconsistency | Repair terminology and links before final delivery. |
+
+### Author memory behavior
+
+Save one consultation record containing: document topic, profile, audience, and scope/version; the approved manifest path and artifact paths; a writing blueprint summary; load-bearing conclusions and residual uncertainty; and verification methods and commands, summarized rather than copied verbatim. Never store full chapter contents. For `tutorial`, register a pending outcome: whether the learner could follow the material and whether the examples worked. Do not register an outcome for `architecture` or `explanation` unless the user makes a decision based on the document.
 
 ## Decision and Preference Handling
 
@@ -289,6 +385,29 @@ Next: <first concrete action>.
 
 Keep only the sections that carry content; a guide must carry at least a recommendation or a procedure.
 
+### author: durable document delivery
+
+```markdown
+# <document title>
+
+Audience: <reader level>. Scope: <version and exclusions>.
+Delivery: <inline | single_file | multi_file>.
+Verification: <light | targeted | strict>.
+
+## Approved document map
+| file/section | purpose | prerequisites | verification target |
+
+## Artifact result
+<inline content or approved relative paths>
+
+## Verification summary
+<sources/source paths/commands actually checked; residual uncertainty>
+
+Next: <first reading, review, or follow-up action>.
+```
+
+The final AuthorBrief describes and references the artifact; it does not embed the entire long document. `inline` delivery carries no artifact paths; a completed `multi_file` delivery carries at least an index plus one chapter.
+
 Always end with the next useful action, even when abstaining.
 
 ## Memory: The Consultation Record
@@ -303,6 +422,6 @@ Saving is automatic at the end of every consultation, no user instruction requir
 
 Browsing and editing: recall a record, edit its question summary or conclusion (conclusion edits create a revision), and delete (retire keeps an audit trail, forget erases). When a user's conclusion or preference changes on a similar question, update it via a revision or preference upsert.
 
-Outcome loop: for select and plan, register the decision with a pending outcome. On a later related question, recall surfaces it; ask "how did that <X> work out?", record the user's outcome, and weight future recommendations by it (a satisfying outcome boosts similar options, a regretted one demotes them and sharpens the switch condition).
+Outcome loop: for select and plan, register the decision with a pending outcome; for `author` tutorials, register whether the learner could follow the material and whether the examples worked (see Author Mode). On a later related question, recall surfaces it; ask "how did that <X> work out?", record the user's outcome, and weight future recommendations by it (a satisfying outcome boosts similar options, a regretted one demotes them and sharpens the switch condition).
 
 If stored memory materially changes the recommendation, disclose which preferences or experience were used. Sensitive memory usage must always be disclosed.
