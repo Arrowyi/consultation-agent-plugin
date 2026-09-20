@@ -36,6 +36,9 @@ export const ConsultationPluginConfigSchema = z.object({
   writer_agent: z.string().default("consultation-writer"),
   writer_model: z.string().optional(),
   writer_enabled: z.boolean().default(true),
+  writer_delegate_agent: z.string().optional(),
+  writer_delegate_model: z.string().optional(),
+  writer_fallback_models: z.array(z.string()).optional(),
   team_caps: z
     .object({
       round_cap: z.number().int().positive(),
@@ -68,14 +71,17 @@ export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSc
 
 // explorer → canonical `deepseek-flash` id (legacy `deepseek-v4-flash` is retired);
 // consultant intentionally stays on `deepseek-v4-pro` until V4.1-Pro ships.
+// writer defaults to a top-tier writing model with a domestic-direct fallback.
 export const MODEL_DEFAULTS = {
   consultant: "deepseek/deepseek-v4-pro",
   explorer: "deepseek/deepseek-flash",
   analyst: "opencode-go/qwen3.7-max",
   critic: "opencode-go/glm-5.2",
   verifier: "opencode-go/qwen3.7-max",
-  writer: "deepseek/deepseek-v4-pro",
+  writer: "opencode/claude-sonnet-5",
 } as const
+
+export const WRITER_FALLBACK_MODELS_DEFAULT = ["moonshotai-cn/kimi-k3"] as const
 
 export type ModelRole = keyof typeof MODEL_DEFAULTS
 
@@ -94,6 +100,14 @@ export function resolveRoleModel(config: ConsultationPluginConfig, role: ModelRo
     case "writer":
       return config.writer_model ?? MODEL_DEFAULTS.writer
   }
+}
+
+export function resolveRoleModelChain(config: ConsultationPluginConfig, role: ModelRole): string[] {
+  if (role !== "writer") return [resolveRoleModel(config, role)]
+  return [
+    resolveRoleModel(config, "writer"),
+    ...(config.writer_fallback_models ?? [...WRITER_FALLBACK_MODELS_DEFAULT]),
+  ]
 }
 
 export interface TeamCapsConfig {

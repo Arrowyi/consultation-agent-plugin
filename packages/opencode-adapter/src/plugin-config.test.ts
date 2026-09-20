@@ -8,6 +8,7 @@ import {
   TIER_ROLE_CAPS_DEFAULTS,
   resolveCostGuardUsd,
   resolveRoleModel,
+  resolveRoleModelChain,
   resolveTeamCaps,
   resolveTierRoleCaps,
   stripJsonc,
@@ -80,7 +81,10 @@ describe("writer role configuration", () => {
     // then
     expect(cfg.writer_agent).toBe("consultation-writer")
     expect(cfg.writer_enabled).toBe(true)
-    expect(resolveRoleModel(cfg, "writer")).toBe("deepseek/deepseek-v4-pro")
+    expect(resolveRoleModel(cfg, "writer")).toBe("opencode/claude-sonnet-5")
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5", "moonshotai-cn/kimi-k3"])
+    expect(cfg.writer_delegate_agent).toBeUndefined()
+    expect(cfg.writer_delegate_model).toBeUndefined()
     expect(resolveTierRoleCaps(cfg).standard.writer).toBe(1)
     expect(resolveTierRoleCaps(cfg).deep.writer).toBe(2)
   })
@@ -91,6 +95,30 @@ describe("writer role configuration", () => {
 
     // when // then
     expect(resolveRoleModel(cfg, "writer")).toBe("anthropic/claude-opus-4-6")
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["anthropic/claude-opus-4-6", "moonshotai-cn/kimi-k3"])
+  })
+
+  it("honors a configured fallback chain", () => {
+    // given
+    const cfg = config({ writer_fallback_models: ["a/b", "c/d"] })
+
+    // when // then
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5", "a/b", "c/d"])
+  })
+
+  it("keeps non-writer roles on a single-model chain", () => {
+    // given // when // then
+    expect(resolveRoleModelChain(config(), "critic")).toEqual(["opencode-go/glm-5.2"])
+    expect(resolveRoleModelChain(config(), "explorer")).toEqual(["deepseek/deepseek-flash"])
+  })
+
+  it("accepts writer delegate fields", () => {
+    // given
+    const cfg = config({ writer_delegate_agent: "host-writer", writer_delegate_model: "p/m" })
+
+    // when // then
+    expect(cfg.writer_delegate_agent).toBe("host-writer")
+    expect(cfg.writer_delegate_model).toBe("p/m")
   })
 
   it("accepts a legacy custom role-cap matrix without writer", () => {
