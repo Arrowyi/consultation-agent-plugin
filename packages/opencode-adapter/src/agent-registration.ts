@@ -3,6 +3,7 @@ import { resolveAsset } from "./asset-paths.ts"
 import {
   resolveCostGuardUsd,
   resolveRoleModel,
+  resolveRoleModelChain,
   resolveTeamCaps,
   resolveTierRoleCaps,
   type ConsultationPluginConfig,
@@ -74,10 +75,17 @@ export function buildRuntimeBindings(
       ? `verifier \`${pluginConfig.verifier_agent}\` (${resolveRoleModel(pluginConfig, "verifier")})`
       : "verifier DISABLED by configuration",
   )
+  const writerChain = resolveRoleModelChain(pluginConfig, "writer")
+  const writerModelLabel =
+    writerChain.length > 1
+      ? `${writerChain[0]}, fallback: ${writerChain.slice(1).join(", ")}`
+      : `${writerChain[0]}`
   roleParts.push(
-    pluginConfig.writer_enabled
-      ? `writer \`${pluginConfig.writer_agent}\` (${resolveRoleModel(pluginConfig, "writer")})`
-      : "writer DISABLED by configuration",
+    pluginConfig.writer_delegate_agent !== undefined
+      ? `writer delegated to \`${pluginConfig.writer_delegate_agent}\``
+      : pluginConfig.writer_enabled
+        ? `writer \`${pluginConfig.writer_agent}\` (${writerModelLabel})`
+        : "writer DISABLED by configuration",
   )
   const teamLine = `- Team subagents: ${roleParts.join(", ")}`
 
@@ -217,6 +225,7 @@ export async function registerWriter(
   config: MutableConfig,
   pluginConfig: ConsultationPluginConfig,
 ): Promise<void> {
+  if (pluginConfig.writer_delegate_agent !== undefined) return
   await registerReadOnlySubagent(config, {
     name: pluginConfig.writer_agent,
     description: WRITER_DESCRIPTION,

@@ -180,7 +180,7 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("writer `consultation-writer` (test/writer-model)")
+    expect(block).toContain("writer `consultation-writer` (test/writer-model, fallback: moonshotai-cn/kimi-k3)")
   })
 
   it("says writer DISABLED when writer_enabled is false", () => {
@@ -477,8 +477,42 @@ describe("registerWriter", () => {
     // then
     expect(config.agent?.["consultation-writer"]).toMatchObject({
       mode: "subagent",
-      model: "deepseek/deepseek-v4-pro",
+      model: "opencode/claude-sonnet-5",
       permission: { edit: "deny", bash: "deny" },
     })
+  })
+
+  it("does not register the bundled writer when a delegate agent is configured", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ writer_delegate_agent: "host-writer" })
+
+    // when
+    await registerWriter(config, pluginConfig)
+
+    // then
+    expect(config.agent?.["consultation-writer"]).toBeUndefined()
+  })
+
+  it("reports the delegate in runtime bindings when configured", () => {
+    // given
+    const config = makeConfig({ writer_delegate_agent: "host-writer" })
+
+    // when
+    const block = buildRuntimeBindings(config, "oc-ns")
+
+    // then
+    expect(block).toContain("writer delegated to `host-writer`")
+  })
+
+  it("reports the writer fallback chain in runtime bindings", () => {
+    // given
+    const config = makeConfig()
+
+    // when
+    const block = buildRuntimeBindings(config, "oc-ns")
+
+    // then
+    expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5, fallback: moonshotai-cn/kimi-k3)")
   })
 })
