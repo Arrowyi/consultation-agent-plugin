@@ -1,5 +1,5 @@
 import { tool, type ToolContext, type ToolDefinition, type PluginInput } from "@opencode-ai/plugin"
-import { loadPluginConfig, resolveRoleModel, type ConsultationPluginConfig } from "./plugin-config.ts"
+import { loadPluginConfig, resolveRoleModel, resolveRoleModelChain, type ConsultationPluginConfig } from "./plugin-config.ts"
 
 /**
  * The five roles the consultant may dispatch. Each maps to one of our own
@@ -11,7 +11,7 @@ export type DispatchRole = (typeof DISPATCH_ROLES)[number]
 
 export interface RoleTarget {
   agentName: string
-  model: string
+  model?: string
 }
 
 export function resolveRoleTarget(
@@ -28,6 +28,9 @@ export function resolveRoleTarget(
     case "verifier":
       return { agentName: config.verifier_agent, model: resolveRoleModel(config, "verifier") }
     case "writer":
+      if (config.writer_delegate_agent !== undefined) {
+        return { agentName: config.writer_delegate_agent, model: config.writer_delegate_model }
+      }
       return { agentName: config.writer_agent, model: resolveRoleModel(config, "writer") }
   }
 }
@@ -42,6 +45,19 @@ export function splitModel(model: string): { providerID: string; modelID: string
     throw new Error(`invalid model id "${model}": expected "provider/model"`)
   }
   return { providerID: model.slice(0, separator), modelID: model.slice(separator + 1) }
+}
+
+const RETRYABLE_MODEL_ERROR_CODES = ["402", "429", "500", "502", "503", "504"] as const
+
+export function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "object" && error !== null) return JSON.stringify(error)
+  return String(error)
+}
+
+export function isRetryableModelError(error: unknown): boolean {
+  const text = errorText(error)
+  return RETRYABLE_MODEL_ERROR_CODES.some((code) => text.includes(code))
 }
 
 type TextPart = { type: "text"; text: string }
@@ -108,36 +124,47 @@ export function createConsultationDispatchTool(client: PluginInput["client"]): T
     async execute(args, context: ToolContext): Promise<string> {
       const config = await loadPluginConfig(process.env)
       const { agentName, model } = resolveRoleTarget(config, args.role)
-      const { providerID, modelID } = splitModel(model)
+      const attempts: Array<string | undefined> =
+        args.role === "writer" && config.writer_delegate_agent !== undefined
+          ? [model]
+          : resolveRoleModelChain(config, args.role)
 
-      const createResult = await dispatchClient.session.create({
-        body: { parentID: context.sessionID, title: `consultation ${args.role}` },
-        query: { directory: context.directory },
-      })
-      if (createResult.error !== undefined || createResult.data === undefined) {
-        return `Error: failed to create subagent session: ${String(createResult.error ?? "unknown error")}`
-      }
-      const sessionID = createResult.data.id
-
-      try {
-        const promptResult = await dispatchClient.session.prompt({
-          path: { id: sessionID },
-          body: {
-            agent: agentName,
-            model: { providerID, modelID },
-            parts: [{ type: "text", text: args.prompt }],
-          },
+      const tried: string[] = []
+      let lastError = "unknown error"
+      for (const attemptModel of attempts) {
+        tried.push(attemptModel ?? `host model of ${agentName}`)
+        const createResult = await dispatchClient.session.create({
+          body: { parentID: context.sessionID, title: `consultation ${args.role}` },
+          query: { directory: context.directory },
         })
-        if (promptResult.error !== undefined || promptResult.data === undefined) {
-          return `Error: ${args.role} dispatch failed: ${String(promptResult.error ?? "unknown error")}`
+        if (createResult.error !== undefined || createResult.data === undefined) {
+          return `Error: failed to create subagent session: ${String(createResult.error ?? "unknown error")}`
         }
-        return extractText(promptResult.data.parts ?? [])
-      } finally {
-        // Free the child session after the sync turn completes. Aborting an
-        // already-idle session is a no-op; this just prevents lingering
-        // subagent sessions from accumulating.
-        void dispatchClient.session.abort({ path: { id: sessionID } }).catch(() => {})
+        const sessionID = createResult.data.id
+
+        try {
+          const promptResult = await dispatchClient.session.prompt({
+            path: { id: sessionID },
+            body: {
+              agent: agentName,
+              ...(attemptModel === undefined ? {} : { model: splitModel(attemptModel) }),
+              parts: [{ type: "text", text: args.prompt }],
+            },
+          })
+          if (promptResult.error !== undefined || promptResult.data === undefined) {
+            lastError = errorText(promptResult.error)
+            if (isRetryableModelError(promptResult.error)) continue
+            return `Error: ${args.role} dispatch failed: ${lastError}`
+          }
+          return extractText(promptResult.data.parts ?? [])
+        } finally {
+          // Free the child session after the sync turn completes. Aborting an
+          // already-idle session is a no-op; this just prevents lingering
+          // subagent sessions from accumulating.
+          void dispatchClient.session.abort({ path: { id: sessionID } }).catch(() => {})
+        }
       }
+      return `Error: ${args.role} dispatch failed on every model in the chain (${tried.join(" -> ")}): ${lastError}; degrade by answering inline and say so.`
     },
   })
 }

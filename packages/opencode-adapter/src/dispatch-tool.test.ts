@@ -41,7 +41,23 @@ describe("resolveRoleTarget", () => {
     expect(explorer).toEqual({ agentName: "consultation-explorer", model: "deepseek/deepseek-flash" })
     expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.7-max" })
     expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.2" })
-    expect(writer).toEqual({ agentName: "consultation-writer", model: "deepseek/deepseek-v4-pro" })
+    expect(writer).toEqual({ agentName: "consultation-writer", model: "opencode/claude-sonnet-5" })
+  })
+
+  it("routes the writer to a delegate agent without pinning a model by default", () => {
+    // given
+    const cfg = config({ writer_delegate_agent: "host-writer" })
+
+    // when // then
+    expect(resolveRoleTarget(cfg, "writer")).toEqual({ agentName: "host-writer", model: undefined })
+  })
+
+  it("pins the delegate model only when writer_delegate_model is set", () => {
+    // given
+    const cfg = config({ writer_delegate_agent: "host-writer", writer_delegate_model: "p/m" })
+
+    // when // then
+    expect(resolveRoleTarget(cfg, "writer")).toEqual({ agentName: "host-writer", model: "p/m" })
   })
 
   it("honors model overrides", () => {
@@ -196,5 +212,105 @@ describe("createConsultationDispatchTool", () => {
     // then
     expect(result).toContain("explorer dispatch failed")
     expect(result).toContain("model auth failed")
+  })
+
+  it("falls back to kimi-k3 when the writer model hits a quota error", async () => {
+    // given
+    const promptCalls: Array<{ body: { model?: { providerID: string; modelID: string } } }> = []
+    let attempt = 0
+    const fakeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_child" } }),
+        prompt: async (input: { body: { model?: { providerID: string; modelID: string } } }) => {
+          promptCalls.push(input)
+          attempt += 1
+          if (attempt === 1) return { error: { status: 402, message: "quota exhausted" }, data: undefined }
+          return { data: { parts: [{ type: "text", text: "kimi wrote it" }] } }
+        },
+        abort: async () => {},
+      },
+    }
+    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+
+    // when
+    const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
+
+    // then
+    expect(result).toBe("kimi wrote it")
+    expect(promptCalls).toHaveLength(2)
+    expect(promptCalls[0]?.body.model).toEqual({ providerID: "opencode", modelID: "claude-sonnet-5" })
+    expect(promptCalls[1]?.body.model).toEqual({ providerID: "moonshotai-cn", modelID: "kimi-k3" })
+  })
+
+  it("reports every tried model when the whole chain fails", async () => {
+    // given
+    const fakeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_child" } }),
+        prompt: async () => ({ error: { status: 429, message: "rate limited" }, data: undefined }),
+        abort: async () => {},
+      },
+    }
+    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+
+    // when
+    const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
+
+    // then
+    expect(result).toContain("opencode/claude-sonnet-5")
+    expect(result).toContain("moonshotai-cn/kimi-k3")
+    expect(result).toContain("degrade")
+  })
+
+  it("does not fall back on a non-retryable writer error", async () => {
+    // given
+    const promptCalls: unknown[] = []
+    const fakeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_child" } }),
+        prompt: async (input: unknown) => {
+          promptCalls.push(input)
+          return { error: "model auth failed", data: undefined }
+        },
+        abort: async () => {},
+      },
+    }
+    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+
+    // when
+    const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
+
+    // then
+    expect(result).toContain("writer dispatch failed")
+    expect(promptCalls).toHaveLength(1)
+  })
+
+  it("dispatches a delegated writer without pinning a model", async () => {
+    // given
+    writeFileSync(
+      configPath,
+      JSON.stringify({ writer_delegate_agent: "host-writer" }),
+    )
+    const promptCalls: Array<{ body: { agent?: string; model?: { providerID: string; modelID: string } } }> = []
+    const fakeClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_child" } }),
+        prompt: async (input: { body: { agent?: string; model?: { providerID: string; modelID: string } } }) => {
+          promptCalls.push(input)
+          return { data: { parts: [{ type: "text", text: "host wrote it" }] } }
+        },
+        abort: async () => {},
+      },
+    }
+    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+
+    // when
+    const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
+
+    // then
+    expect(result).toBe("host wrote it")
+    expect(promptCalls).toHaveLength(1)
+    expect(promptCalls[0]?.body.agent).toBe("host-writer")
+    expect(promptCalls[0]?.body.model).toBeUndefined()
   })
 })
