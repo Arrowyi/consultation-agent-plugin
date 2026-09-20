@@ -98,7 +98,16 @@ A missing file is fine; all fields have defaults. Create the file to override de
   "analyst_model": "opencode-go/qwen3.7-max",
   "critic_model": "opencode-go/glm-5.2",
   "verifier_model": "opencode-go/qwen3.7-max",
-  "writer_model": "deepseek/deepseek-v4-pro",
+  "writer_model": "opencode/claude-sonnet-5",
+
+  // Writer model chain and host delegation. On retryable errors (402/429/5xx)
+  // the dispatch tool walks the fallback chain in order. Defaults shown.
+  "writer_fallback_models": ["moonshotai-cn/kimi-k3"],
+  // Prefer a stronger host-provided writing agent over the bundled one.
+  // When set, the bundled writer is not registered; dispatch routes to this
+  // agent and only pins a model when writer_delegate_model is also set.
+  // "writer_delegate_agent": "host-writer",
+  // "writer_delegate_model": "provider/model",
 
   // Subagent names. Rename only if they clash with an existing agent.
   "explorer_agent": "consultation-explorer",
@@ -166,7 +175,10 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `verifier_model` | string (optional) | `opencode-go/qwen3.7-max` | Model for the verifier subagent |
 | `verifier_enabled` | boolean | `true` | Whether to register the verifier subagent |
 | `writer_agent` | string | `"consultation-writer"` | Name of the writing-blueprint subagent (`author` mode) |
-| `writer_model` | string (optional) | `deepseek/deepseek-v4-pro` | Model for the writer subagent |
+| `writer_model` | string (optional) | `opencode/claude-sonnet-5` | Primary model for the writer subagent |
+| `writer_fallback_models` | string[] (optional) | `["moonshotai-cn/kimi-k3"]` | Fallback chain tried on retryable model errors (402/429/5xx), in order |
+| `writer_delegate_agent` | string (optional) | (none) | Host-provided writing agent preferred over the bundled writer; the bundled writer is not registered when set |
+| `writer_delegate_model` | string (optional) | (none) | Model pinned on the delegate agent; when unset the delegate uses its own model |
 | `writer_enabled` | boolean | `true` | Whether to register the writer subagent |
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
