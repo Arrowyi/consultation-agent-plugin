@@ -4,6 +4,7 @@ import {
   registerConsultationCritic,
   registerExplorer,
   registerAnalyst,
+  registerVerifier,
   registerWriter,
   buildRuntimeBindings,
   injectRuntimeBindings,
@@ -462,6 +463,20 @@ describe("registerAnalyst", () => {
     // then
     const analyst = config.agent?.["consultation-analyst"] as { model: string }
     expect(analyst.model).toBe("test/analyst-model")
+  })
+})
+
+describe("registerVerifier", () => {
+  it("uses the configured default critic-family model for the verifier", async () => {
+    const config: { agent?: Record<string, unknown> } = {}
+
+    await registerVerifier(config, makeConfig())
+
+    expect(config.agent?.["consultation-verifier"]).toMatchObject({
+      mode: "subagent",
+      model: "opencode-go/glm-5.2",
+      permission: { edit: "deny" },
+    })
   })
 })
 

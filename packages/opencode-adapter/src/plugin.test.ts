@@ -101,6 +101,10 @@ describe("createConsultationConfigHook", () => {
       const critic = config.agent?.["consultation-critic"] as { mode: string; model: string }
       expect(critic.mode).toBe("subagent")
       expect(critic.model).toBe("opencode-go/glm-5.2")
+      expect(config.agent?.["consultation-verifier"]).toMatchObject({
+        mode: "subagent",
+        model: "opencode-go/glm-5.2",
+      })
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
     }
