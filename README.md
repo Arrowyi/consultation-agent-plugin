@@ -2,7 +2,7 @@
 
 An evidence-driven consultation agent plugin for [OpenCode](https://opencode.ai) with a portable, user-approved memory core.
 
-The public experience is a single `consultant` primary agent with six modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (a composite operational playbook for an end-to-end goal), `research` (understand a topic deeply, delivered as a readable report), and `author` (a durable technical document — tutorial, architecture analysis, or technical explanation — delivered behind one outline-approval gate). It separates verified facts from inference, audits user-generated sources for deliberate deception, and grades evidence. A local SQLite-backed memory system auto-saves consultation records (question + conclusion summaries), supports browse/edit/delete plus an outcome-feedback loop, and is shared across agents. Canonical records stay independent of classification, summarization, and embedding models.
+The public experience is a single `consultant` primary agent with six modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (a composite operational playbook for an end-to-end goal), `research` (understand a topic deeply, delivered as a readable report), and `author` (a durable technical document — tutorial, architecture analysis, or technical explanation — delivered behind one outline-approval gate). It assigns bounded evidence, analysis, challenge, influence-audit, and writing tasks to suitable subagents when those checks may matter or cannot be ruled out; caps are ceilings, not dispatch targets. It separates verified facts from inference, audits uncertain user/third-party/promotional source influence, and grades evidence. A local SQLite-backed memory system auto-saves consultation records (question + conclusion summaries), supports browse/edit/delete plus an outcome-feedback loop, and is shared across agents. Canonical records stay independent of classification, summarization, and embedding models.
 
 ## Usage
 
@@ -60,7 +60,7 @@ Core packages are harness-neutral (no OpenCode, no MCP SDK, no SQLite imports). 
 Assets live under `assets/`:
 - `assets/agents/consultant.md` - the primary-agent prompt
 - `assets/agents/explorer.md`, `assets/agents/analyst.md`, `assets/agents/consultation-critic.md`, `assets/agents/consultation-verifier.md` - the read-only team prompts
-- `assets/agents/writer.md` - the read-only writing-blueprint prompt for `author` mode; the writer is plugin-owned and optional (`writer_enabled`, default true)
+- `assets/agents/writer.md` - the read-only author specialist: blueprint/review before outline approval or usable section/chapter prose from an approved outline and evidence packet; the bundled writer is optional (`writer_enabled`, default true). The consultant verifies, integrates, and writes final files; a configured external writer delegate retains its host permissions.
 - `assets/skills/consultation/SKILL.md` - the reusable consultation skill
 
 ## Quickstart
