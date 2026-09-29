@@ -72,12 +72,15 @@ export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSc
 // explorer → canonical `deepseek-flash` id (legacy `deepseek-v4-flash` is retired);
 // consultant intentionally stays on `deepseek-v4-pro` until V4.1-Pro ships.
 // writer defaults to a top-tier writing model with a domestic-direct fallback.
+// verifier shares `glm-5.2` with the critic: it does signal-level text/account
+// audit (not frontier reasoning), so a second `qwen3.7-max` was over-spec'd;
+// reusing the critic's model also keeps verifier ≠ analyst for cross-model audit.
 export const MODEL_DEFAULTS = {
   consultant: "deepseek/deepseek-v4-pro",
   explorer: "deepseek/deepseek-flash",
   analyst: "opencode-go/qwen3.7-max",
   critic: "opencode-go/glm-5.2",
-  verifier: "opencode-go/qwen3.7-max",
+  verifier: "opencode-go/glm-5.2",
   writer: "opencode/claude-sonnet-5",
 } as const
 
