@@ -62,7 +62,7 @@ export function isRetryableModelError(error: unknown): boolean {
 
 type TextPart = { type: "text"; text: string }
 
-function extractText(parts: readonly unknown[]): string {
+function extractText(parts: readonly unknown[]): string | undefined {
   const texts: string[] = []
   for (const part of parts) {
     if (typeof part !== "object" || part === null) continue
@@ -72,7 +72,7 @@ function extractText(parts: readonly unknown[]): string {
     }
   }
   const joined = texts.join("\n").trim()
-  return joined.length > 0 ? joined : "(no text in subagent response)"
+  return joined.length > 0 ? joined : undefined
 }
 
 /**
@@ -123,6 +123,14 @@ export function createConsultationDispatchTool(client: PluginInput["client"]): T
     },
     async execute(args, context: ToolContext): Promise<string> {
       const config = await loadPluginConfig(process.env)
+      const enabled: Record<DispatchRole, boolean> = {
+        explorer: true,
+        analyst: true,
+        critic: config.critic_enabled,
+        verifier: config.verifier_enabled,
+        writer: config.writer_enabled || config.writer_delegate_agent !== undefined,
+      }
+      if (!enabled[args.role]) return `Error: ${args.role} is disabled by configuration`
       const { agentName, model } = resolveRoleTarget(config, args.role)
       const attempts: Array<string | undefined> =
         args.role === "writer" && config.writer_delegate_agent !== undefined
@@ -156,7 +164,7 @@ export function createConsultationDispatchTool(client: PluginInput["client"]): T
             if (isRetryableModelError(promptResult.error)) continue
             return `Error: ${args.role} dispatch failed: ${lastError}`
           }
-          return extractText(promptResult.data.parts ?? [])
+          return extractText(promptResult.data.parts ?? []) ?? `Error: ${args.role} dispatch returned no usable text`
         } finally {
           // Free the child session after the sync turn completes. Aborting an
           // already-idle session is a no-op; this just prevents lingering
