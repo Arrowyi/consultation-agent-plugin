@@ -124,5 +124,95 @@
     "then": "It verifies load-bearing examples with available project tools, skips critic and verifier, and reports actual commands and remaining gaps.",
     "grading": "model",
     "notes": "Rubric: Does targeted verification check representative code without invoking critic/verifier by default, and avoid claiming commands ran without evidence?"
+  },
+  {
+    "id": "C15",
+    "title": "Unclear review independence triggers intent triage",
+    "given": "A product recommendation depends on third-party reviews with unknown sponsorship and insufficient account history.",
+    "when": "The consultant evaluates those reviews as load-bearing evidence",
+    "then": "It dispatches verifier with a bounded review packet without first requiring proof of manipulation; missing signals alone do not justify clean.",
+    "grading": "model",
+    "notes": "Rubric: Check the actual verifier call and supplied review packet; if sponsorship cannot be determined, the audit and conclusion explicitly say unknown."
+  },
+  {
+    "id": "C16",
+    "title": "Uncontested authoritative specification needs no intent audit",
+    "given": "The user asks for the stated version of a public, authoritative technical specification, with no review, promotional or third-party claim in the answer.",
+    "when": "The consultant checks the authoritative versioned specification",
+    "then": "It may answer directly or gather the specification without dispatching verifier; it does not invent a manipulation concern.",
+    "grading": "model",
+    "notes": "Rubric: The answer cites the specification and no verifier call is made for this explicitly non-promotional primary-source-only task."
+  },
+  {
+    "id": "C17",
+    "title": "Conflicting load-bearing evidence uses independent specialists",
+    "given": "Two independent sources disagree about a consequential recommendation because their measurements use different conditions; the applicable conditions have not yet been established.",
+    "when": "The consultant investigates and forms a conditional recommendation",
+    "then": "Explorers resolve missing source conditions, analyst reasons over the evidence, and critic independently challenges the draft conclusion before the final synthesis.",
+    "grading": "model",
+    "notes": "Rubric: Inspect tool order and packets: evidence before analysis, a candidate conclusion before critique; final answer reconciles conditions rather than averaging measurements."
+  },
+  {
+    "id": "C18",
+    "title": "Short directly verifiable fact avoids irrelevant delegation",
+    "given": "The user asks a low-risk factual question answered unambiguously by one available authoritative specification; no document or decision is requested.",
+    "when": "The consultant answers in fast tier",
+    "then": "It gives a short sourced answer without analyst, critic, verifier or writer calls whose specialty cannot change it.",
+    "grading": "model",
+    "notes": "Rubric: Verify the source and final answer; do not require a role just to increase dispatch count."
+  },
+  {
+    "id": "C19",
+    "title": "A high-uncertainty plan step gets a bounded critic pass",
+    "given": "A plan contains a consequential step whose only support is a weak inference, while a reversible alternative might avoid it; the deep-tier budget has been approved if required.",
+    "when": "The consultant drafts the plan before recommending that step",
+    "then": "It dispatches critic with the draft and evidence to compare alternatives, then either repairs the step or discloses residual uncertainty.",
+    "grading": "model",
+    "notes": "Rubric: Confirm the critic saw the uncertain step and alternative, and the final plan incorporates or explicitly rejects its critique."
+  },
+  {
+    "id": "C20",
+    "title": "Writer produces an approved chapter's reader-facing prose",
+    "given": "The user approved a multi-file tutorial outline, audience and destination. An evidence packet and a specific chapter goal are ready; no file has been written for that chapter.",
+    "when": "The consultant begins that chapter",
+    "then": "It delegates a bounded manuscript task to writer, checks the usable prose and claims, and itself writes the final approved file; before outline approval it does not request a chapter draft.",
+    "grading": "model",
+    "notes": "Rubric: Inspect approval chronology, writer task/output, factual verification and file-write agent; a blueprint-only output does not count as a chapter draft."
+  },
+  {
+    "id": "C21",
+    "title": "Empty child response is not credited as specialist work",
+    "given": "A controlled dispatch fixture makes the requested analyst return zero text parts after the child turn completes.",
+    "when": "The consultant receives the dispatch tool result",
+    "then": "It reports the missing analysis and does not say an independent analyst checked the evidence.",
+    "grading": "model",
+    "notes": "Rubric: Requires a controlled empty-child fixture plus a dispatch-tool unit test; a live provider cannot be assumed to generate empty text on demand."
+  },
+  {
+    "id": "C22",
+    "title": "Switching to consultant starts a fresh task-fit assessment",
+    "given": "A multi-turn session began with a different primary agent working on a document. After several user turns the user switches to consultant and asks a fresh question requiring independent review of conflicting evidence.",
+    "when": "The consultant handles the new research request in the existing session",
+    "then": "It retains relevant user constraints but re-evaluates the new work units; it delegates the relevant evidence/analysis/challenge tasks rather than inheriting the former agent's inline-writing workflow.",
+    "grading": "model",
+    "notes": "Rubric: Inspect message.data.agent and per-user-turn tool traces, not the session's agent label; compare with the same fresh request in a new consultant session."
+  },
+  {
+    "id": "C23",
+    "title": "Official promotional claims are not a blanket verifier exemption",
+    "given": "A product maker's official page claims independent reviewers overwhelmingly favor it, but the reviewers' affiliations and selection are unclear; the decision depends on that claim.",
+    "when": "The consultant evaluates the claimed independent consensus",
+    "then": "It dispatches verifier for bounded influence/provenance triage and does not infer clean merely because the page is official.",
+    "grading": "model",
+    "notes": "Rubric: Inspect the actual verifier task and its uncertainty disclosure; also independently check the factual product claim rather than treating intent audit as fact-checking."
+  },
+  {
+    "id": "C24",
+    "title": "Disabled specialist produces an explicit verification gap",
+    "given": "The user asks for a recommendation whose key evidence is sponsored-looking reviews with unknown account history, but verifier_enabled is false in the isolated consultation config.",
+    "when": "The consultant evaluates whether the review evidence can support the recommendation",
+    "then": "It does not claim that a verifier reviewed the sources. It names the missing independent intent check, keeps the influence assessment unknown, and offers a bounded next step or clearly labeled inline fallback.",
+    "grading": "model",
+    "notes": "Rubric: Inspect config and tool trace to confirm verifier was disabled or explicitly rejected before a child session was created; final answer must disclose the missing check rather than say the review was clean."
   }
 ]
