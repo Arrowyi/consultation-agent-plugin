@@ -33,16 +33,16 @@ const EXPLORER_DESCRIPTION =
   "Search and information-gathering specialist. Gathers graded sources for specific claims and returns a structured report. Dispatched by the consultant and may fan out to multiple instances."
 
 const ANALYST_DESCRIPTION =
-  "Independent cross-model analyst. Reasons over gathered evidence per claim and returns a structured analysis. Dispatched by the consultant for standard and deep consultations."
+  "Independent cross-model analyst. Reasons over gathered evidence when interpretation, conflicting sources, or important trade-offs could change the conclusion; returns a structured analysis."
 
 const CRITIC_DESCRIPTION =
-  "Adversarial counter-evidence reviewer. Independently searches for opposing, qualifying, and superseding sources, challenges the leading conclusion, and returns a structured critique. Dispatched by the consultant for standard and deep consultations."
+  "Adversarial counter-evidence reviewer. Independently searches for opposing, qualifying, and superseding sources when a consequential conclusion or uncertain plan step needs challenge."
 
 const VERIFIER_DESCRIPTION =
-  "Intent-audit specialist. Audits user-generated sources for deliberate deception (paid shilling, coordinated smear campaigns, astroturfing) using text, account, temporal, rating-distribution, and platform-marker signals, and returns per-source intent annotations. Dispatched by the consultant for select and verify consultations at standard and deep tiers."
+  "Source intent and influence specialist. Audits user reviews, promotional claims, and purportedly independent third-party material when sponsorship, coordination, or provenance is relevant or uncertain; reports observable signals and missing evidence rather than assuming clean."
 
 const WRITER_DESCRIPTION =
-  "Read-only writing specialist. Produces a writing blueprint or editorial review from the supplied evidence packet without researching missing facts, executing commands, writing files, or overriding the consultant's final editorial control. Dispatched by the consultant for author consultations."
+  "Read-only writing specialist for author consultations. Produces a blueprint before outline approval, or a substantive section/chapter draft from the approved map and evidence packet after approval; never researches missing facts, executes commands, or writes files."
 
 /**
  * Build the runtime bindings block that the adapter injects into the
@@ -93,8 +93,8 @@ export function buildRuntimeBindings(
   const tiers = resolveTierRoleCaps(pluginConfig)
   const costGuard = resolveCostGuardUsd(pluginConfig)
 
-  const capsLine = `- Team caps: round_cap=${caps.round_cap}, explorer<=${caps.explorer_cap}, critic_searches<=${caps.critic_search_cap} per round`
-  const tierMatrixLine = `- Tier role caps: fast(e${tiers.fast.explorer},a${tiers.fast.analyst},c${tiers.fast.critic},v${tiers.fast.verifier},w${tiers.fast.writer}) standard(e${tiers.standard.explorer},a${tiers.standard.analyst},c${tiers.standard.critic},v${tiers.standard.verifier},w${tiers.standard.writer}) deep(e${tiers.deep.explorer},a${tiers.deep.analyst},c${tiers.deep.critic},v${tiers.deep.verifier},w${tiers.deep.writer})`
+  const capsLine = `- Team maximums (not targets): round_cap=${caps.round_cap}, explorer<=${caps.explorer_cap}, critic_searches<=${caps.critic_search_cap} per round`
+  const tierMatrixLine = `- Tier role maximums (not a required roster): fast(e${tiers.fast.explorer},a${tiers.fast.analyst},c${tiers.fast.critic},v${tiers.fast.verifier},w${tiers.fast.writer}) standard(e${tiers.standard.explorer},a${tiers.standard.analyst},c${tiers.standard.critic},v${tiers.standard.verifier},w${tiers.standard.writer}) deep(e${tiers.deep.explorer},a${tiers.deep.analyst},c${tiers.deep.critic},v${tiers.deep.verifier},w${tiers.deep.writer})`
   const costLine = `- Cost guard: ~$${costGuard} per provider (advisory, converge when approaching)`
 
   const namespaceLine = `- Memory namespace: \`${namespace}\``
