@@ -75,6 +75,44 @@ function extractText(parts: readonly unknown[]): string | undefined {
   return joined.length > 0 ? joined : undefined
 }
 
+export const DISPATCH_TIMEOUT_MS = 5 * 60 * 1000
+
+class DispatchTimeoutError extends Error {
+  constructor(role: DispatchRole, timeoutMs: number) {
+    super(`Error: ${role} dispatch timed out after ${timeoutMs}ms`)
+    this.name = "DispatchTimeoutError"
+  }
+}
+
+type PromptResult = {
+  data?: { parts?: readonly unknown[] }
+  error?: unknown
+}
+
+function promptWithTimeout(
+  prompt: Promise<PromptResult>,
+  onTimeout: () => void,
+  timeoutMs: number,
+  role: DispatchRole,
+): Promise<PromptResult> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      onTimeout()
+      reject(new DispatchTimeoutError(role, timeoutMs))
+    }, timeoutMs)
+    prompt.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (reason: unknown) => {
+        clearTimeout(timer)
+        reject(reason)
+      },
+    )
+  })
+}
+
 /**
  * The client surface this tool needs. Narrowed structurally so the tool is
  * unit-testable with a fake client; the real `PluginInput["client"]` satisfies
@@ -111,7 +149,10 @@ export interface DispatchClient {
  * and returns the final assistant text. The consultant fans out by issuing
  * multiple calls; true background dispatch is a later enhancement.
  */
-export function createConsultationDispatchTool(client: PluginInput["client"]): ToolDefinition {
+export function createConsultationDispatchTool(
+  client: PluginInput["client"],
+  timeoutMs: number = DISPATCH_TIMEOUT_MS,
+): ToolDefinition {
   const dispatchClient = client as unknown as DispatchClient
 
   return tool({
@@ -151,20 +192,30 @@ export function createConsultationDispatchTool(client: PluginInput["client"]): T
         const sessionID = createResult.data.id
 
         try {
-          const promptResult = await dispatchClient.session.prompt({
-            path: { id: sessionID },
-            body: {
-              agent: agentName,
-              ...(attemptModel === undefined ? {} : { model: splitModel(attemptModel) }),
-              parts: [{ type: "text", text: args.prompt }],
+          const promptResult = await promptWithTimeout(
+            dispatchClient.session.prompt({
+              path: { id: sessionID },
+              body: {
+                agent: agentName,
+                ...(attemptModel === undefined ? {} : { model: splitModel(attemptModel) }),
+                parts: [{ type: "text", text: args.prompt }],
+              },
+            }),
+            () => {
+              void dispatchClient.session.abort({ path: { id: sessionID } }).catch(() => {})
             },
-          })
+            timeoutMs,
+            args.role,
+          )
           if (promptResult.error !== undefined || promptResult.data === undefined) {
             lastError = errorText(promptResult.error)
             if (isRetryableModelError(promptResult.error)) continue
             return `Error: ${args.role} dispatch failed: ${lastError}`
           }
           return extractText(promptResult.data.parts ?? []) ?? `Error: ${args.role} dispatch returned no usable text`
+        } catch (err) {
+          if (err instanceof DispatchTimeoutError) return err.message
+          throw err
         } finally {
           // Free the child session after the sync turn completes. Aborting an
           // already-idle session is a no-op; this just prevents lingering

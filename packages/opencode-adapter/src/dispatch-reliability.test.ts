@@ -105,4 +105,24 @@ describe("consultation dispatch reliability", () => {
 
     expect(result).toBe("finding with source")
   })
+
+  it("aborts and reports a timeout when a child never returns", async () => {
+    const aborted: string[] = []
+    const client: DispatchClient = {
+      session: {
+        create: async () => ({ data: { id: "ses_child" } }),
+        prompt: () => new Promise(() => {}),
+        abort: async (input) => {
+          aborted.push(input.path.id)
+          return {}
+        },
+      },
+    }
+    const dispatch = createConsultationDispatchTool(client as unknown as PluginInput["client"], 50)
+
+    const result = await dispatch.execute({ role: "analyst", prompt: "analyze evidence" }, context)
+
+    expect(result).toBe("Error: analyst dispatch timed out after 50ms")
+    expect(aborted).toContain("ses_child")
+  })
 })
