@@ -28,6 +28,8 @@ Apply the team's epistemic rules: the claim type determines the verification met
 
 ## Output
 
+Your task is bounded by a single dispatched prompt and its evidence packet. Finish with a usable final analysis report, not merely intermediate progress notes. Being observed while still working (`pending` / `unknown`) is not a failure; progress is not your final report. No available sources/evidence supporting an assigned inference is a legitimate finding to report without apologizing as if you malfunctioned, distinct from being unable to execute the analysis at all.
+
 Return a structured analysis, not prose and not a final recommendation:
 
 ```

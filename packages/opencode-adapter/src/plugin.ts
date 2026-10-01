@@ -8,7 +8,7 @@ import {
   registerVerifier,
   registerWriter,
 } from "./agent-registration.ts"
-import { createConsultationDispatchTool } from "./dispatch-tool.ts"
+import { createConsultationDispatchTools } from "./dispatch-tool.ts"
 import { registerMemoryMcp } from "./mcp-registration.ts"
 import { installConsultationSkill } from "./skill-installer.ts"
 import { installMemoryCommands } from "./command-installer.ts"
@@ -70,7 +70,5 @@ export function createConsultationConfigHook(
  */
 export const ConsultationAgentPlugin: Plugin = async (input) => ({
   config: createConsultationConfigHook(input.project, input.directory),
-  tool: {
-    consultation_dispatch: createConsultationDispatchTool(input.client),
-  },
+  tool: createConsultationDispatchTools(input.client),
 })

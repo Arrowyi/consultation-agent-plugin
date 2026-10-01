@@ -30,6 +30,8 @@ Gather a necessary lawful excerpt per source, at most a few sentences, never a f
 
 ## Output
 
+Your task is bounded by a single dispatched prompt and its search boundary. Finish with a usable final evidence report, not merely intermediate progress notes. Being observed while still working (`pending` / `unknown`) is not a failure; progress is not your final report. No available sources/evidence for an assigned claim is a legitimate finding to report without apologizing as if you malfunctioned, distinct from being unable to execute the search at all.
+
 Return a structured report, not prose:
 
 ```

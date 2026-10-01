@@ -189,12 +189,16 @@ flowchart TD
     C -->|Yes| ASK[Ask 1-3 Questions]
     C -->|No| D[Decompose Claims]
     ASK --> D
-    D --> R[Gather + Grade Evidence via Channel Ladder]
-    R --> V{select/verify at standard/deep?}
-    V -->|Yes| IA[Verifier: Intent Audit]
-    V -->|No| X{Standard or Deep?}
-    IA --> X
-    X -->|Yes| CE[Critic Counter-Evidence / Hard Gate]
+    D --> R[Identify missing evidence + task-fit roles]
+    R --> G[Gather + Grade Evidence via Channel Ladder]
+    G --> V{Source influence uncertain or relevant?}
+    V -->|Yes| IA[Verifier: Bounded Intent Audit]
+    V -->|No| A{Material interpretation uncertain?}
+    IA --> A
+    A -->|Yes| AN[Analyst: Independent Analysis]
+    A -->|No| X{Consequential conclusion needs challenge?}
+    AN --> X
+    X -->|Yes| CE[Critic: Counter-Evidence]
     X -->|No| SYN[Synthesize]
     CE --> SYN
     SYN --> O[Mode-Specific Brief or Readable Report]
@@ -206,11 +210,12 @@ flowchart TD
 ```text
 route -> intake (audience/delivery/scope) -> explore load-bearing claims
 -> writer blueprint -> outline + file manifest -> one approval
--> continuous authoring -> proportionate verification -> cross-file check
+-> writer produces bounded approved chapter drafts
+-> consultant checks and authors final files -> proportionate verification -> cross-file check
 -> final AuthorBrief -> memory summary
 ```
 
-In this mode the adversarial roles are proportionate, never default: the critic runs only for `strict` verification, conflicting evidence, high-risk material, or a failed execution that challenges the explanation; the verifier runs only for user-generated product claims or manipulation-prone evidence. The consultant primary writes all artifact files and runs executable verification; every subagent stays read-only.
+In this mode adversarial roles are proportionate, never a fixed roster: the critic runs for `strict` verification, conflicting evidence, high-risk material, failed execution, or material uncertainty it could resolve; the verifier audits user-generated, promotional, or purportedly independent evidence when influence or provenance is relevant or uncertain. After outline approval the writer may produce complete section/chapter prose from a bounded evidence packet. The consultant checks facts, integrates drafts, writes all artifact files and runs executable verification; plugin-owned subagents stay read-only. A delegated writer's host permissions are separate and are not enforced by this plugin.
 
 ### 6.1 Consultation Tiers
 
@@ -230,7 +235,7 @@ Use for comparisons, recommendations, personalization, or moderate inference.
 - Check source independence and provenance.
 - Search for counter-evidence.
 - Retrieve relevant experience and preferences progressively.
-- Use no subagent unless a specific capability gap exists.
+- Dispatch a plausible specialist when its check might materially affect the answer or its relevance cannot be ruled out. Skip only with a task-specific reason; standard tier does not prescribe a roster.
 - Return a one-screen decision brief.
 
 #### Deep
@@ -238,8 +243,8 @@ Use for comparisons, recommendations, personalization, or moderate inference.
 Use for high risk, strong source conflicts, missing primary evidence, inference-dominated conclusions, broad comparisons, or any research-mode question.
 
 - Ask the user before escalating.
-- Dispatch the full team (explorers, analysts, critic, verifier; `author` consultations add up to two writers and keep critic/verifier proportional) and reconcile their independent findings.
-- Require supporting and opposing evidence, and run the intent audit on user-generated sources.
+- Decompose consequential work and route to the specialists whose evidence, interpretation, independent challenge, influence audit, or authoring is relevant or uncertain. Deep tier does not require calling every role.
+- Seek supporting and opposing evidence; audit source intent when influence or independence is relevant or uncertain.
 - Keep final synthesis and output with the consultant agent.
 
 Deep work is done by the consultant's own team. There is no separate deep-research provider; the `research` mode (§8) is the deep, understanding-oriented path.
@@ -256,17 +261,17 @@ The router evaluates:
 
 ### 6.3 Team Roles and Tier Caps
 
-The consultant leads five read-only subagent roles, dispatched through the adapter's `consultation_dispatch` tool:
+The consultant leads five specialist subagent roles through `consultation_dispatch`. Its skill is the authoritative task-fit policy: assign bounded work when a role could materially change the result or its relevance cannot yet be ruled out; skip only when a task-specific reason establishes the role is unnecessary. Independent gathering may fan out; analysis follows evidence, critique follows a draft conclusion, and substantive authoring follows outline approval. The consultant retains final synthesis and delivery.
 
 | Role | Purpose |
 |---|---|
 | `explorer` | gather and grade evidence (fan-out up to 5 instances) |
 | `analyst` | independent cross-model reasoning over evidence |
 | `critic` | adversarial counter-evidence pass; hard gate over research hypotheses |
-| `verifier` | deliberate-deception intent audit of user-generated sources |
-| `writer` | writing blueprint or editorial review for `author` consultations (edit and shell denied) |
+| `verifier` | bounded audit of manipulation or opaque independence in user/third-party/promotional evidence; missing observations produce `unknown` |
+| `writer` | blueprint before approval, usable section/chapter prose after approval, or editorial review for `author` (plugin-owned: edit and shell denied) |
 
-Per-tier instance caps (`TIER_ROLE_CAPS`, mirrored by the adapter's validated `tier_role_caps` config):
+Per-tier **maximum** instance counts (`TIER_ROLE_CAPS`, mirrored by the adapter's validated `tier_role_caps` config), never minimums or a required team roster:
 
 | Tier | explorer | analyst | critic | verifier | writer |
 |---|---|---|---|---|---|
@@ -274,7 +279,25 @@ Per-tier instance caps (`TIER_ROLE_CAPS`, mirrored by the adapter's validated `t
 | standard | 5 | 1 | 1 | 1 | 1 |
 | deep | 5 | 3 | 2 | 2 | 2 |
 
-`author` never runs at fast tier. The writer is optional (`writer_enabled`, default true); when it is disabled or unavailable, the consultant constructs the same writing blueprint inline and discloses the degradation. A legacy custom cap matrix without `writer` still parses and resolves `writer` to 0.
+`author` never runs at fast tier. The writer is optional (`writer_enabled`, default true); when it is disabled or unavailable, the consultant discloses which writing check is missing and may work inline without implying an independent writer review. A legacy custom cap matrix without `writer` still parses and resolves `writer` to 0. The caps are presently passed to the consultant as configuration, not enforced by a per-turn runtime scheduler; zero means the role is unavailable at that tier and the consultant must disclose a material gap.
+
+### 6.4 Recoverable Dispatch API
+
+All roles share the same recoverable dispatch lifecycle; only the bundled writer has a configured model-fallback chain.
+
+| Tool | Arguments | Contract |
+|---|---|---|
+| `consultation_dispatch` | `{role, prompt}`; role is explorer, analyst, critic, verifier or writer | Launch a durable host-session job and observe within a soft wait window |
+| `consultation_dispatch_wait` | `{job_id, wait_ms?}` | Recover/observe the same job; optional integer `wait_ms` is 0..300000, default 300000; zero performs a snapshot |
+| `consultation_dispatch_cancel` | `{job_id}` | Request explicit cancellation and reconcile durable completion/abort evidence |
+
+Launch uses a 300000 ms soft observation window, not a specialist execution deadline. Completed usable reports remain plain text and confirmed failures use `Error:` text. Nonterminal JSON envelopes identify `job_id`, `session_id`, `role`, `attempt`, `status` (`pending`, `unknown`, or `cancelling`) and `next: "consultation_dispatch_wait"`. A `cancelled` envelope requires confirmed abort evidence; normal completion racing cancellation wins and preserves the original report.
+
+Expiry or an observation-context abort stops waiting, not the child job. Pending means work remains active; unknown means available host evidence does not establish the outcome, not confirmed failure. Keep the same job ID for later waits, including through a fresh coordinator after restart, without a duplicate generating request. Wait/cancel enforce the caller's parent session and workspace ownership. Only explicit cancellation requests may abort work; cancellation remains `cancelling` until reconciled.
+
+The consultant may do independent preparation within existing permissions and caps while waiting, but must integrate the eventual specialist report before dependent synthesis and cannot silently substitute inline work or claim an independent check that did not return. Execution status comes from host session/message evidence, not from specialist liveness assertions. A verifier's evidence-quality `unknown` is distinct from a dispatch execution `unknown`.
+
+Non-writer roles have one configured attempt. The bundled writer uses its primary model plus `writer_fallback_models` and advances only after a confirmed terminal retryable model error; pending, unknown and non-retryable failures never advance. A delegated writer also has one configured attempt, with either a pinned model or host model selection (`null` in the durable spec), and retains host-defined permissions. This describes plugin fallback selection, not the external host's internal retry policy. See [the per-role audit matrix and verification levels](../evals/README.md#per-role-audit-matrix).
 
 ## 7. Epistemic Model
 
@@ -306,7 +329,7 @@ Grades are `high`, `medium`, `low`, and `lead_only`. Numerical trust percentages
 
 Niche sources, forums, and social platforms are normally leads, counterexamples, or experience reports. Obscurity is never a credibility bonus.
 
-Reliability grading assumes honest-but-flawed sources. Deliberate deception (water armies, coordinated smearing, astroturfing) is graded separately by the `verifier` subagent as an intent audit: each source is annotated `clean`, `suspect_shill`, `suspect_smear`, or `unknown` from detectable signals (temporal bursts, cross-account phrase repetition, single-product accounts, rating-text mismatch, missing disclosure, reviewer target concentration, and others). Suspicion is graded with a stated basis, never ground truth. When manipulation is indicated or evidence is too thin to decide, the report discloses the contamination explicitly.
+Reliability grading assumes honest-but-flawed sources. Deliberate deception and opaque independence (water armies, coordinated smearing, undisclosed sponsorship, astroturfing, and purportedly independent promotional evidence) receive a bounded `verifier` audit when potentially relevant, not only after manipulation is proved: each source is annotated `clean`, `suspect_shill`, `suspect_smear`, or `unknown` from observable signals (temporal bursts, cross-account phrase repetition, account history, disclosure, reviewer target concentration, publisher affiliation, and others). Missing account, sponsorship, or comparison data require `unknown`, not an unsupported `clean`. Suspicion is graded with a stated basis, never ground truth. Explorer and consultant still verify the underlying factual claim.
 
 ### 7.3 Facts and Inference
 
@@ -361,10 +384,10 @@ Do not output invented numerical confidence.
 Deep, understanding-oriented investigation is a `research` mode of the consultant, not a separate agent or external provider. The consultant detects understanding-seeking intent (open-ended questions, "深度研究", topic surveys) and runs the mode with its own team:
 
 - decompose the question into sub-directions;
-- gather evidence with parallel explorers;
+- gather missing or uncertain evidence with independent explorers, parallelizing only independent searches;
 - compare consensus, disagreements, and gaps;
 - form multiple hypotheses with confidence, actively seeking counterexamples;
-- run the critic as a hard gate over the hypotheses;
+- challenge consequential hypotheses with a critic pass when independent counter-evidence could matter or that possibility cannot be ruled out;
 - synthesize a readable report (bottom line up front, plain language, evidence and disagreements folded behind a disclosure).
 
 The research report is a validated contract (`ResearchBriefSchema`): a one-line bottom line, plain-language key points, an implications line, and confidence, with hypotheses, disagreements, residual uncertainty, and sources as folded detail. There is no separate deep-research provider or `research-director` agent.

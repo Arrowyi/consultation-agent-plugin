@@ -223,5 +223,50 @@
     "then": "It dispatches writer for a writing blueprint (chapter order, mental-model progression, cross-chapter example continuity, per-chapter teaching beats) before presenting the outline, and skips only a genuinely trivial single-section document with an explicit disclosure.",
     "grading": "model",
     "notes": "Rubric: Inspect tool order — a writer call must precede the outline approval gate; verify it requests a blueprint rather than full chapter prose before approval, and that any skip is disclosed. Do not require chapter prose before approval."
+  },
+  {
+    "id": "C26",
+    "title": "Pending-live work survives soft wait expiry and is recovered",
+    "given": "A specialist is actively working when the 300000 ms soft wait window expires; host evidence still shows progress.",
+    "when": "consultation_dispatch returns pending and consultation_dispatch_wait observes the same job_id after normal completion",
+    "then": "The original report is returned without another generating request or an expiry-triggered abort. The consultant integrates the eventual real result, never calls pending specialist failure, and never credits independent preparation as the specialist's report.",
+    "grading": "deterministic",
+    "notes": "Executable: packages/opencode-adapter/src/dispatch-registration.test.ts — 'recovers a soft-expired dispatch through the shared wait tool'; dispatch-lifecycle.test.ts — '<label>: pending envelope on expiry, later wait retrieves report without new launch'; dispatch-observer.test.ts — 'D2: returns pending when the final read times out after observing durable progress'. Live consultant integration/attribution needs a separate model review. Rubric: Reject '300s means failed', silent inline substitution, abort-on-expiry, or falsely crediting independent preparation as returned specialist work. Require same-job wait and eventual report integration."
+  },
+  {
+    "id": "C27",
+    "title": "Unknown observation is unresolved rather than confirmed failure",
+    "given": "No durable liveness evidence exists after startup grace, or a transport read rejects; no terminal specialist failure is confirmed.",
+    "when": "The observer classifies the job and the consultant decides its next action",
+    "then": "The status is unknown, not failed. The consultant waits on the same job or honestly discloses the unresolved gap, without a backup-model or duplicate launch.",
+    "grading": "deterministic",
+    "notes": "Executable: packages/opencode-adapter/src/dispatch-observer.test.ts — 'returns unknown after startup grace with no liveness signal', 'returns unknown when the session status is idle after startup grace', and 'returns unknown with reason on messages transport rejection and ends cleanly'; dispatch-lifecycle.test.ts — 'returns unknown and never resends'. Consultant disclosure needs a separate model review. Rubric: Reject unknown-triggered backup model, duplicate launch, or representing an evidence gap as confirmed specialist failure."
+  },
+  {
+    "id": "C28",
+    "title": "A late result is recovered through a fresh coordinator",
+    "given": "A prior coordinator launched a durable job before a plugin/server restart; the original child later completes normally.",
+    "when": "consultation_dispatch_wait uses the original job_id through a fresh coordinator with the same parent and workspace",
+    "then": "The completed original report is recovered from host evidence without a new promptAsync or replacement generating request.",
+    "grading": "deterministic",
+    "notes": "Executable: packages/opencode-adapter/src/dispatch-lifecycle.test.ts — recovery through a fresh coordinator / 'recovers a completed result without a new promptAsync'. This proves reconstructed coordinator recovery with an SDK fake, not an installed-host restart or live-model pass. Rubric: Reject a new dispatch presented as recovery of the original report."
+  },
+  {
+    "id": "C29",
+    "title": "Normal completion wins a cancellation race",
+    "given": "An explicit consultation_dispatch_cancel races normal completion of the original specialist attempt.",
+    "when": "Cancellation reconciles the exact child/request's durable terminal evidence",
+    "then": "The original report is returned, not a cancelled envelope; subsequent wait retains that report.",
+    "grading": "deterministic",
+    "notes": "Executable: packages/opencode-adapter/src/dispatch-cancel.test.ts — 'preserves normal completion racing the abort request' (all role/delegate variants). Rubric: Reject a cancelled claim when matching durable normal completion has won the race."
+  },
+  {
+    "id": "C30",
+    "title": "Only confirmed retryable bundled-writer failure advances fallback",
+    "given": "The bundled writer has primary plus fallback_models; its primary produces a confirmed terminal retryable model error. Contrast pending, unknown, non-retryable failure, non-writer roles and delegated writer configurations.",
+    "when": "The lifecycle selects whether to advance the configured model chain",
+    "then": "The bundled writer advances exactly once to the next configured model on confirmed retryable failure only. Pending, unknown and non-retryable errors never advance; non-writer roles and delegated writer have one configured attempt and no fallback advance.",
+    "grading": "deterministic",
+    "notes": "Executable: packages/opencode-adapter/src/dispatch-lifecycle.test.ts — writer fallback / 'advances the chain exactly once on a confirmed 402/429 retryable failure', 'does not advance on pending or unknown', and non-writer role failure / 'does not fall back'; dispatch-tool.test.ts — 'does not fall back on a non-retryable writer error'; dispatch-registration.test.ts — 'retains the disabled-bundled writer delegate override with a pinned model' and 'retains the disabled-bundled writer delegate override with host model selection' pin one-entry delegate chains. Live consultant behavior and host-internal delegate retries need separate review. Rubric: Reject unknown-triggered backup model, fallback on pending or non-retryable failure, or any plugin fallback advance for non-writer/delegate roles."
   }
 ]

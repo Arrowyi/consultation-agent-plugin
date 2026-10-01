@@ -37,6 +37,8 @@ Leaked documents and pirated content are a high-fabrication zone. For these, add
 
 ## Output
 
+Your task is bounded by a single dispatched prompt and its source packet. Finish with a usable final audit report, not merely intermediate progress notes. Being observed while still working (`pending` / `unknown`) is not a failure; progress is not your final report. No available sources/evidence or missing observations for the assigned audit is a legitimate finding to report without apologizing as if you malfunctioned, distinct from being unable to execute the audit at all.
+
 Return a structured intent audit, not prose and not a final verdict on the underlying claim:
 
 ```

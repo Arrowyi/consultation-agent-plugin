@@ -38,6 +38,22 @@ const DETERMINISTIC_TEST_MAP: Record<string, string[]> = {
     "packages/memory-core/src/provenance.test.ts",
   ],
   C9: ["packages/memory-core/src/injection.test.ts"],
+  C26: [
+    "packages/opencode-adapter/src/dispatch-registration.test.ts",
+    "packages/opencode-adapter/src/dispatch-lifecycle.test.ts",
+    "packages/opencode-adapter/src/dispatch-observer.test.ts",
+  ],
+  C27: [
+    "packages/opencode-adapter/src/dispatch-observer.test.ts",
+    "packages/opencode-adapter/src/dispatch-lifecycle.test.ts",
+  ],
+  C28: ["packages/opencode-adapter/src/dispatch-lifecycle.test.ts"],
+  C29: ["packages/opencode-adapter/src/dispatch-cancel.test.ts"],
+  C30: [
+    "packages/opencode-adapter/src/dispatch-lifecycle.test.ts",
+    "packages/opencode-adapter/src/dispatch-tool.test.ts",
+    "packages/opencode-adapter/src/dispatch-registration.test.ts",
+  ],
   M1: ["packages/memory-sqlite/src/store.test.ts"],
   M2: ["packages/memory-sqlite/src/store.test.ts"],
   M4: [

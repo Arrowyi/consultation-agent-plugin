@@ -1,5 +1,11 @@
 import { tool, type ToolContext, type ToolDefinition, type PluginInput } from "@opencode-ai/plugin"
 import { loadPluginConfig, resolveRoleModel, resolveRoleModelChain, type ConsultationPluginConfig } from "./plugin-config.ts"
+import { createKeyedMutex, parseWaitArgs, type Clock, type DispatchSdk, type KeyedMutex } from "./dispatch-contract.ts"
+import { createDispatchLifecycle, createSystemClock, type DispatchLifecycle } from "./dispatch-lifecycle.ts"
+import { createDispatchCancel } from "./dispatch-cancel.ts"
+import { splitModel, errorText, isRetryableModelError } from "./dispatch-helpers.ts"
+
+export { splitModel, errorText, isRetryableModelError }
 
 /**
  * The five roles the consultant may dispatch. Each maps to one of our own
@@ -35,129 +41,35 @@ export function resolveRoleTarget(
   }
 }
 
-/**
- * Split a `provider/model` id into its OpenCode prompt parts.
- * Throws when the id has no `provider/model` separator.
- */
-export function splitModel(model: string): { providerID: string; modelID: string } {
-  const separator = model.indexOf("/")
-  if (separator <= 0 || separator === model.length - 1) {
-    throw new Error(`invalid model id "${model}": expected "provider/model"`)
-  }
-  return { providerID: model.slice(0, separator), modelID: model.slice(separator + 1) }
-}
-
-const RETRYABLE_MODEL_ERROR_CODES = ["402", "429", "500", "502", "503", "504"] as const
-
-export function errorText(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === "object" && error !== null) return JSON.stringify(error)
-  return String(error)
-}
-
-export function isRetryableModelError(error: unknown): boolean {
-  const text = errorText(error)
-  return RETRYABLE_MODEL_ERROR_CODES.some((code) => text.includes(code))
-}
-
-type TextPart = { type: "text"; text: string }
-
-function extractText(parts: readonly unknown[]): string | undefined {
-  const texts: string[] = []
-  for (const part of parts) {
-    if (typeof part !== "object" || part === null) continue
-    const record = part as { type?: unknown; text?: unknown }
-    if (record.type === "text" && typeof record.text === "string") {
-      texts.push(record.text)
-    }
-  }
-  const joined = texts.join("\n").trim()
-  return joined.length > 0 ? joined : undefined
-}
-
-export const DISPATCH_TIMEOUT_MS = 5 * 60 * 1000
-
-class DispatchTimeoutError extends Error {
-  constructor(role: DispatchRole, timeoutMs: number) {
-    super(`Error: ${role} dispatch timed out after ${timeoutMs}ms`)
-    this.name = "DispatchTimeoutError"
-  }
-}
-
-type PromptResult = {
-  data?: { parts?: readonly unknown[] }
-  error?: unknown
-}
-
-function promptWithTimeout(
-  prompt: Promise<PromptResult>,
-  onTimeout: () => void,
-  timeoutMs: number,
-  role: DispatchRole,
-): Promise<PromptResult> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      onTimeout()
-      reject(new DispatchTimeoutError(role, timeoutMs))
-    }, timeoutMs)
-    prompt.then(
-      (value) => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (reason: unknown) => {
-        clearTimeout(timer)
-        reject(reason)
-      },
-    )
-  })
+export interface DispatchToolDeps {
+  readonly clock?: Clock
+  readonly mutex?: KeyedMutex
+  readonly lifecycle?: DispatchLifecycle
 }
 
 /**
- * The client surface this tool needs. Narrowed structurally so the tool is
- * unit-testable with a fake client; the real `PluginInput["client"]` satisfies
- * it. Only `session.create` + `session.prompt` + `session.abort` are used.
- */
-export interface DispatchClient {
-  session: {
-    create(input: {
-      body: { parentID?: string; title?: string }
-      query: { directory?: string }
-    }): Promise<{ data?: { id: string }; error?: unknown }>
-    prompt(input: {
-      path: { id: string }
-      body: {
-        agent?: string
-        model?: { providerID: string; modelID: string }
-        parts: TextPart[]
-      }
-    }): Promise<{ data?: { parts?: readonly unknown[] }; error?: unknown }>
-    abort(input: { path: { id: string } }): Promise<unknown>
-  }
-}
-
-/**
- * Build the `consultation_dispatch` tool.
+ * Build the three consultation job tools with one shared coordinator set.
  *
  * It dispatches ONLY to the five consultation subagents (`explorer`,
- * `analyst`, `critic`, `verifier`, `writer`) using the raw OpenCode client
- * session API, pinning both the agent and its configured model. It is additive:
- * it neither shadows nor interferes with the built-in `task` tool or any other
- * plugin's tools.
- *
- * Sync-only in v1: `session.prompt` blocks until the subagent's turn completes
- * and returns the final assistant text. The consultant fans out by issuing
- * multiple calls; true background dispatch is a later enhancement.
+ * `analyst`, `critic`, `verifier`, `writer`) using the recoverable lifecycle
+ * coordinator. It is additive: it neither shadows nor interferes with the
+ * built-in `task` tool or any other plugin's tools.
  */
-export function createConsultationDispatchTool(
+export function createConsultationDispatchTools(
   client: PluginInput["client"],
-  timeoutMs: number = DISPATCH_TIMEOUT_MS,
-): ToolDefinition {
-  const dispatchClient = client as unknown as DispatchClient
+  deps: DispatchToolDeps = {},
+) {
+  const sdk = client as unknown as DispatchSdk
+  const clock = deps.clock ?? createSystemClock()
+  const mutex = deps.mutex ?? createKeyedMutex()
+  const lifecycle =
+    deps.lifecycle ??
+    createDispatchLifecycle({ sdk, clock, mutex })
+  const cancelHandler = createDispatchCancel({ sdk, clock, mutex })
 
-  return tool({
+  const dispatch = tool({
     description:
-      "Dispatch work to one of the consultation team subagents (explorer, analyst, critic, verifier, writer) and get its result. Dispatch ONLY to these five roles; never use it for any other agent.",
+      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
     args: {
       role: tool.schema.enum(DISPATCH_ROLES),
       prompt: tool.schema.string(),
@@ -172,58 +84,69 @@ export function createConsultationDispatchTool(
         writer: config.writer_enabled || config.writer_delegate_agent !== undefined,
       }
       if (!enabled[args.role]) return `Error: ${args.role} is disabled by configuration`
+
       const { agentName, model } = resolveRoleTarget(config, args.role)
-      const attempts: Array<string | undefined> =
+      const modelChain: Array<string | null> =
         args.role === "writer" && config.writer_delegate_agent !== undefined
-          ? [model]
-          : resolveRoleModelChain(config, args.role)
+          ? [model ?? null]
+          : resolveRoleModelChain(config, args.role).map((m) => m ?? null)
 
-      const tried: string[] = []
-      let lastError = "unknown error"
-      for (const attemptModel of attempts) {
-        tried.push(attemptModel ?? `host model of ${agentName}`)
-        const createResult = await dispatchClient.session.create({
-          body: { parentID: context.sessionID, title: `consultation ${args.role}` },
-          query: { directory: context.directory },
-        })
-        if (createResult.error !== undefined || createResult.data === undefined) {
-          return `Error: failed to create subagent session: ${String(createResult.error ?? "unknown error")}`
-        }
-        const sessionID = createResult.data.id
-
-        try {
-          const promptResult = await promptWithTimeout(
-            dispatchClient.session.prompt({
-              path: { id: sessionID },
-              body: {
-                agent: agentName,
-                ...(attemptModel === undefined ? {} : { model: splitModel(attemptModel) }),
-                parts: [{ type: "text", text: args.prompt }],
-              },
-            }),
-            () => {
-              void dispatchClient.session.abort({ path: { id: sessionID } }).catch(() => {})
-            },
-            timeoutMs,
-            args.role,
-          )
-          if (promptResult.error !== undefined || promptResult.data === undefined) {
-            lastError = errorText(promptResult.error)
-            if (isRetryableModelError(promptResult.error)) continue
-            return `Error: ${args.role} dispatch failed: ${lastError}`
-          }
-          return extractText(promptResult.data.parts ?? []) ?? `Error: ${args.role} dispatch returned no usable text`
-        } catch (err) {
-          if (err instanceof DispatchTimeoutError) return err.message
-          throw err
-        } finally {
-          // Free the child session after the sync turn completes. Aborting an
-          // already-idle session is a no-op; this just prevents lingering
-          // subagent sessions from accumulating.
-          void dispatchClient.session.abort({ path: { id: sessionID } }).catch(() => {})
-        }
-      }
-      return `Error: ${args.role} dispatch failed on every model in the chain (${tried.join(" -> ")}): ${lastError}; degrade by answering inline and say so.`
+      return lifecycle.launch({
+        role: args.role,
+        prompt: args.prompt,
+        agentName,
+        modelChain,
+        parentID: context.sessionID,
+        directory: context.directory,
+        signal: context.abort,
+      })
     },
   })
+
+  const wait = tool({
+    description:
+      "Retrieve a consultation job's result or detect completion, waiting up to wait_ms (default 300000, max 300000; 0 takes one snapshot). Soft expiry preserves the job and returns a recoverable job id, not a specialist failure.",
+    args: {
+      job_id: tool.schema.string(),
+      wait_ms: tool.schema.number().optional(),
+    },
+    async execute(args, context: ToolContext): Promise<string> {
+      const parsed = parseWaitArgs(args)
+      if (!parsed.ok) return `Error: ${parsed.error.message}`
+      return lifecycle.wait({
+        jobID: parsed.value.job_id,
+        waitMs: parsed.value.wait_ms,
+        parentID: context.sessionID,
+        directory: context.directory,
+        signal: context.abort,
+      })
+    },
+  })
+
+  const cancel = tool({
+    description:
+      "Request cancellation of a pending consultation job. May return a cancelling status if cancellation is not yet confirmed; use consultation_dispatch_wait to reconcile. Already completed results are preserved.",
+    args: { job_id: tool.schema.string() },
+    async execute(args, context: ToolContext): Promise<string> {
+      return cancelHandler.cancel({
+        jobID: args.job_id,
+        parentID: context.sessionID,
+        directory: context.directory,
+        signal: context.abort,
+      })
+    },
+  })
+
+  return {
+    consultation_dispatch: dispatch,
+    consultation_dispatch_wait: wait,
+    consultation_dispatch_cancel: cancel,
+  }
+}
+
+export function createConsultationDispatchTool(
+  client: PluginInput["client"],
+  deps: DispatchToolDeps = {},
+): ToolDefinition {
+  return createConsultationDispatchTools(client, deps).consultation_dispatch
 }

@@ -33,10 +33,11 @@
  * node:fs / node:os / node:path.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { buildCleanRoomEnv } from "./integration-env.ts"
+import { proveDispatchPrimitives } from "./integration-dispatch-primitives.ts"
 import {
   type Assertion,
   gitStatusPorcelain,
@@ -59,7 +60,7 @@ async function main(): Promise<void> {
   }
   console.log("integration: opencode found on PATH")
 
-  const sandbox = mkdtempSync(join(tmpdir(), "consult-integration-"))
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "consult-integration-")))
   const sandboxData = join(sandbox, "data")
   const sandboxConfig = join(sandbox, "config")
   const sandboxState = join(sandbox, "state")
@@ -188,7 +189,19 @@ async function main(): Promise<void> {
           pass: hasAuthor,
           detail: hasAuthor ? "skill text contains `author`" : "skill text MISSING `author`",
         })
+        for (const name of ["consultation_dispatch_wait", "consultation_dispatch_cancel"]) {
+          assertions.push({ name: `installed skill names ${name}`, pass: skillText.includes(name), detail: "installed tool-routing token" })
+        }
       }
+      assertions.push(...await proveDispatchPrimitives(async (path, body) => {
+        const response = await fetch(`${baseUrl}${path}?directory=${encodeURIComponent(sandboxProj)}`, {
+          method: body === undefined ? "GET" : "POST",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        })
+        if (!response.ok) throw new Error(`primitive HTTP ${response.status}: ${await response.text()}`)
+        return response.json()
+      }, sandboxProj))
     }
 
     const gitAfter = await gitStatusPorcelain()

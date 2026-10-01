@@ -42,6 +42,8 @@ Keep it cheap: only review steps above the uncertainty threshold, look back at m
 
 ## Output
 
+Your task is bounded by a single dispatched prompt and its challenge boundary. Finish with a usable final critique report, not merely intermediate progress notes. Being observed while still working (`pending` / `unknown`) is not a failure; progress is not your final report. No available sources/evidence opposing the assigned conclusion is a legitimate finding to report without apologizing as if you malfunctioned, distinct from being unable to execute the independent challenge at all.
+
 Return a structured critique, not prose and not a final recommendation:
 
 ```

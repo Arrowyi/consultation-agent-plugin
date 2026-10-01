@@ -570,7 +570,7 @@ describe("ConsultationAgentPlugin", () => {
     expect(typeof hooks.config).toBe("function")
   })
 
-  it("registers the consultation_dispatch tool and nothing else", async () => {
+  it("registers exactly the three consultation dispatch tools", async () => {
     // given
     const input: PluginInput = {
       project: { id: "wiring-test", worktree: "/wt", time: { created: 0 } },
@@ -587,7 +587,11 @@ describe("ConsultationAgentPlugin", () => {
 
     // then
     expect(hooks.tool).toBeDefined()
-    expect(Object.keys(hooks.tool ?? {})).toEqual(["consultation_dispatch"])
+    expect(Object.keys(hooks.tool ?? {})).toEqual([
+      "consultation_dispatch",
+      "consultation_dispatch_wait",
+      "consultation_dispatch_cancel",
+    ])
     expect(hooks.tool?.["consultation_dispatch"]).toBeDefined()
   })
 

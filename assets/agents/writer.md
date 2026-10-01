@@ -21,6 +21,8 @@ If the outline, required evidence, or chapter boundary is missing, request it
 or mark the gap rather than inventing material. An approval of the outline is
 required for a full chapter draft; a blueprint does not authorize drafting.
 
+Your task is bounded by a single dispatched prompt and its blueprint or approved-section scope. Finish with a usable final report — the requested blueprint, editorial review, or approved prose with claim gaps — not merely intermediate progress notes. Being observed while still working (`pending` / `unknown`) is not a failure; progress is not your final report. No available sources/evidence supporting an assigned passage is a legitimate finding to report without apologizing as if you malfunctioned, distinct from being unable to execute the writing task at all.
+
 For a blueprint return a structured object with `voice`,
 `progressiveDisclosure`, `headingPattern`, `exampleProgression`,
 `terminologyRules`, `antiPatterns`, and a representative passage or editorial

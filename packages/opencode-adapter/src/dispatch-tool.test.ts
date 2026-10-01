@@ -10,6 +10,9 @@ import {
   splitModel,
 } from "./dispatch-tool.ts"
 import { ConsultationPluginConfigSchema, type ConsultationPluginConfig } from "./plugin-config.ts"
+import { createFakeClock, createFakeSdk, type FakeSdk } from "./dispatch-test-fixtures.ts"
+import { PRODUCTION_WAIT_BUDGET_MS, type DispatchEnvelope, type SdkAssistantMessage, type SdkMessageWithParts, type SdkTextPart } from "./dispatch-contract.ts"
+import type { DispatchLifecycle, LaunchInput } from "./dispatch-lifecycle.ts"
 
 function config(overrides: Partial<ConsultationPluginConfig> = {}): ConsultationPluginConfig {
   return ConsultationPluginConfigSchema.parse(overrides)
@@ -29,16 +32,63 @@ function fakeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   }
 }
 
+function textPart(text: string): SdkTextPart {
+  return { type: "text", text }
+}
+
+function completedAssistantMessage(requestMessageID: string, text: string, overrides: Partial<SdkAssistantMessage> = {}): SdkMessageWithParts {
+  return {
+    info: {
+      id: "msg-reply",
+      sessionID: "ignored",
+      role: "assistant",
+      parentID: requestMessageID,
+      time: { created: 0, completed: 0 },
+      modelID: "m",
+      providerID: "p",
+      finish: "stop",
+      ...overrides,
+    } as SdkAssistantMessage,
+    parts: [textPart(text)],
+  }
+}
+
+function promptAsyncCount(fake: FakeSdk): number {
+  return fake.calls.filter((c) => (c as { method: string }).method === "promptAsync").length
+}
+
+function abortCount(fake: FakeSdk): number {
+  return fake.calls.filter((c) => (c as { method: string }).method === "abort").length
+}
+
+function lastPromptAsyncCall(fake: FakeSdk): { input: { path: { id: string }; body: { agent?: string; model?: { providerID: string; modelID: string }; parts: SdkTextPart[]; messageID?: string } } } {
+  const calls = fake.calls.filter((c) => (c as { method: string }).method === "promptAsync")
+  return calls[calls.length - 1] as { input: { path: { id: string }; body: { agent?: string; model?: { providerID: string; modelID: string }; parts: SdkTextPart[]; messageID?: string } } }
+}
+
+function createRespondingFake(responseText: string, clock = createFakeClock()): FakeSdk {
+  const fake = createFakeSdk()
+  const base = fake.session.promptAsync.bind(fake.session)
+    fake.session.promptAsync = async (input) => {
+      const result = await base(input)
+      const requestMessageID = input.body.messageID!
+      const sessionID = input.path.id
+      fake.seedMessages(sessionID, [
+        completedAssistantMessage(requestMessageID, responseText, { sessionID, id: `msg-reply-${sessionID}` }),
+      ])
+      return result
+    }
+  return fake
+}
+
 describe("resolveRoleTarget", () => {
   it("maps each role to its own agent and default model", () => {
-    // given // when
     const explorer = resolveRoleTarget(config(), "explorer")
     const analyst = resolveRoleTarget(config(), "analyst")
     const critic = resolveRoleTarget(config(), "critic")
     const verifier = resolveRoleTarget(config(), "verifier")
     const writer = resolveRoleTarget(config(), "writer")
 
-    // then
     expect(explorer).toEqual({ agentName: "consultation-explorer", model: "opencode-go/deepseek-v4.1-flash" })
     expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.8-max" })
     expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.3" })
@@ -47,56 +97,33 @@ describe("resolveRoleTarget", () => {
   })
 
   it("routes the writer to a delegate agent without pinning a model by default", () => {
-    // given
     const cfg = config({ writer_delegate_agent: "host-writer" })
-
-    // when // then
     expect(resolveRoleTarget(cfg, "writer")).toEqual({ agentName: "host-writer", model: undefined })
   })
 
   it("pins the delegate model only when writer_delegate_model is set", () => {
-    // given
     const cfg = config({ writer_delegate_agent: "host-writer", writer_delegate_model: "p/m" })
-
-    // when // then
     expect(resolveRoleTarget(cfg, "writer")).toEqual({ agentName: "host-writer", model: "p/m" })
   })
 
   it("honors model overrides", () => {
-    // given
     const cfg = config({ analyst_model: "test/analyst" })
-
-    // when
-    const analyst = resolveRoleTarget(cfg, "analyst")
-
-    // then
-    expect(analyst.model).toBe("test/analyst")
+    expect(resolveRoleTarget(cfg, "analyst")).toEqual({ agentName: "consultation-analyst", model: "test/analyst" })
   })
 
   it("resolves the configured writer target", () => {
-    // given
-    const cfg = config({
-      writer_agent: "custom-writer",
-      writer_model: "provider/writer-model",
-    })
-
-    // when
-    const writer = resolveRoleTarget(cfg, "writer")
-
-    // then
-    expect(writer).toEqual({ agentName: "custom-writer", model: "provider/writer-model" })
+    const cfg = config({ writer_agent: "custom-writer", writer_model: "provider/writer-model" })
+    expect(resolveRoleTarget(cfg, "writer")).toEqual({ agentName: "custom-writer", model: "provider/writer-model" })
   })
 })
 
 describe("splitModel", () => {
   it("splits provider/model on the first slash", () => {
-    // given // when // then
     expect(splitModel("deepseek/deepseek-v4-pro")).toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
     expect(splitModel("opencode-go/qwen3.8-max")).toEqual({ providerID: "opencode-go", modelID: "qwen3.8-max" })
   })
 
   it("throws on a model id without a provider separator", () => {
-    // given // when // then
     expect(() => splitModel("no-slash")).toThrow(/provider\/model/)
     expect(() => splitModel("/leading")).toThrow()
     expect(() => splitModel("trailing/")).toThrow()
@@ -133,186 +160,201 @@ describe("createConsultationDispatchTool", () => {
   })
 
   it("dispatches to the right agent and model and returns the subagent text", async () => {
-    // given
-    const createCalls: unknown[] = []
-    const promptCalls: unknown[] = []
-    const abortCalls: unknown[] = []
-    const fakeClient = {
-      session: {
-        create: async (input: unknown) => {
-          createCalls.push(input)
-          return { data: { id: "ses_child" } }
-        },
-        prompt: async (input: unknown) => {
-          promptCalls.push(input)
-          return { data: { parts: [{ type: "text", text: "the analyst result" }] } }
-        },
-        abort: async (input: unknown) => {
-          abortCalls.push(input)
-          return {}
-        },
-      },
-    }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+    const clock = createFakeClock()
+    const fake = createRespondingFake("the analyst result", clock)
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
-    // when
     const result = await dispatchTool.execute({ role: "analyst", prompt: "analyze claims" }, fakeContext())
 
-    // then
     expect(result).toBe("the analyst result")
+    expect(promptAsyncCount(fake)).toBe(1)
+    expect(abortCount(fake)).toBe(0)
 
-    const create = createCalls[0] as { body: { parentID?: string }; query: { directory?: string } }
-    expect(create.body.parentID).toBe("ses_parent")
-    expect(create.query.directory).toBe("/tmp/project")
+    const createCall = fake.calls.find((c) => (c as { method: string }).method === "create") as { input: { body: { parentID?: string }; query: { directory?: string } } }
+    expect(createCall.input.body.parentID).toBe("ses_parent")
+    expect(createCall.input.query.directory).toBe("/tmp/project")
 
-    const prompt = promptCalls[0] as {
-      path: { id: string }
-      body: { agent?: string; model?: { providerID: string; modelID: string }; parts: unknown[] }
-    }
-    expect(prompt.path.id).toBe("ses_child")
-    expect(prompt.body.agent).toBe("consultation-analyst")
-    expect(prompt.body.model).toEqual({ providerID: "provider-b", modelID: "analyst-m" })
-    expect(prompt.body.parts).toEqual([{ type: "text", text: "analyze claims" }])
-
-    const abort = abortCalls[0] as { path: { id: string } }
-    expect(abort.path.id).toBe("ses_child")
+    const prompt = lastPromptAsyncCall(fake)
+    expect(prompt.input.path.id).toMatch(/^ses_fake_/)
+    expect(prompt.input.body.agent).toBe("consultation-analyst")
+    expect(prompt.input.body.model).toEqual({ providerID: "provider-b", modelID: "analyst-m" })
+    expect(prompt.input.body.parts).toEqual([{ type: "text", text: "analyze claims" }])
   })
 
   it("returns a clear error string when session create fails", async () => {
-    // given
-    const fakeClient = {
-      session: {
-        create: async () => ({ error: "boom", data: undefined }),
-        prompt: async () => ({ data: { parts: [] } }),
-        abort: async () => {},
-      },
-    }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+    const fake = createFakeSdk()
+    fake.session.create = async () => ({ error: "boom", data: undefined })
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
 
-    // when
     const result = await dispatchTool.execute({ role: "critic", prompt: "challenge" }, fakeContext())
 
-    // then
-    expect(result).toContain("failed to create subagent session")
-    expect(result).toContain("boom")
+    expect(result).toContain("failed to create job")
+    expect(result).toContain("unrecognized provider error")
+    expect(result).not.toContain("boom")
   })
 
-  it("returns a clear error string when the prompt fails", async () => {
-    // given
-    const fakeClient = {
-      session: {
-        create: async () => ({ data: { id: "ses_child" } }),
-        prompt: async () => ({ error: "model auth failed", data: undefined }),
-        abort: async () => {},
-      },
-    }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+  it("returns a clear error string when promptAsync fails", async () => {
+    const fake = createFakeSdk()
+    fake.setPromptAsyncError({ status: 500, message: "model auth failed" })
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
 
-    // when
     const result = await dispatchTool.execute({ role: "explorer", prompt: "search" }, fakeContext())
 
-    // then
     expect(result).toContain("explorer dispatch failed")
-    expect(result).toContain("model auth failed")
+    expect(result).toContain("unrecognized provider error")
+    expect(result).not.toContain("model auth failed")
   })
 
   it("falls back to kimi-k3 when the writer model hits a quota error", async () => {
-    // given
-    const promptCalls: Array<{ body: { model?: { providerID: string; modelID: string } } }> = []
+    const clock = createFakeClock()
+    const fake = createFakeSdk()
+    const base = fake.session.promptAsync.bind(fake.session)
     let attempt = 0
-    const fakeClient = {
-      session: {
-        create: async () => ({ data: { id: "ses_child" } }),
-        prompt: async (input: { body: { model?: { providerID: string; modelID: string } } }) => {
-          promptCalls.push(input)
-          attempt += 1
-          if (attempt === 1) return { error: { status: 402, message: "quota exhausted" }, data: undefined }
-          return { data: { parts: [{ type: "text", text: "kimi wrote it" }] } }
-        },
-        abort: async () => {},
-      },
+    fake.session.promptAsync = async (input) => {
+      const result = await base(input)
+      attempt++
+      const requestMessageID = input.body.messageID!
+      const sessionID = input.path.id
+      if (attempt === 1) {
+        fake.seedMessages(sessionID, [
+          {
+            info: {
+              id: `msg-fail-${sessionID}`,
+              sessionID,
+              role: "assistant",
+              parentID: requestMessageID,
+              time: { created: clock.now(), completed: clock.now() },
+              modelID: "m",
+              providerID: "p",
+              error: { name: "APIError", data: { isRetryable: true, status: 402, message: "quota exhausted" } },
+            } as SdkAssistantMessage,
+            parts: [],
+          },
+        ])
+      } else {
+        fake.seedMessages(sessionID, [completedAssistantMessage(requestMessageID, "kimi wrote it", { sessionID, id: `msg-success-${sessionID}` })])
+      }
+      return result
     }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
-    // when
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
-    // then
     expect(result).toBe("kimi wrote it")
-    expect(promptCalls).toHaveLength(2)
-    expect(promptCalls[0]?.body.model).toEqual({ providerID: "opencode", modelID: "claude-sonnet-5" })
-    expect(promptCalls[1]?.body.model).toEqual({ providerID: "opencode-go", modelID: "kimi-k3" })
+    expect(promptAsyncCount(fake)).toBe(2)
+    const asyncs = fake.calls.filter((c) => (c as { method: string }).method === "promptAsync")
+    expect((asyncs[0] as { input: { body: { model?: { providerID: string; modelID: string } } } }).input.body.model).toEqual({ providerID: "opencode", modelID: "claude-sonnet-5" })
+    expect((asyncs[1] as { input: { body: { model?: { providerID: string; modelID: string } } } }).input.body.model).toEqual({ providerID: "opencode-go", modelID: "kimi-k3" })
   })
 
   it("reports every tried model when the whole chain fails", async () => {
-    // given
-    const fakeClient = {
-      session: {
-        create: async () => ({ data: { id: "ses_child" } }),
-        prompt: async () => ({ error: { status: 429, message: "rate limited" }, data: undefined }),
-        abort: async () => {},
-      },
+    const clock = createFakeClock()
+    const fake = createFakeSdk()
+    const base = fake.session.promptAsync.bind(fake.session)
+    fake.session.promptAsync = async (input) => {
+      const result = await base(input)
+      const requestMessageID = input.body.messageID!
+      const sessionID = input.path.id
+      fake.seedMessages(sessionID, [
+        {
+          info: {
+            id: `msg-err-${sessionID}`,
+            sessionID,
+            role: "assistant",
+            parentID: requestMessageID,
+            time: { created: clock.now(), completed: clock.now() },
+            modelID: "m",
+            providerID: "p",
+            error: { name: "APIError", data: { isRetryable: true, status: 429, message: "rate limited" } },
+          } as SdkAssistantMessage,
+          parts: [],
+        },
+      ])
+      return result
     }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
-    // when
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
-    // then
     expect(result).toContain("opencode/claude-sonnet-5")
     expect(result).toContain("opencode-go/kimi-k3")
     expect(result).toContain("degrade")
   })
 
   it("does not fall back on a non-retryable writer error", async () => {
-    // given
-    const promptCalls: unknown[] = []
-    const fakeClient = {
-      session: {
-        create: async () => ({ data: { id: "ses_child" } }),
-        prompt: async (input: unknown) => {
-          promptCalls.push(input)
-          return { error: "model auth failed", data: undefined }
+    const clock = createFakeClock()
+    const fake = createFakeSdk()
+    const base = fake.session.promptAsync.bind(fake.session)
+    fake.session.promptAsync = async (input) => {
+      const result = await base(input)
+      const requestMessageID = input.body.messageID!
+      const sessionID = input.path.id
+      fake.seedMessages(sessionID, [
+        {
+          info: {
+            id: `msg-err-${sessionID}`,
+            sessionID,
+            role: "assistant",
+            parentID: requestMessageID,
+            time: { created: clock.now(), completed: clock.now() },
+            modelID: "m",
+            providerID: "p",
+            error: { name: "APIError", data: { isRetryable: false, status: 401, message: "model auth failed" } },
+          } as SdkAssistantMessage,
+          parts: [],
         },
-        abort: async () => {},
-      },
+      ])
+      return result
     }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
-    // when
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
-    // then
     expect(result).toContain("writer dispatch failed")
-    expect(promptCalls).toHaveLength(1)
+    expect(promptAsyncCount(fake)).toBe(1)
   })
 
   it("dispatches a delegated writer without pinning a model", async () => {
-    // given
-    writeFileSync(
-      configPath,
-      JSON.stringify({ writer_delegate_agent: "host-writer" }),
-    )
-    const promptCalls: Array<{ body: { agent?: string; model?: { providerID: string; modelID: string } } }> = []
-    const fakeClient = {
-      session: {
-        create: async () => ({ data: { id: "ses_child" } }),
-        prompt: async (input: { body: { agent?: string; model?: { providerID: string; modelID: string } } }) => {
-          promptCalls.push(input)
-          return { data: { parts: [{ type: "text", text: "host wrote it" }] } }
-        },
-        abort: async () => {},
-      },
-    }
-    const dispatchTool = createConsultationDispatchTool(fakeClient as unknown as PluginInput["client"])
+    writeFileSync(configPath, JSON.stringify({ writer_delegate_agent: "host-writer" }))
+    const clock = createFakeClock()
+    const fake = createRespondingFake("host wrote it", clock)
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
-    // when
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
-    // then
     expect(result).toBe("host wrote it")
-    expect(promptCalls).toHaveLength(1)
-    expect(promptCalls[0]?.body.agent).toBe("host-writer")
-    expect(promptCalls[0]?.body.model).toBeUndefined()
+    expect(promptAsyncCount(fake)).toBe(1)
+    const prompt = lastPromptAsyncCall(fake)
+    expect(prompt.input.body.agent).toBe("host-writer")
+    expect(prompt.input.body.model).toBeUndefined()
+  })
+
+  it("uses the production 300000 ms wait budget at the tool boundary", async () => {
+    const captured: LaunchInput[] = []
+    const spyLifecycle: DispatchLifecycle = {
+      launch: async (input) => {
+        captured.push(input)
+        const envelope: DispatchEnvelope = {
+          v: 1,
+          status: "pending",
+          job_id: "ses_spy",
+          role: input.role,
+          attempt: { index: 0, model: input.modelChain[0] ?? null },
+          session_id: "ses_spy",
+          waited_ms: 0,
+          reason: "spy",
+          next: "consultation_dispatch_wait",
+        }
+        return JSON.stringify(envelope)
+      },
+      wait: async () => "never called",
+    }
+    const fake = createFakeSdk()
+    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { lifecycle: spyLifecycle })
+
+    await dispatchTool.execute({ role: "analyst", prompt: "analyze evidence" }, fakeContext())
+
+    expect(captured).toHaveLength(1)
+    expect(captured[0]!.waitMs ?? PRODUCTION_WAIT_BUDGET_MS).toBe(PRODUCTION_WAIT_BUDGET_MS)
   })
 })

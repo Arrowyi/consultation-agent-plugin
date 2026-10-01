@@ -75,8 +75,14 @@ Restart OpenCode so it picks up the new plugin entry. On startup the plugin's `c
 1. registers the `consultant` primary agent;
 2. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its configured model; the verifier reuses the critic's model by default; the writer also denies shell execution);
 3. registers the `consultation-memory` local MCP server (when memory is enabled, the default);
-4. registers the `consultation_dispatch` tool, which the consultant uses to dispatch to the five team subagents (it handles only these five and does not interfere with the built-in `task` tool or other plugins);
+4. registers `consultation_dispatch{role,prompt}`, `consultation_dispatch_wait{job_id,wait_ms?}` and `consultation_dispatch_cancel{job_id}` for the five team roles (these do not interfere with the built-in `task` tool or other plugins);
 5. installs the `consultation` skill and the `consultation-memory` browse command into your OpenCode config directory.
+
+### Recoverable team jobs
+
+All roles share the same recoverable dispatch lifecycle; only the bundled writer has a configured model-fallback chain. Launch observes for a 300000 ms soft wait window. Expiry returns a recoverable job envelope, not specialist failure, and never aborts the child. Wait uses the same `job_id`, including after a coordinator restart; `wait_ms` is an optional integer 0..300000 (default 300000; zero is a snapshot). Pending/unknown jobs must not trigger duplicate launches, backup models, or silent inline substitution. The consultant integrates the eventual original report and discloses any unresolved independent check.
+
+Cancel is explicit and may return `cancelling` until durable abort evidence confirms `cancelled`; normal completion racing cancellation wins and returns the report. Nonterminal envelopes name `consultation_dispatch_wait` as their next action. Wait/cancel use the caller's parent session and workspace for ownership, not routing overrides. See [the architecture API contract](architecture.md#64-recoverable-dispatch-api).
 
 ## Step 4: Optional Plugin Configuration
 
@@ -102,8 +108,9 @@ A missing file is fine; all fields have defaults. Create the file to override de
   "verifier_model": "opencode-go/glm-5.3",
   "writer_model": "opencode/claude-sonnet-5",
 
-  // Writer model chain and host delegation. On retryable errors (402/429/5xx)
+  // Bundled writer only: on confirmed terminal retryable model errors
   // the dispatch tool walks the fallback chain in order. Defaults shown.
+  // Pending, unknown and non-retryable errors never trigger fallback.
   "writer_fallback_models": ["opencode-go/kimi-k3"],
   // Prefer a stronger host-provided writing agent over the bundled one.
   // When set, the bundled writer is not registered; dispatch routes to this
@@ -179,7 +186,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `verifier_enabled` | boolean | `true` | Whether to register the verifier subagent |
 | `writer_agent` | string | `"consultation-writer"` | Name of the blueprint/review and approved-section-drafting subagent (`author` mode) |
 | `writer_model` | string (optional) | `opencode/claude-sonnet-5` | Primary model for the writer subagent |
-| `writer_fallback_models` | string[] (optional) | `["opencode-go/kimi-k3"]` | Fallback chain tried on retryable model errors (402/429/5xx), in order |
+| `writer_fallback_models` | string[] (optional) | `["opencode-go/kimi-k3"]` | Bundled-writer chain tried only after confirmed terminal retryable model errors, in order; never for pending/unknown/non-retryable outcomes or delegate writer |
 | `writer_delegate_agent` | string (optional) | (none) | Host-provided writing agent preferred over the bundled writer; the bundled writer is not registered when set, and its permissions are controlled by the host |
 | `writer_delegate_model` | string (optional) | (none) | Model pinned on the delegate agent; when unset the delegate uses its own model |
 | `writer_enabled` | boolean | `true` | Whether to register the writer subagent |
@@ -197,6 +204,8 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `embedding.dimensions` | number | (none) | Embedding vector dimensions |
 
 The `embedding` block is all-or-nothing: set all four sub-fields or omit the block.
+
+Non-writer roles and delegate writer each have one configured attempt, with no plugin fallback advance. A delegate without `writer_delegate_model` uses host model selection (`null` in the durable job spec); it keeps host permissions and host-internal retry behavior. Neither wait expiry nor unknown observation authorizes a backup model.
 
 The consultant routes bounded tasks to suitable specialist agents: `explorer` gathers missing evidence, `analyst` interprets material disputes, `critic` independently challenges consequential conclusions, `verifier` triages unclear influence or independence of user/third-party/promotional sources, and `writer` produces a blueprint before outline approval or usable section/chapter prose afterward. A potentially relevant check is delegated when its necessity cannot be ruled out; a role is skipped only with a task-specific reason. These roles are not a tier-dependent required roster. Plugin-owned subagents have `permission.edit = "deny"`; the bundled writer also has `permission.bash = "deny"`. An external `writer_delegate_agent` keeps its host-defined permissions and does not inherit these restrictions. Analyst follows evidence, critic follows a draft conclusion, writer's substantive prose follows approved scope and evidence, and the consultant verifies, integrates and writes final files. The default consultant, analyst and critic use different model families; verifier reuses critic's configured model, without a performance guarantee from that choice. Role caps are advisory ceilings rather than a runtime-enforced scheduler.
 
