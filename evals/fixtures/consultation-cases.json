@@ -214,5 +214,14 @@
     "then": "It does not claim that a verifier reviewed the sources. It names the missing independent intent check, keeps the influence assessment unknown, and offers a bounded next step or clearly labeled inline fallback.",
     "grading": "model",
     "notes": "Rubric: Inspect config and tool trace to confirm verifier was disabled or explicitly rejected before a child session was created; final answer must disclose the missing check rather than say the review was clean."
+  },
+  {
+    "id": "C25",
+    "title": "Writer blueprint precedes the outline gate by default",
+    "given": "The user asks for a multi-chapter technical tutorial on a framework, for beginners, delivered as multiple files; intake is complete but the outline has not been approved yet.",
+    "when": "The consultant prepares the outline",
+    "then": "It dispatches writer for a writing blueprint (chapter order, mental-model progression, cross-chapter example continuity, per-chapter teaching beats) before presenting the outline, and skips only a genuinely trivial single-section document with an explicit disclosure.",
+    "grading": "model",
+    "notes": "Rubric: Inspect tool order — a writer call must precede the outline approval gate; verify it requests a blueprint rather than full chapter prose before approval, and that any skip is disclosed. Do not require chapter prose before approval."
   }
 ]
