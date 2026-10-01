@@ -90,7 +90,7 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("opencode-go/glm-5.2")
+    expect(block).toContain("opencode-go/glm-5.3")
   })
 
   it("reports the consultant and team role models", () => {
@@ -102,12 +102,12 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(block).toContain("Consultant model")
-    expect(block).toContain("deepseek/deepseek-v4-pro")
+    expect(block).toContain("opencode-go/deepseek-v4-pro")
     expect(block).toContain("Team subagents")
     expect(block).toContain("consultation-explorer")
-    expect(block).toContain("deepseek/deepseek-flash")
+    expect(block).toContain("opencode-go/deepseek-v4.1-flash")
     expect(block).toContain("consultation-analyst")
-    expect(block).toContain("opencode-go/qwen3.7-max")
+    expect(block).toContain("opencode-go/qwen3.8-max")
   })
 
   it("reports the default team caps, tier matrix, and cost guard", () => {
@@ -181,7 +181,7 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("writer `consultation-writer` (test/writer-model, fallback: moonshotai-cn/kimi-k3)")
+    expect(block).toContain("writer `consultation-writer` (test/writer-model, fallback: opencode-go/kimi-k3)")
   })
 
   it("says writer DISABLED when writer_enabled is false", () => {
@@ -281,7 +281,7 @@ describe("registerConsultantAgent", () => {
 
     // then
     const consultant = config.agent?.["consultant"] as { model?: string }
-    expect(consultant.model).toBe("deepseek/deepseek-v4-pro")
+    expect(consultant.model).toBe("opencode-go/deepseek-v4-pro")
   })
 
   it("does NOT clobber a pre-existing user-defined consultant agent entry", async () => {
@@ -351,7 +351,7 @@ describe("registerConsultationCritic", () => {
     expect(critic.model).toBe("anthropic/claude-sonnet-4")
   })
 
-  it("defaults the critic model to glm-5.2 when critic_model is unset", async () => {
+  it("defaults the critic model to glm-5.3 when critic_model is unset", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -361,7 +361,7 @@ describe("registerConsultationCritic", () => {
 
     // then
     const critic = config.agent?.["consultation-critic"] as { model?: string }
-    expect(critic.model).toBe("opencode-go/glm-5.2")
+    expect(critic.model).toBe("opencode-go/glm-5.3")
   })
 
   it("uses the configured critic_agent name", async () => {
@@ -412,7 +412,7 @@ describe("registerExplorer", () => {
     }
     expect(explorer.mode).toBe("subagent")
     expect(explorer.prompt).toContain("# Explorer")
-    expect(explorer.model).toBe("deepseek/deepseek-flash")
+    expect(explorer.model).toBe("opencode-go/deepseek-v4.1-flash")
     expect(explorer.permission).toEqual({ edit: "deny" })
   })
 
@@ -448,7 +448,7 @@ describe("registerAnalyst", () => {
     }
     expect(analyst.mode).toBe("subagent")
     expect(analyst.prompt).toContain("# Analyst")
-    expect(analyst.model).toBe("opencode-go/qwen3.7-max")
+    expect(analyst.model).toBe("opencode-go/qwen3.8-max")
     expect(analyst.permission).toEqual({ edit: "deny" })
   })
 
@@ -474,7 +474,7 @@ describe("registerVerifier", () => {
 
     expect(config.agent?.["consultation-verifier"]).toMatchObject({
       mode: "subagent",
-      model: "opencode-go/glm-5.2",
+      model: "opencode-go/glm-5.3",
       permission: { edit: "deny" },
     })
   })
@@ -528,6 +528,6 @@ describe("registerWriter", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5, fallback: moonshotai-cn/kimi-k3)")
+    expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5, fallback: opencode-go/kimi-k3)")
   })
 })

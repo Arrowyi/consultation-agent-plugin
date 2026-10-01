@@ -39,10 +39,10 @@ describe("resolveRoleTarget", () => {
     const writer = resolveRoleTarget(config(), "writer")
 
     // then
-    expect(explorer).toEqual({ agentName: "consultation-explorer", model: "deepseek/deepseek-flash" })
-    expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.7-max" })
-    expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.2" })
-    expect(verifier).toEqual({ agentName: "consultation-verifier", model: "opencode-go/glm-5.2" })
+    expect(explorer).toEqual({ agentName: "consultation-explorer", model: "opencode-go/deepseek-v4.1-flash" })
+    expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.8-max" })
+    expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.3" })
+    expect(verifier).toEqual({ agentName: "consultation-verifier", model: "opencode-go/glm-5.3" })
     expect(writer).toEqual({ agentName: "consultation-writer", model: "opencode/claude-sonnet-5" })
   })
 
@@ -92,7 +92,7 @@ describe("splitModel", () => {
   it("splits provider/model on the first slash", () => {
     // given // when // then
     expect(splitModel("deepseek/deepseek-v4-pro")).toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
-    expect(splitModel("opencode-go/qwen3.7-max")).toEqual({ providerID: "opencode-go", modelID: "qwen3.7-max" })
+    expect(splitModel("opencode-go/qwen3.8-max")).toEqual({ providerID: "opencode-go", modelID: "qwen3.8-max" })
   })
 
   it("throws on a model id without a provider separator", () => {
@@ -241,7 +241,7 @@ describe("createConsultationDispatchTool", () => {
     expect(result).toBe("kimi wrote it")
     expect(promptCalls).toHaveLength(2)
     expect(promptCalls[0]?.body.model).toEqual({ providerID: "opencode", modelID: "claude-sonnet-5" })
-    expect(promptCalls[1]?.body.model).toEqual({ providerID: "moonshotai-cn", modelID: "kimi-k3" })
+    expect(promptCalls[1]?.body.model).toEqual({ providerID: "opencode-go", modelID: "kimi-k3" })
   })
 
   it("reports every tried model when the whole chain fails", async () => {
@@ -260,7 +260,7 @@ describe("createConsultationDispatchTool", () => {
 
     // then
     expect(result).toContain("opencode/claude-sonnet-5")
-    expect(result).toContain("moonshotai-cn/kimi-k3")
+    expect(result).toContain("opencode-go/kimi-k3")
     expect(result).toContain("degrade")
   })
 

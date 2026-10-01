@@ -82,7 +82,7 @@ describe("writer role configuration", () => {
     expect(cfg.writer_agent).toBe("consultation-writer")
     expect(cfg.writer_enabled).toBe(true)
     expect(resolveRoleModel(cfg, "writer")).toBe("opencode/claude-sonnet-5")
-    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5", "moonshotai-cn/kimi-k3"])
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5", "opencode-go/kimi-k3"])
     expect(cfg.writer_delegate_agent).toBeUndefined()
     expect(cfg.writer_delegate_model).toBeUndefined()
     expect(resolveTierRoleCaps(cfg).standard.writer).toBe(1)
@@ -95,7 +95,7 @@ describe("writer role configuration", () => {
 
     // when // then
     expect(resolveRoleModel(cfg, "writer")).toBe("anthropic/claude-opus-4-6")
-    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["anthropic/claude-opus-4-6", "moonshotai-cn/kimi-k3"])
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["anthropic/claude-opus-4-6", "opencode-go/kimi-k3"])
   })
 
   it("honors a configured fallback chain", () => {
@@ -108,8 +108,8 @@ describe("writer role configuration", () => {
 
   it("keeps non-writer roles on a single-model chain", () => {
     // given // when // then
-    expect(resolveRoleModelChain(config(), "critic")).toEqual(["opencode-go/glm-5.2"])
-    expect(resolveRoleModelChain(config(), "explorer")).toEqual(["deepseek/deepseek-flash"])
+    expect(resolveRoleModelChain(config(), "critic")).toEqual(["opencode-go/glm-5.3"])
+    expect(resolveRoleModelChain(config(), "explorer")).toEqual(["opencode-go/deepseek-v4.1-flash"])
   })
 
   it("accepts writer delegate fields", () => {

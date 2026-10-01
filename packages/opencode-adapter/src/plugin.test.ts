@@ -91,19 +91,19 @@ describe("createConsultationConfigHook", () => {
 
       // then
       const consultant = config.agent?.["consultant"] as { model: string }
-      expect(consultant.model).toBe("deepseek/deepseek-v4-pro")
+      expect(consultant.model).toBe("opencode-go/deepseek-v4-pro")
       const explorer = config.agent?.["consultation-explorer"] as { mode: string; model: string }
       expect(explorer.mode).toBe("subagent")
-      expect(explorer.model).toBe("deepseek/deepseek-flash")
+      expect(explorer.model).toBe("opencode-go/deepseek-v4.1-flash")
       const analyst = config.agent?.["consultation-analyst"] as { mode: string; model: string }
       expect(analyst.mode).toBe("subagent")
-      expect(analyst.model).toBe("opencode-go/qwen3.7-max")
+      expect(analyst.model).toBe("opencode-go/qwen3.8-max")
       const critic = config.agent?.["consultation-critic"] as { mode: string; model: string }
       expect(critic.mode).toBe("subagent")
-      expect(critic.model).toBe("opencode-go/glm-5.2")
+      expect(critic.model).toBe("opencode-go/glm-5.3")
       expect(config.agent?.["consultation-verifier"]).toMatchObject({
         mode: "subagent",
-        model: "opencode-go/glm-5.2",
+        model: "opencode-go/glm-5.3",
       })
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })

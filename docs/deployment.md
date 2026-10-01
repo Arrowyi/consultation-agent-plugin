@@ -63,7 +63,7 @@ Installed layout:
 
 Re-running `bun run install:local` rebuilds and replaces the installed bundle. Restart OpenCode afterwards to load it.
 
-The installed plugin ships every prompt it needs, including `assets/agents/writer.md`, and does not require OMO, Janus, global agent files under `~/.config/opencode/agents/`, external skills, or the source checkout at runtime. Missing writer capability degrades to inline packaged prompt behavior: the consultant constructs the same writing blueprint itself and discloses the degradation.
+The installed plugin ships every prompt it needs, including `assets/agents/writer.md`, and does not require OMO, Janus, global agent files under `~/.config/opencode/agents/`, external skills, or the source checkout at runtime. Missing writer capability degrades to disclosed inline work: the consultant must not claim an independent blueprint or chapter draft was produced.
 
 ### Development only: source mode
 
@@ -73,7 +73,7 @@ For iterating on this repo (unit tests, the integration proof, or a throwaway se
 
 Restart OpenCode so it picks up the new plugin entry. On startup the plugin's `config` hook runs and:
 1. registers the `consultant` primary agent;
-2. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its own model; the writer also denies shell execution);
+2. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its configured model; the verifier reuses the critic's model by default; the writer also denies shell execution);
 3. registers the `consultation-memory` local MCP server (when memory is enabled, the default);
 4. registers the `consultation_dispatch` tool, which the consultant uses to dispatch to the five team subagents (it handles only these five and does not interfere with the built-in `task` tool or other plugins);
 5. installs the `consultation` skill and the `consultation-memory` browse command into your OpenCode config directory.
@@ -92,17 +92,19 @@ A missing file is fine; all fields have defaults. Create the file to override de
 {
   // Models for the consultant and its five team subagents. All are optional;
   // the defaults below ship with the plugin and are tuned for cross-model
-  // verification (consultant vs analyst vs critic vs verifier use different families).
-  "agent_model": "deepseek/deepseek-v4-pro",
-  "explorer_model": "deepseek/deepseek-flash",
-  "analyst_model": "opencode-go/qwen3.7-max",
-  "critic_model": "opencode-go/glm-5.2",
-  "verifier_model": "opencode-go/qwen3.7-max",
+  // verification (consultant vs analyst vs critic use different families;
+  // the verifier reuses the critic's model by configuration, keeping it
+  // different from the analyst; this is not a claim of model superiority).
+  "agent_model": "opencode-go/deepseek-v4-pro",
+  "explorer_model": "opencode-go/deepseek-v4.1-flash",
+  "analyst_model": "opencode-go/qwen3.8-max",
+  "critic_model": "opencode-go/glm-5.3",
+  "verifier_model": "opencode-go/glm-5.3",
   "writer_model": "opencode/claude-sonnet-5",
 
   // Writer model chain and host delegation. On retryable errors (402/429/5xx)
   // the dispatch tool walks the fallback chain in order. Defaults shown.
-  "writer_fallback_models": ["moonshotai-cn/kimi-k3"],
+  "writer_fallback_models": ["opencode-go/kimi-k3"],
   // Prefer a stronger host-provided writing agent over the bundled one.
   // When set, the bundled writer is not registered; dispatch routes to this
   // agent and only pins a model when writer_delegate_model is also set.
@@ -128,7 +130,8 @@ A missing file is fine; all fields have defaults. Create the file to override de
     "critic_search_cap": 5   // max critic verification searches per round
   },
 
-  // Max instances per role per tier (explorer/analyst/critic/verifier/writer).
+  // Max instances per role per tier (explorer/analyst/critic/verifier/writer),
+  // never minimum dispatch counts or a required team roster.
   // All optional; defaults shown. A legacy matrix without `writer` still parses;
   // `writer` then defaults to 0 in the supplied tiers.
   "tier_role_caps": {
@@ -163,27 +166,27 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `agent_model` | string (optional) | `deepseek/deepseek-v4-pro` | Model for the `consultant` agent |
+| `agent_model` | string (optional) | `opencode-go/deepseek-v4-pro` | Model for the `consultant` agent |
 | `explorer_agent` | string | `"consultation-explorer"` | Name of the search/gathering subagent |
-| `explorer_model` | string (optional) | `deepseek/deepseek-flash` | Model for the explorer subagent |
+| `explorer_model` | string (optional) | `opencode-go/deepseek-v4.1-flash` | Model for the explorer subagent |
 | `analyst_agent` | string | `"consultation-analyst"` | Name of the analysis subagent |
-| `analyst_model` | string (optional) | `opencode-go/qwen3.7-max` | Model for the analyst subagent |
+| `analyst_model` | string (optional) | `opencode-go/qwen3.8-max` | Model for the analyst subagent |
 | `critic_agent` | string | `"consultation-critic"` | Name of the adversarial critic subagent |
-| `critic_model` | string (optional) | `opencode-go/glm-5.2` | Model for the critic subagent |
+| `critic_model` | string (optional) | `opencode-go/glm-5.3` | Model for the critic subagent |
 | `critic_enabled` | boolean | `true` | Whether to register the critic subagent |
-| `verifier_agent` | string | `"consultation-verifier"` | Name of the intent-audit subagent |
-| `verifier_model` | string (optional) | `opencode-go/qwen3.7-max` | Model for the verifier subagent |
+| `verifier_agent` | string | `"consultation-verifier"` | Name of the bounded source-influence and independence-audit subagent |
+| `verifier_model` | string (optional) | `opencode-go/glm-5.3` | Model for the verifier subagent |
 | `verifier_enabled` | boolean | `true` | Whether to register the verifier subagent |
-| `writer_agent` | string | `"consultation-writer"` | Name of the writing-blueprint subagent (`author` mode) |
+| `writer_agent` | string | `"consultation-writer"` | Name of the blueprint/review and approved-section-drafting subagent (`author` mode) |
 | `writer_model` | string (optional) | `opencode/claude-sonnet-5` | Primary model for the writer subagent |
-| `writer_fallback_models` | string[] (optional) | `["moonshotai-cn/kimi-k3"]` | Fallback chain tried on retryable model errors (402/429/5xx), in order |
-| `writer_delegate_agent` | string (optional) | (none) | Host-provided writing agent preferred over the bundled writer; the bundled writer is not registered when set |
+| `writer_fallback_models` | string[] (optional) | `["opencode-go/kimi-k3"]` | Fallback chain tried on retryable model errors (402/429/5xx), in order |
+| `writer_delegate_agent` | string (optional) | (none) | Host-provided writing agent preferred over the bundled writer; the bundled writer is not registered when set, and its permissions are controlled by the host |
 | `writer_delegate_model` | string (optional) | (none) | Model pinned on the delegate agent; when unset the delegate uses its own model |
 | `writer_enabled` | boolean | `true` | Whether to register the writer subagent |
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
 | `team_caps.critic_search_cap` | number | `5` | Max critic verification searches per round |
-| `tier_role_caps.*` | object | fast `5/0/0/0/0`, standard `5/1/1/1/1`, deep `5/3/2/2/2` | Max instances per role per tier (explorer/analyst/critic/verifier/writer); a supplied matrix without `writer` resolves it to 0 |
+| `tier_role_caps.*` | object | fast `5/0/0/0/0`, standard `5/1/1/1/1`, deep `5/3/2/2/2` | Advisory maximum instances per role per tier, never minimum calls; a supplied matrix without `writer` resolves it to 0 |
 | `cost_guard_provider_usd` | number | `10` | Advisory stop-loss per provider (converge when approaching) |
 | `install_skill` | boolean | `true` | Whether to install the consultation skill into the OpenCode config dir |
 | `install_commands` | boolean | `true` | Whether to install the `consultation-memory` browse slash command |
@@ -195,7 +198,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
 The `embedding` block is all-or-nothing: set all four sub-fields or omit the block.
 
-The consultant leads a team of five read-only subagents, all `permission.edit = "deny"`: `explorer` (gather evidence, fan-out up to 5 instances), `analyst` (independent cross-model reasoning), `critic` (adversarial counter-evidence), `verifier` (deliberate-deception intent audit), and `writer` (writing blueprint or editorial review for `author` consultations; also `permission.bash = "deny"`, and optional via `writer_enabled`). They run the loop `explore -> analyze -> critique`, bounded by a 3-round cap; in select and verify modes the verifier audits user-generated sources for astroturfing alongside; in author mode the writer supplies the blueprint while critic and verifier run only on their proportionate triggers. Each role runs on its own model by default so the analysis, critique, and intent audit are cross-model, not the consultant arguing with itself.
+The consultant routes bounded tasks to suitable specialist agents: `explorer` gathers missing evidence, `analyst` interprets material disputes, `critic` independently challenges consequential conclusions, `verifier` triages unclear influence or independence of user/third-party/promotional sources, and `writer` produces a blueprint before outline approval or usable section/chapter prose afterward. A potentially relevant check is delegated when its necessity cannot be ruled out; a role is skipped only with a task-specific reason. These roles are not a tier-dependent required roster. Plugin-owned subagents have `permission.edit = "deny"`; the bundled writer also has `permission.bash = "deny"`. An external `writer_delegate_agent` keeps its host-defined permissions and does not inherit these restrictions. Analyst follows evidence, critic follows a draft conclusion, writer's substantive prose follows approved scope and evidence, and the consultant verifies, integrates and writes final files. The default consultant, analyst and critic use different model families; verifier reuses critic's configured model, without a performance guarantee from that choice. Role caps are advisory ceilings rather than a runtime-enforced scheduler.
 
 ## Data, State, and Cache Paths
 

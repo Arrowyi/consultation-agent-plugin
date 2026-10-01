@@ -69,22 +69,23 @@ export const ConsultationPluginConfigSchema = z.object({
 
 export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSchema>
 
-// explorer → canonical `deepseek-flash` id (legacy `deepseek-v4-flash` is retired);
-// consultant intentionally stays on `deepseek-v4-pro` until V4.1-Pro ships.
-// writer defaults to a top-tier writing model with a domestic-direct fallback.
-// verifier shares `glm-5.2` with the critic: it does signal-level text/account
-// audit (not frontier reasoning), so a second `qwen3.7-max` was over-spec'd;
-// reusing the critic's model also keeps verifier ≠ analyst for cross-model audit.
+// consultant and explorer route through `opencode-go` so a Go/Go Plus
+// subscription allowance absorbs their usage (DeepSeek is served there at the
+// same price as the direct API, with a monthly per-model allowance).
+// analyst is qwen3.8-max (qwen3.7-max was retired from Go); critic and verifier
+// share glm-5.3 (upgraded from glm-5.2). verifier reuses the critic's model so
+// it stays ≠ analyst for cross-model audit. writer is a top-tier writing model
+// with a Go-allowance fallback.
 export const MODEL_DEFAULTS = {
-  consultant: "deepseek/deepseek-v4-pro",
-  explorer: "deepseek/deepseek-flash",
-  analyst: "opencode-go/qwen3.7-max",
-  critic: "opencode-go/glm-5.2",
-  verifier: "opencode-go/glm-5.2",
+  consultant: "opencode-go/deepseek-v4-pro",
+  explorer: "opencode-go/deepseek-v4.1-flash",
+  analyst: "opencode-go/qwen3.8-max",
+  critic: "opencode-go/glm-5.3",
+  verifier: "opencode-go/glm-5.3",
   writer: "opencode/claude-sonnet-5",
 } as const
 
-export const WRITER_FALLBACK_MODELS_DEFAULT = ["moonshotai-cn/kimi-k3"] as const
+export const WRITER_FALLBACK_MODELS_DEFAULT = ["opencode-go/kimi-k3"] as const
 
 export type ModelRole = keyof typeof MODEL_DEFAULTS
 
