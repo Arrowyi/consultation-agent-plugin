@@ -69,7 +69,7 @@ const DETERMINISTIC_TEST_MAP: Record<string, string[]> = {
   M9: ["packages/memory-sqlite/src/store.test.ts"],
   M10: ["packages/memory-sqlite/src/cli.test.ts"],
   M11: ["packages/memory-sqlite/src/store.test.ts"],
-  M12: ["packages/memory-sqlite/src/writer-lock.test.ts"],
+  M12: ["packages/memory-sqlite/src/multi-instance.test.ts"],
 }
 
 const FIXTURES: Array<{ file: string; label: string }> = [

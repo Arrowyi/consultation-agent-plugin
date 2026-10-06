@@ -464,6 +464,41 @@ describe("loadJob", () => {
     expect(loaded.records).toHaveLength(4)
   })
 
+  it("accepts an attempt-0 receipt bound to the job root session", async () => {
+    const sdk = createJournalFakeSdk()
+    const clock = createFakeClock(1_000_000)
+    const { jobID } = assertOk(
+      await createJob(sdk, {
+        parentID: FAKE_PARENT_ID,
+        directory: FAKE_DIRECTORY,
+        role: "analyst",
+        agentName: "consultation-analyst",
+        modelChain: ["opencode-go/qwen3.8-max"],
+        prompt: "analyze this",
+        clock,
+      }),
+    )
+
+    const reservationMessageID = "msg-test-root-reservation"
+    assertOk(await appendRecord(sdk, {
+      jobID,
+      directory: FAKE_DIRECTORY,
+      record: makeAttemptReservation({ job_id: jobID, attempt_index: 0, message_id: reservationMessageID, model: "opencode-go/qwen3.8-max" }),
+      messageID: reservationMessageID,
+    }))
+    assertOk(await appendRecord(sdk, {
+      jobID,
+      directory: FAKE_DIRECTORY,
+      record: makeAttemptReceipt({ job_id: jobID, attempt_index: 0, session_id: jobID, message_id: reservationMessageID }),
+    }))
+
+    // When recovering with no attempt child session at all.
+    const loaded = assertOk(await loadJob(sdk, { jobID, directory: FAKE_DIRECTORY, expectedParentID: FAKE_PARENT_ID }))
+    expect(loaded.receipts).toHaveLength(1)
+    expect(loaded.receipts[0]!.session_id).toBe(jobID)
+    expect(loaded.children).toHaveLength(0)
+  })
+
   it("reload exposes a newly appended cancel-intent (journal re-read is source of truth)", async () => {
     const sdk = createJournalFakeSdk()
     const clock = createFakeClock(1_000_000)

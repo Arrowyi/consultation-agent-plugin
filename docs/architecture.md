@@ -156,7 +156,7 @@ The SQLite adapter owns:
 
 - schema migrations;
 - transactions and idempotency;
-- single-writer enforcement;
+- multi-process safety (WAL, busy timeout, write transactions);
 - canonical record persistence;
 - FTS indexes;
 - derived summaries and embedding records;
@@ -294,6 +294,8 @@ All roles share the same recoverable dispatch lifecycle; only the bundled writer
 Launch uses a 300000 ms soft observation window, not a specialist execution deadline. Completed usable reports remain plain text and confirmed failures use `Error:` text. Nonterminal JSON envelopes identify `job_id`, `session_id`, `role`, `attempt`, `status` (`pending`, `unknown`, or `cancelling`) and `next: "consultation_dispatch_wait"`. A `cancelled` envelope requires confirmed abort evidence; normal completion racing cancellation wins and preserves the original report.
 
 Expiry or an observation-context abort stops waiting, not the child job. Pending means work remains active; unknown means available host evidence does not establish the outcome, not confirmed failure. Keep the same job ID for later waits, including through a fresh coordinator after restart, without a duplicate generating request. Wait/cancel enforce the caller's parent session and workspace ownership. Only explicit cancellation requests may abort work; cancellation remains `cancelling` until reconciled.
+
+Each job is a durable host session rooted under the caller's session (`[consultation-dispatch:v1] <role>`). The first attempt's generation runs directly in that job session, so the dispatched prompt and the specialist's live messages are visible there; journal records are written as ignored/synthetic user messages and stay out of the conversation. A writer fallback attempt advances into a child session (`[consultation-dispatch:v1] attempt <role>`) only after a confirmed retryable terminal failure of the previous attempt.
 
 The consultant may do independent preparation within existing permissions and caps while waiting, but must integrate the eventual specialist report before dependent synthesis and cannot silently substitute inline work or claim an independent check that did not return. Execution status comes from host session/message evidence, not from specialist liveness assertions. A verifier's evidence-quality `unknown` is distinct from a dispatch execution `unknown`.
 
@@ -542,7 +544,7 @@ Keep the agent-facing surface small:
 4. `memory_commit`
 5. `memory_manage`
 
-Maintenance operations (export, import, migration, integrity checks, reindexing) and offline browsing of the consultation record (list, show, search, delete, forget) belong in the CLI rather than permanent agent tool definitions. While the memory MCP server holds the writer lock in a live session, the CLI cannot open the store concurrently — use it offline.
+Maintenance operations (export, import, migration, integrity checks, reindexing) and offline browsing of the consultation record (list, show, search, delete, forget) belong in the CLI rather than permanent agent tool definitions. The database is opened in WAL mode with a busy timeout and every write runs in a short transaction, so the CLI and any number of live memory MCP servers (one per OpenCode window) can use the store concurrently.
 
 The MCP transport is local stdio. The server contains no consultation policy and no model-specific reasoning.
 
@@ -631,9 +633,9 @@ The system must:
 | Embedding unavailable | Fall back to taxonomy and FTS |
 | Search unavailable | State that current factual verification could not be completed |
 | Summary or classification fails | Keep the canonical record pending enrichment |
-| Writer lock held | Fail safely with a clear single-writer message |
+| Another process holds the write lock | Wait up to the busy timeout, then fail with a retryable database-locked error |
 | Save request retried | Return the existing idempotent result |
-| Migration fails | Restore or retain the pre-migration database and stop |
+| Migration fails | Roll back the migration transaction, leave the database unchanged, and stop |
 | Prompt injection detected | Block it, log a sanitized event, and notify according to severity |
 
 ## 16. User-Facing Output Contract

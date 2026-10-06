@@ -32,7 +32,7 @@ describe("unified dispatch registration", () => {
     // Given a real coordinator set with an injected clock and active work.
     const f = fixture()
     const clock = createFakeClock()
-    f.sdk.setStatusResult({ data: { ses_fake_2: { type: "busy" } } })
+    f.sdk.setStatusResult({ data: { ses_fake_1: { type: "busy" } } })
     const tools = createConsultationDispatchTools(pluginInput(f.sdk).client, { clock })
     const launched = tools.consultation_dispatch.execute({ role: "analyst", prompt: "analyze" }, context())
     await setImmediate()

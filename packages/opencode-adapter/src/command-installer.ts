@@ -15,7 +15,7 @@ function commandContent(): string {
 description: Browse and manage your saved consultations — list them, view one, or delete/forget one or many at once.
 ---
 
-Help the user browse and manage their saved consultations using the consultation-memory MCP tools (memory_recall / memory_expand / memory_manage). Do NOT run the consultation-memory CLI here: the running memory MCP server holds the writer lock, so a second process cannot open the database.
+Help the user browse and manage their saved consultations using the consultation-memory MCP tools (memory_recall / memory_expand / memory_manage). Do NOT run the consultation-memory CLI here: the MCP tools already own this workflow.
 
 1. List them: call \`memory_recall\` with \`tier: "standard"\`, \`limit: 50\`, and \`expandTop: 50\` so each consultation's current conclusion is included. Present the result as a numbered list, ONE line per consultation — the question summary (title), a short conclusion, and the date. Keep it compact. If it is empty, say there are no saved consultations yet and suggest asking the consultant a question first.
 

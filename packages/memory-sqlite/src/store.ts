@@ -1,7 +1,7 @@
-// openMemoryStore: opens the SQLite database, acquires the writer lock, runs
-// migrations, and returns a MemoryStore backed by the modular commit/recall/
-// manage/expand helpers. The concrete type also exposes db, reindexFts, and
-// integrityCheck for the CLI and tests.
+// openMemoryStore: opens the SQLite database, configures the connection for
+// multi-process access, runs migrations, and returns a MemoryStore backed by
+// the modular commit/recall/manage/expand helpers. The concrete type also
+// exposes db, reindexFts, and integrityCheck for the CLI and tests.
 
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
@@ -19,8 +19,7 @@ import type {
   RecallQuery,
   RecallResult,
 } from "@consultation-agent/memory-core"
-import { loadSqliteDriver, runInTransaction, type SqliteDatabase } from "./driver.ts"
-import { acquireWriterLock, type ReleaseLock } from "./writer-lock.ts"
+import { configureConnection, loadSqliteDriver, runInTransaction, type SqliteDatabase } from "./driver.ts"
 import { resolveStoragePaths, type StoragePaths } from "./paths.ts"
 import { runMigrations } from "./migrations.ts"
 import { REINDEX_FTS_SQL } from "./schema.ts"
@@ -32,7 +31,6 @@ import { runExpand } from "./expand.ts"
 
 export type { EmbeddingProvider } from "./embedding.ts"
 export { createOpenAICompatibleEmbeddingProvider } from "./embedding.ts"
-export { acquireWriterLock } from "./writer-lock.ts"
 export { resolveStoragePaths } from "./paths.ts"
 export { runMigrations } from "./migrations.ts"
 
@@ -60,21 +58,20 @@ export async function openMemoryStore(options: OpenStoreOptions = {}): Promise<O
     cacheDir: options.cacheDir ?? defaults.cacheDir,
   }
   for (const path of Object.values(paths)) mkdirSync(path, { recursive: true })
-  const release = acquireWriterLock(paths.stateDir)
   const dbPath = options.dbPath ?? join(paths.dataDir, "memory.sqlite3")
   const Driver = await loadSqliteDriver()
-  let db: SqliteDatabase
+  const db = new Driver(dbPath)
   try {
-    db = new Driver(dbPath)
+    configureConnection(db)
     const backupPath = `${dbPath}.backup-${new Date().toISOString().replace(/[:.]/g, "-")}`
     runMigrations(db, { dbPath, backupPath })
   } catch (error) {
-    release()
+    db.close()
     throw error
   }
   const embedding = options.embedding ?? null
   const clock = options.now ?? (() => new Date().toISOString())
-  return new SqliteMemoryStore(db, release, embedding, clock)
+  return new SqliteMemoryStore(db, embedding, clock)
 }
 
 class SqliteMemoryStore implements OpenedMemoryStore {
@@ -82,7 +79,6 @@ class SqliteMemoryStore implements OpenedMemoryStore {
 
   constructor(
     readonly db: SqliteDatabase,
-    private readonly release: ReleaseLock,
     readonly embedding: EmbeddingProvider | null,
     private readonly clock: () => string,
   ) {}
@@ -146,7 +142,6 @@ class SqliteMemoryStore implements OpenedMemoryStore {
     if (this.#closed) return
     this.#closed = true
     this.db.close()
-    this.release()
   }
 
   reindexFts(): void {

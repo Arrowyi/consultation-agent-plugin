@@ -53,7 +53,7 @@ Core packages are harness-neutral (no OpenCode, no MCP SDK, no SQLite imports). 
 |---------|------|------|
 | `@consultation-agent/consultation-core` | `packages/consultation-core/` | Tier routing, source grading, budget enforcement, decision and author brief validation, ports |
 | `@consultation-agent/memory-core` | `packages/memory-core/` | Canonical schemas, revision state machine, retrieval planning, injection/secret detection, MemoryStore port |
-| `@consultation-agent/memory-sqlite` | `packages/memory-sqlite/` | SQLite + FTS5 store implementation, migrations, writer lock, XDG paths, CLI |
+| `@consultation-agent/memory-sqlite` | `packages/memory-sqlite/` | SQLite + FTS5 store implementation, migrations, multi-process-safe WAL access, XDG paths, CLI |
 | `@consultation-agent/memory-mcp` | `packages/memory-mcp/` | Local stdio MCP server exposing 5 memory tools |
 | `@consultation-agent/opencode-adapter` | `packages/opencode-adapter/` | Thin OpenCode plugin: registers the consultant agent, the five read-only team subagents, memory MCP, and consultation skill via the `config` hook |
 

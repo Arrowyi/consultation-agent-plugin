@@ -25,6 +25,44 @@ export async function loadSqliteDriver(): Promise<SqliteDatabaseConstructor> {
   return mod.DatabaseSync as unknown as SqliteDatabaseConstructor
 }
 
+export const BUSY_TIMEOUT_MS = 5000
+
+// Per-connection settings for safe multi-process access: contended locks wait
+// instead of failing, WAL lets readers run beside a writer, and foreign keys
+// are enforced. busy_timeout and foreign_keys are per connection, so this must
+// run on every open, not only when a migration happens to apply.
+export function configureConnection(db: SqliteDatabase): void {
+  db.exec(`PRAGMA busy_timeout=${BUSY_TIMEOUT_MS}`)
+  enableWal(db)
+  db.exec("PRAGMA synchronous=NORMAL")
+  db.exec("PRAGMA foreign_keys=ON")
+}
+
+// Switching a database into WAL needs an exclusive lock and SQLite returns
+// SQLITE_BUSY for it without consulting busy_timeout, so processes racing to
+// open a brand-new database must retry. Once the database is WAL (the mode is
+// persistent) the read below short-circuits and no lock is needed.
+function enableWal(db: SqliteDatabase): void {
+  const deadline = Date.now() + BUSY_TIMEOUT_MS
+  for (;;) {
+    try {
+      const current = db.prepare("PRAGMA journal_mode").get()
+      if (current !== null && Object.values(current)[0] === "wal") return
+      db.exec("PRAGMA journal_mode=WAL")
+      return
+    } catch (error) {
+      if (!isBusyError(error) || Date.now() >= deadline) throw error
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5)
+    }
+  }
+}
+
+function isBusyError(error: unknown): boolean {
+  if (error === null || typeof error !== "object") return false
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return (typeof code === "string" && code.startsWith("SQLITE_BUSY")) || (typeof message === "string" && message.includes("database is locked"))
+}
+
 // Portable transaction helper: BEGIN/COMMIT/ROLLBACK work on both drivers
 // (bun:sqlite also ships db.transaction, but node:sqlite does not).
 export function runInTransaction<T>(db: SqliteDatabase, work: () => T): T {

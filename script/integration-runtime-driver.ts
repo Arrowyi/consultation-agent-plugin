@@ -35,7 +35,7 @@ export async function findJob(host: RuntimeHost, parent: string) {
     const root = roots.find((r) => r.title.startsWith("[consultation-dispatch:v1] "))
     if (root) {
       const attempts = await host.children(root.id)
-      if (attempts.length) return { root, attempts }
+      return { root, attempts }
     }
     await Bun.sleep(100)
   }

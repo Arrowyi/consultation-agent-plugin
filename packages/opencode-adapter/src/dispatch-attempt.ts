@@ -64,9 +64,12 @@ export async function launchAttempt(context: AttemptContext, request: AttemptSub
     model, message_id: requestMessageID, reserved_at: clock.now(),
   } })
   if (!reservation.ok) throw new LaunchError(`failed to persist attempt reservation: ${reservation.error.message}`, jobID)
-  const child = await createAttemptSession(sdk, { jobID, directory: spec.directory, role: spec.role })
-  if (!child.ok) throw new LaunchError(`failed to create attempt session: ${child.error.message}`, jobID)
-  const sessionID = child.value.sessionID
+  let sessionID = jobID
+  if (index > 0) {
+    const child = await createAttemptSession(sdk, { jobID, directory: spec.directory, role: spec.role })
+    if (!child.ok) throw new LaunchError(`failed to create attempt session: ${child.error.message}`, jobID)
+    sessionID = child.value.sessionID
+  }
   const receipt = await appendRecord(sdk, { jobID, directory: spec.directory, messageID: makeAttemptRequestID(), record: {
     v: 1, kind: "attempt-receipt", job_id: jobID, attempt_index: index,
     session_id: sessionID, message_id: requestMessageID, received_at: clock.now(),

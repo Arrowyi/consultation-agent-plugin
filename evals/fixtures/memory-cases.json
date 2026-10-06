@@ -100,11 +100,11 @@
   },
   {
     "id": "M12",
-    "title": "A second writer cannot corrupt the database",
-    "given": "One process has opened the store and holds the writer lock.",
-    "when": "a second process tries to open the store on the same stateDir",
-    "then": "The second open fails with MemoryError code WRITER_LOCKED naming the holding pid, and no concurrent write corruption is possible.",
+    "title": "Concurrent processes share one database without corruption",
+    "given": "Several processes (for example one OpenCode window each) open the store on the same directories at the same instant, including the first-time migration.",
+    "when": "each commits its own session plus one session shared by all of them and recalls memory",
+    "then": "Every open and commit succeeds, no session or item is lost or orphaned, the integrity and foreign-key checks pass, and migrations apply exactly once.",
     "grading": "deterministic",
-    "notes": "Covered by packages/memory-sqlite/src/writer-lock.test.ts (acquireWriterLock second-opener fails)."
+    "notes": "Covered by packages/memory-sqlite/src/multi-instance.test.ts (multi-process stress test) and migrations.test.ts (failed migration rolls back)."
   }
 ]

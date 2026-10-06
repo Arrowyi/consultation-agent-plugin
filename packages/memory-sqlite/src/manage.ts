@@ -3,11 +3,21 @@
 
 import { assertTransition, MemoryError } from "@consultation-agent/memory-core"
 import type { ExperienceItem, ManageInput, ManageResult, Outcome, RevisionStatus, SessionSummary, UserPreference } from "@consultation-agent/memory-core"
-import type { SqliteDatabase } from "./driver.ts"
+import { runInTransaction, type SqliteDatabase } from "./driver.ts"
 
 type Row = Record<string, unknown>
 
+const READ_ONLY_ACTIONS: ReadonlySet<ManageInput["action"]> = new Set(["list_preferences", "list_sessions", "stats"])
+
+// Mutating actions read before they write (status checks, upserts, revisions),
+// so each runs in one write transaction: concurrent processes cannot interleave
+// between the read and the write, and a failure leaves nothing half-applied.
 export function runManage(db: SqliteDatabase, input: ManageInput): ManageResult {
+  if (READ_ONLY_ACTIONS.has(input.action)) return dispatchManage(db, input)
+  return runInTransaction(db, () => dispatchManage(db, input))
+}
+
+function dispatchManage(db: SqliteDatabase, input: ManageInput): ManageResult {
   switch (input.action) {
     case "retire":
       return retireItem(db, input)

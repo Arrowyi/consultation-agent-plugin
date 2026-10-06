@@ -232,7 +232,7 @@ export function createFakeSdk(): FakeSdk {
       },
       messages: async (input) => {
         record("messages", input)
-        return { data: messages.get(input.path.id) ?? [] }
+        return { data: [...(messages.get(input.path.id) ?? [])] }
       },
       status: async (input) => {
         record("status", input)

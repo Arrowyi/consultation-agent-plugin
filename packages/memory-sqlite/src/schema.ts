@@ -1,13 +1,11 @@
-// Single DDL string for migration 0001. PRAGMAs + every canonical/derived table
-// + the FTS5 virtual table and the triggers that keep it in sync.
+// Single DDL string for migration 0001: every canonical/derived table + the FTS5
+// virtual table and the triggers that keep it in sync. Connection PRAGMAs live in
+// driver.ts (configureConnection): journal_mode cannot change inside the
+// transaction migrations run in, and busy_timeout must apply to every connection.
 // The plan had a typo (REFERENCES experience_items_id_fk) — fixed to
 // REFERENCES session_experiences(id) ON DELETE CASCADE.
 
 export const SCHEMA_DDL = `
-PRAGMA journal_mode=WAL;
-PRAGMA foreign_keys=ON;
-PRAGMA busy_timeout=5000;
-
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL

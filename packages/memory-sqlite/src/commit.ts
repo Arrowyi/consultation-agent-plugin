@@ -11,6 +11,7 @@ import type { EmbeddingProvider } from "./embedding.ts"
 import { float32ArrayToBlob } from "./embedding.ts"
 
 type Row = Record<string, unknown>
+type Written = { readonly sessionId: string; readonly created: boolean; readonly itemIds: Record<string, string>; readonly revisionIds: string[] }
 
 export async function runCommit(
   db: SqliteDatabase,
@@ -20,19 +21,18 @@ export async function runCommit(
 ): Promise<CommitResult> {
   validateCommit(input)
   const now = input.now ?? clock()
-  const existing = db
-    .prepare("SELECT id, preview_token FROM session_experiences WHERE namespace = ? AND host_session_id = ?")
-    .get(input.namespace, input.hostSessionId) as Row | null
 
-  if (existing !== null && String(existing.preview_token) === input.previewToken) {
-    return { sessionExperienceId: String(existing.id), created: false, itemIds: loadItemIds(db, String(existing.id)), revisionIds: [], warnings: [] }
-  }
+  const written = runInTransaction(db, (): CommitResult | Written => {
+    const existing = db
+      .prepare("SELECT id, preview_token FROM session_experiences WHERE namespace = ? AND host_session_id = ?")
+      .get(input.namespace, input.hostSessionId) as Row | null
+    if (existing !== null && String(existing.preview_token) === input.previewToken) {
+      return { sessionExperienceId: String(existing.id), created: false, itemIds: loadItemIds(db, String(existing.id)), revisionIds: [], warnings: [] }
+    }
 
-  const sessionId = existing === null ? crypto.randomUUID() : String(existing.id)
-  const itemIds: Record<string, string> = {}
-  const revisionIds: string[] = []
-
-  runInTransaction(db, () => {
+    const sessionId = existing === null ? crypto.randomUUID() : String(existing.id)
+    const itemIds: Record<string, string> = {}
+    const revisionIds: string[] = []
     db.prepare(
       "INSERT INTO session_experiences (id, namespace, host_session_id, title, status, preview_token, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?, ?) ON CONFLICT(namespace, host_session_id) DO UPDATE SET title = excluded.title, preview_token = excluded.preview_token, updated_at = excluded.updated_at",
     ).run(sessionId, input.namespace, input.hostSessionId, input.title, input.previewToken, now, now)
@@ -41,13 +41,14 @@ export async function runCommit(
       itemIds[prepared.topicKey] = upsertItem(db, sessionId, input.namespace, prepared, now, revisionIds)
     }
     upsertPreferences(db, input, now)
+    return { sessionId, created: existing === null, itemIds, revisionIds }
   })
 
+  if (!("sessionId" in written)) return written
   if (embedding !== null) {
-    await storeEmbeddings(db, embedding, sessionId, itemIds, input.items, now)
+    await storeEmbeddings(db, embedding, written.sessionId, written.itemIds, input.items, now)
   }
-
-  return { sessionExperienceId: sessionId, created: existing === null, itemIds, revisionIds, warnings: [] }
+  return { sessionExperienceId: written.sessionId, created: written.created, itemIds: written.itemIds, revisionIds: written.revisionIds, warnings: [] }
 }
 
 function upsertItem(

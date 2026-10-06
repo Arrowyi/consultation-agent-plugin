@@ -65,9 +65,9 @@ async function main() {
       const output = await (await invokeTool(host, roleParent, "consultation_dispatch", { role, prompt: `${role} fixture` }))()
       check(`${role} installed role routes end-to-end`, output.includes(`${role.toUpperCase()}_FINAL`), `requests=${provider.counts.get(role)}`)
       const roleJob = await findJob(host, roleParent)
-      for (const attempt of roleJob.attempts) {
-        const messages = await host.messages(attempt.id)
-        trace.push({ scenario: role, root: roleJob.root, attempt, messages: redactMessages(messages) })
+      for (const session of [roleJob.root, ...roleJob.attempts]) {
+        const messages = await host.messages(session.id)
+        trace.push({ scenario: role, root: roleJob.root, session, messages: redactMessages(messages) })
         const finals = messages.filter((m) => m.info.role === "assistant" && m.info.finish === "stop" && m.info.time.completed !== undefined)
         check(`${role} real host completed-stop shape`, finals.length > 0, `final_messages=${finals.length}`)
         if (role === "analyst") check("intermediate tool-calls not credited as final", messages.some((m) => m.info.finish === "tool-calls" && m.info.time.completed !== undefined) && output.includes("ANALYST_FINAL"), "misleading_success_output")
@@ -79,7 +79,9 @@ async function main() {
     const retryParent = await host.createParent()
     const retryOutput = await (await invokeTool(host, retryParent, "consultation_dispatch", { role: "writer", prompt: "retryable writer fixture" }))()
     const retryJob = await findJob(host, retryParent)
-    check("confirmed retryable writer failure advances chain exactly once", retryOutput.includes("WRITER_BACKUP_FINAL") && retryJob.attempts.length === 2 && provider.counts.get("backup") === 1, `attempts=${retryJob.attempts.length}; requests=${provider.counts.get("writer")}`)
+    const retryRootMessages = await host.messages(retryJob.root.id)
+    const primaryFailed = retryRootMessages.some((m) => m.info.role === "assistant" && m.info.error !== undefined)
+    check("confirmed retryable writer failure advances chain exactly once", retryOutput.includes("WRITER_BACKUP_FINAL") && retryJob.attempts.length === 1 && primaryFailed && provider.counts.get("backup") === 1, `root_attempt_error=${primaryFailed}; child_attempts=${retryJob.attempts.length}; requests=${provider.counts.get("writer")}`)
     for (const attempt of retryJob.attempts) trace.push({ scenario: "writer-retry", attempt, messages: redactMessages(await host.messages(attempt.id)) })
     await host.restart()
     const countBefore = provider.counts.get("explorer")

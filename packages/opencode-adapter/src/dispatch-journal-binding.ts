@@ -38,7 +38,7 @@ export function bindJob(snapshot: JournalSnapshot, input: LoadJobInput): Journal
     const previous = receiptByAttempt.get(receipt.attempt_index)
     if (previous !== undefined && (previous.session_id !== receipt.session_id || previous.message_id !== receipt.message_id)) return fail("invalid-job", "invalid journal semantics")
     receiptByAttempt.set(receipt.attempt_index, receipt)
-    if (!childIds.has(receipt.session_id)) return fail("invalid-job", "receipt references unknown child session")
+    if (receipt.session_id !== input.jobID && !childIds.has(receipt.session_id)) return fail("invalid-job", "receipt references unknown session")
     const reservation = reservationByAttempt.get(receipt.attempt_index)
     if (reservation === undefined || reservation.message_id !== receipt.message_id) return fail("invalid-job", "receipt references unknown reservation")
   }

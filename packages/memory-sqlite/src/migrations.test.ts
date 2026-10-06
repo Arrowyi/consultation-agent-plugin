@@ -54,6 +54,28 @@ describe("runMigrations", () => {
     db.close()
   })
 
+  test("a failing migration leaves the connection's database unchanged and keeps no partial state", async () => {
+    // given
+    const dir = await tempDir()
+    const dbPath = join(dir, "memory.sqlite3")
+    const backupPath = `${dbPath}.backup-fail`
+    const Driver = await loadSqliteDriver()
+    const db = new Driver(dbPath)
+    db.exec("CREATE TABLE preexisting (x INTEGER)")
+    db.exec("INSERT INTO preexisting VALUES (1)")
+    const failing = [{ version: 1, sql: "CREATE TABLE half_applied (x INTEGER); INSERT INTO missing_table VALUES (1);" }]
+    // when
+    const attempt = (): void => runMigrations(db, { dbPath, backupPath, migrations: failing })
+    // then — the same connection sees neither the partial DDL nor a recorded version
+    expect(attempt).toThrow()
+    const partial = db.prepare("SELECT name FROM sqlite_master WHERE name = 'half_applied'").get()
+    expect(partial).toBeNull()
+    const preserved = db.prepare("SELECT x FROM preexisting").get() as { x: number } | null
+    expect(preserved?.x).toBe(1)
+    expect(await exists(backupPath)).toBe(false)
+    db.close()
+  })
+
   test("is idempotent: running twice does not re-apply or error", async () => {
     // given
     const dir = await tempDir()

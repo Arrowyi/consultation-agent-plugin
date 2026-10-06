@@ -88,7 +88,7 @@ id encodes the scenario, and the test file encodes the function under test.
 | M9 | packages/memory-sqlite/src/store.test.ts |
 | M10 | packages/memory-sqlite/src/cli.test.ts |
 | M11 | packages/memory-sqlite/src/store.test.ts |
-| M12 | packages/memory-sqlite/src/writer-lock.test.ts |
+| M12 | packages/memory-sqlite/src/multi-instance.test.ts |
 
 Model-graded cases (C3, C4, C5, C6, C7, C8, C10, C11, C12, C13, C14, C15-C25, M3, M5) have no test-file
 mapping by design.

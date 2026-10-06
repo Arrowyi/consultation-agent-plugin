@@ -110,6 +110,31 @@ describe("launch success", () => {
     expect(output).toContain("job_id=ses_fake_1")
     expect(promptAsyncCount(fake)).toBe(0)
   })
+  it("generates attempt 0 in the job root session without creating an attempt child", async () => {
+    const clock = createFakeClock()
+    const fake = createAutoCompletingFake("root result", clock)
+    const lifecycle = createDispatchLifecycle({ sdk: fake, clock })
+
+    const result = await lifecycle.launch({
+      role: "analyst",
+      prompt: "analyze",
+      agentName: "consultation-analyst",
+      modelChain: ["opencode-go/qwen3.8-max"],
+      parentID: FAKE_PARENT_ID,
+      directory: FAKE_DIRECTORY,
+      waitMs: 1_000,
+    })
+
+    expect(result).toBe("root result")
+    const creates = fake.calls.filter((c) => (c as { method: string }).method === "create")
+    expect(creates).toHaveLength(1)
+    const rootCreate = creates[0] as { input: { body: { title: string; parentID: string } } }
+    expect(rootCreate.input.body.title).toBe("[consultation-dispatch:v1] analyst")
+    expect(rootCreate.input.body.parentID).toBe(FAKE_PARENT_ID)
+    const asyncCall = lastPromptAsyncCall(fake)
+    expect(asyncCall.input.path.id).toBe("ses_fake_1")
+    expect(asyncCall.input.body.agent).toBe("consultation-analyst")
+  })
   for (const age of [0, 20000]) {
     it(`uses durable reservation age ${age} when waiting without messages`, async () => {
       // Given a reserved attempt whose host has no assistant progress.
@@ -293,7 +318,7 @@ describe("lost promptAsync acknowledgement", () => {
     it(`round2-4 surfaces live ${status} when no matching message exists`, async () => {
       // Given a live status without durable assistant evidence.
       const fake = createFakeSdk()
-      fake.setStatusResult({ data: { ses_fake_2: { type: status } } })
+      fake.setStatusResult({ data: { ses_fake_1: { type: status } } })
       const lifecycle = createDispatchLifecycle({ sdk: fake, clock: createFakeClock() })
       // When taking a public snapshot.
       const result = parseEnvelope(await lifecycle.launch({ role: "analyst", prompt: "fixture", agentName: "analyst", modelChain: ["p/m"], parentID: FAKE_PARENT_ID, directory: FAKE_DIRECTORY, waitMs: 0 }))
@@ -586,6 +611,59 @@ describe("writer fallback", () => {
     expect(abortCount(fake)).toBe(0)
   })
 
+  it("keeps attempt 0 in the root and creates an attempt child only for the fallback", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeSdk()
+    const base = fake.session.promptAsync.bind(fake.session)
+    let attempt = 0
+    fake.session.promptAsync = async (input) => {
+      const result = await base(input)
+      attempt++
+      const requestMessageID = input.body.messageID!
+      const sessionID = input.path.id
+      if (attempt === 1) {
+        fake.seedMessages(sessionID, [
+          completedAssistantMessage(requestMessageID, "", {
+            sessionID,
+            id: `msg-fail-${sessionID}`,
+            time: { created: clock.now(), completed: clock.now() },
+            error: { name: "APIError", data: { isRetryable: true, status: 429, message: "rate limited" } },
+          }),
+        ])
+      } else {
+        fake.seedMessages(sessionID, [
+          completedAssistantMessage(requestMessageID, "fallback succeeded", {
+            sessionID,
+            id: `msg-success-${sessionID}`,
+            time: { created: clock.now(), completed: clock.now() },
+          }),
+        ])
+      }
+      return result
+    }
+
+    const lifecycle = createDispatchLifecycle({ sdk: fake, clock })
+    const result = await lifecycle.launch({
+      role: "writer",
+      prompt: "write",
+      agentName: "consultation-writer",
+      modelChain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"],
+      parentID: FAKE_PARENT_ID,
+      directory: FAKE_DIRECTORY,
+      waitMs: 1_000,
+    })
+
+    expect(result).toBe("fallback succeeded")
+    const asyncs = fake.calls.filter((c) => (c as { method: string }).method === "promptAsync") as Array<{ input: { path: { id: string } } }>
+    expect(asyncs).toHaveLength(2)
+    expect(asyncs[0]!.input.path.id).toBe("ses_fake_1")
+    expect(asyncs[1]!.input.path.id).toBe("ses_fake_2")
+    const creates = fake.calls.filter((c) => (c as { method: string }).method === "create") as Array<{ input: { body: { title: string } } }>
+    expect(creates).toHaveLength(2)
+    expect(creates[1]!.input.body.title).toBe("[consultation-dispatch:v1] attempt writer")
+    expect(abortCount(fake)).toBe(0)
+  })
+
   it("does not advance on pending or unknown", async () => {
     const clock = createFakeClock()
     const fake = createPendingFake()
@@ -840,7 +918,8 @@ describe("cancel intent blocks fallback", () => {
       }
       fake.session.messages = async (input) => {
         const response = await messages(input)
-        if (!injected && input.path.id !== launched.job_id && (race !== "second-fallback" || input.path.id !== launched.session_id)) {
+        const qualifies = race === "second-fallback" ? input.path.id !== launched.job_id : input.path.id === launched.job_id
+        if (!injected && qualifies) {
           injected = true
           const record = race === "reservation"
             ? { v: 1, kind: "attempt-reservation", job_id: launched.job_id, attempt_index: 1, model: "p/backup", message_id: "msg-racing", reserved_at: 0 } as const
