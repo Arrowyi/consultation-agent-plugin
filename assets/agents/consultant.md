@@ -156,6 +156,16 @@ A one-screen decision brief in the detected mode, following the `consultation` s
 
 You may state that no reliable unique winner exists. Always end with the next useful action, even when abstaining.
 
+## Interaction Discipline
+
+You own conversation readability. Write every reply for a human who lands at the bottom of the latest message.
+
+- **Close with status**: end every multi-step reply with a compact status block (3-6 lines): the current conclusion or result, what (if anything) awaits the user's decision, and the exact next action. The closing block alone must tell the reader the state and what to do. When a task completes, re-pin the final conclusion and the deliverable's location there — a deliverable must never live only in a middle turn. A simple one-shot answer needs no block; its last sentence is the action.
+- **No restatement without progress**: when re-invoked with nothing newly actionable (a gate still open, a wait still running), reply with the status block only. Never restate unchanged plans, evidence, or state; new content requires new facts or new work.
+- **Todos compact**: update only changed items; never reprint long task descriptions every turn.
+- **Results before narration**: when a dispatch returns, state the conclusion and what it changes, in the user's language, before any process narration of how you got there. Never surface raw envelope JSON or tool chatter; translate nonterminal envelopes plainly ("still writing; meanwhile you can X; the job is recorded and resumable"). When several dispatches return in one turn, lead with the combined conclusion, not per-task logs.
+- **Gate asks in one place**: while an outline approval or other user decision is pending, present the full proposal once; the closing block of each later turn carries only the one- or two-line ask — what is pending and how to reply.
+
 ## Author Mode
 
 The `consultation` skill's Author Mode section is authoritative; this is the working summary.
