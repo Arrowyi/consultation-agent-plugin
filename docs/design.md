@@ -34,6 +34,7 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 17 | The model-prompt library is model-keyed: `assets/model-prompts/<slug>.md`, 7 shipped blocks (6 default models + kimi-k3 as a manual-rotation target), content strictly model-trait (never role references), extensible by dropping a single file |
 | 18 | Fallback chains removed: `writer_fallback_models` and its default are deleted, every agent resolves to a single model; the generic `model_chain` walking seam is kept so re-adding automatic allowance-exhaustion fallback later stays a localized change |
 | 19 | Writer default model changed `opencode/claude-sonnet-5` → `opencode/claude-sonnet-5-5` (live-endpoint verified 2026-10-23; claude-sonnet-5's reputation collapsed) |
+| 20 | `MODEL_DEFAULTS` synced to the maintainer's verified set (§16): consultant → `opencode-go/glm-5.3`, critic/verifier → `opencode/gemini-3.8-flash` (restores the cross-family audit structure: challenger ≠ consultant ≠ analyst), writer → `opencode/claude-sonnet-5-5`; fallback removed |
 
 ## 1. Config and model
 
@@ -330,6 +331,21 @@ No "only on the default model" gate. Block content must be **model-trait only** 
 ### Injection mechanics
 
 Empty block → the asset body passes through byte-identical (placeholder comment stays inert); non-empty block → placeholder replaced (or a `## Driving This Model` section appended when no placeholder exists).
+
+## 16. MODEL_DEFAULTS sync (decision 20)
+
+The shipped `MODEL_DEFAULTS` are brought in line with the maintainer's verified set (previously kept only in their local config, whose own comment earmarked this sync):
+
+| role | before | after |
+|---|---|---|
+| consultant | `opencode-go/deepseek-v4-pro` (EOL track — DeepSeek routes it to V4.1-Flash) | `opencode-go/glm-5.3` (TB4.0 41.8%, strongest hard-agentic) |
+| critic | `opencode-go/glm-5.3` | `opencode/gemini-3.8-flash` (GPQA 95.3 / HLE 47.8 / ARC-AGI-2 89.2 — judgment ceiling) |
+| verifier | `opencode-go/glm-5.3` | `opencode/gemini-3.8-flash` (reuses critic's model — still ≠ consultant and ≠ analyst) |
+| writer | `opencode/claude-sonnet-5` (collapsed reputation) | `opencode/claude-sonnet-5-5` (TB4.0 70.6% vs 5's 12.4%) |
+
+Rationale: restores the cross-family audit structure (challenger `gemini` ≠ consultant `glm` ≠ analyst `qwen`), removes the EOL-tracked consultant default, and matches the model-prompt library's block set (6 distinct default models — see §15). explorer/analyst/simple/build-lite defaults are unchanged. The rationale moves from the maintainer's local config comment into the `MODEL_DEFAULTS` source comment.
+
+Note on the Go-subscription framing: critic/verifier now run `opencode/gemini-3.8-flash` on Zen pay-per-use ($1.50/$7.50), not a Go pool — accepted because they are low-frequency read-only challenge roles (tier caps: fast 0 / standard 1 / deep 2), where judgment quality outranks pool accounting. All other defaults remain Go-pool models.
 
 ## Non-goals
 
