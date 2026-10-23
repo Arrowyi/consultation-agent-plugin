@@ -90,10 +90,11 @@ For iterating on this repo (unit tests, the integration proof, or a throwaway se
 Restart OpenCode so it picks up the new plugin entry. On startup the plugin's `config` hook runs and:
 1. registers the `consultant` primary agent;
 2. registers the `simple` agent (mode `all`: selectable as a primary agent and dispatchable), on the configured model, with patterned permissions — read tools allowed, read-only bash commands allowed, its own workspace directory (`$XDG_DATA_HOME/consultation-agent/simple`) writable without asking, every other write asking;
-3. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its configured model; the verifier reuses the critic's model by default; the writer also denies shell execution);
-4. registers the `consultation-memory` local MCP server (when memory is enabled, the default);
-5. registers `consultation_dispatch{role,prompt}`, `consultation_dispatch_wait{job_id,wait_ms?}` and `consultation_dispatch_cancel{job_id}` for the six dispatch roles (these do not interfere with the built-in `task` tool or other plugins);
-6. installs the `consultation` skill and the `consultation-memory` browse command into your OpenCode config directory.
+3. registers the `build-lite` mechanical coding lane (mode `subagent`, steps 50, workspace edits allowed without asking, further dispatch denied);
+4. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its configured model; the verifier reuses the critic's model by default; the writer also denies shell execution);
+5. registers the `consultation-memory` local MCP server (when memory is enabled, the default);
+6. registers `consultation_dispatch{role,prompt}`, `consultation_dispatch_wait{job_id,wait_ms?}` and `consultation_dispatch_cancel{job_id}` for the eight dispatch roles (these do not interfere with the built-in `task` tool or other plugins);
+7. installs the `consultation` skill and the `consultation-memory` browse command into your OpenCode config directory.
 
 ### Recoverable team jobs
 
