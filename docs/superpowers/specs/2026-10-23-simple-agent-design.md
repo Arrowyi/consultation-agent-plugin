@@ -3,6 +3,7 @@
 - Date: 2026-10-23
 - Status: approved design (brainstorming round completed); pending spec review
 - Scope: add a `simple` agent to the plugin, packaged and distributed with it, installable into other OpenCode environments
+- Scope extension (same release, 2026-10-23): also add a `build-lite` mechanical coding lane and a `build` dispatch role routed to the host's native build agent — sections 12–14 cover the extension; where they touch earlier tasks, the implementation plan amends those tasks in place
 
 ## Positioning
 
@@ -24,6 +25,10 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 8 | Name defaults to `simple` (configurable via `simple_agent`); `simple_enabled` defaults to `true` |
 | 9 | P1 resolved as (a): keep `opencode-go` defaults, document loudly with a non-Go config example, AND enrich plugin-owned model-failure messages with a friendly remediation hint (see §3.1) |
 | 10 | P2 resolved: delete the omo leftover script entirely; add explicit old-version compatibility guarantees (see §10); userdoc leaves version control via `.gitignore` (see §11) |
+| 11 | build-lite default model is `opencode-go/glm-5.3-flash` (live-endpoint verified 2026-10-23; $0.15/$0.50 peak Go accounting price; agentic stronger than V4.1-Flash at half the cost; decode ~70 tok/s accepted trade-off) |
+| 12 | build-lite permissions are option B: within-project edits allowed, outside asks — source-proven pattern `edit: {"*": "allow", "/*": "ask"}` (resource is location-relative for workspace paths, absolute for external; last matching rule wins; key order is policy) — with a prompt that hard-constrains no forceful edits and no extra changes (不硬改、不多改) |
+| 13 | build-lite is a lane, not an entry point: mode `subagent`, `steps: 50`, `task: deny` (leaf node — never dispatches further, always reports up), no memory protocol, no runtime bindings (static prompt) |
+| 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
 
 ## 1. Config and model
 
@@ -180,9 +185,19 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 | plugin.ts | plugin.test.ts: simple registered with mode "all" + model + permission; `simple_enabled: false` skips registration; consultant runtime bindings line for simple |
 | install-local.ts | install-local.test.ts: REQUIRED_INSTALLED_FILES contains assets/agents/simple.md |
 | consultant.md / SKILL.md | plugin.test.ts assertions updated where they check consultant prompt content; evals checklist extended with a simple-routing case (print-only) |
-| dispatch-lifecycle.ts (failure hint) | dispatch-lifecycle.test.ts + dispatch-tool.test.ts: terminal model-failure envelope contains role, model, the remediation hint naming the `<role>_model` config field and config path |
+| dispatch-lifecycle.ts (failure hint) | dispatch-lifecycle.test.ts + dispatch-tool.test.ts + dispatch-helpers.test.ts: terminal model-failure envelope contains role, model, the remediation hint naming the `<role>_model` config field and config path; explicit role→field map covers all 8 roles incl. `build-lite` → `build_lite_model` and `build` → `build_model` |
 | plugin-config.ts (compat) | plugin-config.test.ts: a config WITHOUT any `simple_*` keys parses to all defaults (old config files keep working) |
-| integration scripts | script/integration-*.ts: any assertion enumerating registered agents or dispatch roles gains simple |
+| integration scripts | script/integration-*.ts: any assertion enumerating registered agents or dispatch roles gains simple and build-lite (the `build` role registers no agent — assert at dispatch/hint level, not agent-key level) |
+
+### Extension test additions (build-lite + build role)
+
+| Changed file | Tests to update/add |
+|---|---|
+| plugin-config.ts | build_lite_* and build_* schema defaults + compat (old config parses); MODEL_DEFAULTS for both roles |
+| agent-registration.ts | `registerBuildLite` describe: mode "subagent", steps 50, permission object (workspace-allow edit pattern, task deny, read-only bash), model default/override, no-clobber, disabled skip via plugin.test.ts |
+| dispatch-tool.ts / dispatch-contract.ts | DISPATCH_ROLES equality (8 roles); resolveRoleTarget for both new roles (build routes to `build_agent` with optional model); disabled rejections; tool description |
+| dispatch-test-fixtures.ts | build-lite and build job-spec fixtures |
+| agent-registration.test.ts / plugin.test.ts | consultant and simple runtime bindings carry the coding-lane lines and their DISABLED variants |
 
 Full gate: `bun test` + `bun run typecheck` + `bun run install:local` + `CONSULTATION_PLUGIN_ENTRY=... bun run integration` (proves the installed artifact registers simple, its permissions, and the dispatch role).
 
@@ -219,19 +234,72 @@ A user who keeps an older installed bundle or an older config must keep working:
 - userdoc leaves version control: commit the two pending userdoc deletions, `git rm --cached` the remaining tracked userdoc file, add `userdoc/` to `.gitignore`.
 - Commit the two untracked finished-work docs `docs/superpowers/plans/2026-09-29-consultant-task-routing.md` and `docs/superpowers/specs/2026-09-29-consultant-task-routing-design.md` (repo convention commits specs/plans).
 
+## 12. build-lite — mechanical coding lane (scope extension)
+
+A second shipped agent: `build-lite`, the cheap mechanical coding executor carried by `opencode-go/glm-5.3-flash`, adapted from the maintainer's battle-tested personal lane (规格全明确才动手 / 上报优先于做完 / 叶子节点) with GLM-5.3-Flash-specific mitigations from research (2026-10-23: live endpoint verified; Z.ai official blog; Vals/benchlm/BenchmarkList independent data; family-level cautions from the maintainer's cross-checked GLM discipline notes).
+
+Model rationale: agentic execution is the lane's core (Terminal-Bench 2.1 84.3%, Toolathlon 78.4%, official DeepSWE 63.4 vs GLM-5.2's 46.2), at half of V4.1-Flash's peak price ($0.15/$0.50 vs $0.30/$1.20). Its known weakness — underspecified long-horizon vibe coding (Vals Vibe Code 16-31%) — is excluded by the lane's scope rules, not mitigated by capability. Family cautions encoded in the prompt: no protocol/wire-format byte-precision tasks (family protocol-conformance weakness), bounded steps (50) with stop-and-report (long-session drift), zero unrelated changes (verbosity ~1.5x).
+
+### Config
+
+- `build_lite_agent` default `"build-lite"`; `build_lite_model` default `"opencode-go/glm-5.3-flash"`; `build_lite_enabled` default `true`
+- `build_agent` default `"build"` (host native); `build_model` optional (unset → host default model, `null` in the job spec); `build_enabled` default `true`
+
+### Registration (`registerBuildLite`)
+
+- `mode: "subagent"` — a lane dispatched by primaries, not a user entry point
+- `steps: 50` (source-verified current field; `maxSteps` is deprecated in OpenCode)
+- static prompt `assets/agents/build-lite.md` (no runtime bindings — it never dispatches, so no job-tool discipline block needed), never clobbered
+- permission (all source-verified semantics):
+  ```jsonc
+  {
+    "edit": { "*": "allow", "/*": "ask" },   // workspace-relative matches "*" → allow; external absolute matches both, "/*" last → ask; external_directory still gates
+    "bash": { "*": "ask", "<read-only allowlist>": "allow" },  // same list as simple; verification commands ask, user can always-approve
+    "webfetch": "allow", "websearch": "allow",
+    "task": "deny"                            // leaf node: never dispatches further, always reports up
+  }
+  ```
+- gated on `build_lite_enabled`
+
+### Prompt outline (English body + Chinese examples, repo convention)
+
+1. **Role** — cheap mechanical coding executor; exists to absorb fully-specified bulk coding from expensive seats; report-up beats finishing.
+2. **Take only when all three hold** — fully specified (what/change/acceptance, or a copyable in-repo pattern); no design decisions (no 选型/架构/命名方案/接口设计); mechanically repeatable (对每个文件/每处重复同样动作). Typical: 批量重命名/移动、照现有组件复制改 N 个、格式化与 lint 修复、按明确模板生成样板、照现有测试模式补简单测试、明确规格 CRUD 胶水.
+3. **Never take** — ambiguous specs; architecture/selection decisions; debugging/root-cause; protocol / wire-format / contract byte-precision; cross-module refactors with unclear blast radius; security-sensitive (auth/crypto/permissions/money/data deletion); anything not confident one-shot. Hit → stop and report, never attempt.
+4. **Report-up discipline (highest priority, overrides finishing)** — stop immediately; revert or clearly mark partial changes; structured final report: completed+verified parts (files + verification results), blocker reason (缺规格 / 需决策 / 需调试 / 能力不足 / 步数耗尽), and the recommendation: **dispatch role `build` (stronger executor) or the primary does it inline**.
+5. **Execution discipline** — read the target file plus the most similar existing implementation first and follow its pattern (不发明新模式); verify after changes (typecheck/lint/tests from package.json scripts or repo convention; otherwise state 未验证); small steps with a verification round each; **zero unrelated changes — 不硬改、不多改: no drive-by refactors, no extra formatting, no unrequested comments** (only when the task itself is formatting); never echo secrets; leaf node.
+6. **Output** — changed file list (absolute paths), verification commands and their results, unverified items marked honestly.
+
+## 13. `build` dispatch role — host native build agent
+
+The eighth dispatch role. The plugin does NOT register a `build` agent; the role routes to the host's native build agent by name (config `build_agent`, default `"build"`), optionally pinning `build_model`. This mirrors the writer-delegate pattern and keeps every coding delegation on the recoverable lifecycle (wait/cancel/journal) with the §3.1 friendly hints.
+
+Failure flow (user requirement): when the `build` dispatch fails (agent missing or model unresolvable), the primary relays the hint to the user — ask for a usable agent, or set `build_agent`/`build_model` in the plugin config, or enable the host's build model. If the user provides none, **the primary modifies the code itself and says so** (disclosed fallback, never silent substitution).
+
+## 14. Routing and packaging deltas (extension)
+
+- `DISPATCH_ROLES` final order: `["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build"]` (8 roles); tool description lists all; fixtures gain `build-lite` and `build` entries
+- `modelFailureHint` uses an explicit role→config-field map (`"build-lite"` → `build_lite_model`, `build` → `build_model`, others uniform) instead of string interpolation
+- consultant runtime bindings gain two lines: mechanical coding lane (`build-lite` + model) and strong coding lane (role `build` → agent + pinned-or-host model), with DISABLED variants; simple's runtime bindings gain the same two lines (simple can dispatch both lanes)
+- Routing prose: consultant.md Team Orchestration gains the coding-lane paragraph (mechanical → build-lite, including author-mode bulk artifact writing after outline approval; judgment/debug/design/protocol/cross-module/security → `build`; failure → ask user → else inline with disclosure); simple.md Scope/Search Path gains: mechanical code changes beyond a trivial one-liner → dispatch `build-lite`; deeper coding → dispatch `build` or escalate to consultant; SKILL.md routing table gains `build-lite` and `build` rows plus a short paragraph
+- Packaging: `assets/agents/build-lite.md` into REQUIRED_INSTALLED_FILES; deployment.md/README config fields, permission explanation (the workspace-allow pattern and its risk note), non-Go example gains `build_lite_model`; integration proof asserts the `build-lite` agent key (the `build` role has no plugin-registered agent — no key assertion; its availability surfaces at dispatch time with the friendly hint)
+- Rollout on this machine: remove the personal `~/.config/opencode/agents/build-lite.md` (same never-clobber precedence), restart, verify
+
 ## Non-goals
 
 - No outcome-loop registration for simple (v1)
-- No tier/caps integration for simple
+- No tier/caps integration for simple, build-lite, or the build role
+- No memory protocol for build-lite (executed lanes never save; the dispatching primary owns records)
+- No plugin-registered `build` agent — the role targets the host's native build agent by name only
 - No new memory schema or namespace per-agent split
 - No changes to the five specialists' profiles or permissions
 - No host-provider detection or startup probing (P1 resolved as document + failure-path hints; §3.1 explains why probing was rejected)
 
 ## Done when
 
-- All tests and typecheck pass; install:local succeeds; the installed-artifact integration proof passes with simple registered (mode all, model, permission patterns), the `simple` dispatch role functional, and the workspace dir created
-- consultant.md + SKILL.md route to simple and relay in its format
-- Model-failure dispatch envelopes carry the friendly remediation hint (§3.1), tested
+- All tests and typecheck pass; install:local succeeds; the installed-artifact integration proof passes with simple and build-lite registered (their modes, models, permission patterns) and the `simple` workspace dir created
+- consultant.md + SKILL.md route to simple and the coding lanes (build-lite / build) and relay in simple's format
+- Model-failure dispatch envelopes carry the friendly remediation hint (§3.1), tested, covering all eight roles
 - Docs updated: deployment.md (fields, prerequisite note + non-Go example, registration/verify steps), README.md (agent inventory + condensed model note)
 - Repo cleanup done (§11): omo script deleted, userdoc ignored and untracked, 2026-09-29 docs committed
-- On this machine: stale bundle replaced, personal simple.md removed by the user, plugin simple verified end-to-end (quick consultation, explorer dispatch, memory auto-save, workspace write, write-elsewhere prompt)
+- On this machine: stale bundle replaced, personal simple.md and build-lite.md removed by the user, plugin simple verified end-to-end (quick consultation, explorer dispatch, memory auto-save, workspace write, write-elsewhere prompt) and build-lite verified (mechanical edit without prompt inside the project, edit outside the project prompting, task-deny leaf behavior, dispatch from consultant)
