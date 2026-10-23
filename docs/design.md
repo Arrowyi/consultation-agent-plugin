@@ -1,7 +1,7 @@
-# simple — Economical Daily Consultation Agent (Design)
+# Consultation Agent Plugin — Reference Design
 
-- Date: 2026-10-23
-- Status: accepted — reference design for the shipped plugin (simple, build-lite, build role, model-prompt layering, failure hints). Supersedes the superpowers process artifacts it was written from.
+- Date: 2026-10-23 (model-prompt library v2: same date)
+- Status: accepted — reference design for the shipped plugin (simple, build-lite, build role, model-prompt library, failure hints). Supersedes the superpowers process artifacts it was written from.
 - Scope: add a `simple` agent to the plugin, packaged and distributed with it, installable into other OpenCode environments
 - Scope extension (same release, 2026-10-23): also add a `build-lite` mechanical coding lane and a `build` dispatch role routed to the host's native build agent — sections 12–14 cover the extension; where they touch earlier tasks, the implementation plan amends those tasks in place
 
@@ -30,7 +30,10 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 13 | build-lite is a lane, not an entry point: mode `subagent`, `steps: 50`, `task: deny` (leaf node — never dispatches further, always reports up), no memory protocol, no runtime bindings (static prompt) |
 | 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
 | 15 | Every agent's model is user-configurable (pre-existing: all `*_model` fields override `MODEL_DEFAULTS`) — confirmed, no new work |
-| 16 | Prompts are layered: `assembled = role asset + model-adaptation block + runtime bindings`; the model block resolves per agent from the user's `<agent>_model_prompts[resolved model id]` map, else the shipped default block (only when the resolved model IS the agent's default model), else empty — never injecting default-model advice into a swapped model; `build` role and delegated writers are excluded (host-owned prompts) |
+| 16 | Prompts are layered: `role asset + model-adaptation block + runtime bindings`. v2: the model block is keyed by model and decoupled from the agent — resolved from the user's global `model_prompts[model id]` map (exact ids, `""` disables), else the shipped `assets/model-prompts/<slug>.md` block (model-keyed, no default-model gate), else empty. `build` role and delegated writers are excluded (host-owned prompts). Supersedes the v1 per-agent `*_model_prompts` maps (§15) |
+| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<slug>.md`, 7 shipped blocks (6 default models + kimi-k3 as a manual-rotation target), content strictly model-trait (never role references), extensible by dropping a single file |
+| 18 | Fallback chains removed: `writer_fallback_models` and its default are deleted, every agent resolves to a single model; the generic `model_chain` walking seam is kept so re-adding automatic allowance-exhaustion fallback later stays a localized change |
+| 19 | Writer default model changed `opencode/claude-sonnet-5` → `opencode/claude-sonnet-5-5` (live-endpoint verified 2026-10-23; claude-sonnet-5's reputation collapsed) |
 
 ## 1. Config and model
 
@@ -173,7 +176,7 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 
 - `assets/agents/simple.md` ships automatically (assets/ staged wholesale); add to `REQUIRED_INSTALLED_FILES` in script/install-local.ts
 - docs/deployment.md: config example + field reference rows (`simple_agent`, `simple_model`, `simple_enabled`, `simple_workspace_dir`), registration step list (registerSimple, mode all, permission summary incl. workspace + bash allowlist philosophy), verify-install steps (simple appears in agent picker; dispatch role works)
-- docs/deployment.md Prerequisites gains a loud model-prerequisites note (P1 decision 9): the shipped model defaults (`opencode-go/*`, `opencode/claude-sonnet-5`) assume an OpenCode Go subscription; non-Go users copy the commented non-Go config example into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider they have; dispatch failures print this remediation hint. README gains the same note in condensed form.
+- docs/deployment.md Prerequisites gains a loud model-prerequisites note (P1 decision 9): the shipped model defaults (`opencode-go/*`, `opencode/claude-sonnet-5-5`) assume an OpenCode Go subscription; non-Go users copy the commented non-Go config example into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider they have; dispatch failures print this remediation hint. README gains the same note in condensed form.
 - README.md: agent inventory — `simple` alongside the five read-only specialists with its positioning
 - Note in deployment.md: a user-defined agent file named `simple` under `~/.config/opencode/agents/` takes precedence (never-clobber); remove it to use the plugin's
 
@@ -212,7 +215,7 @@ Full gate: `bun test` + `bun run typecheck` + `bun run install:local` + `CONSULT
 
 ## Release-readiness audit (requested 2026-10-23: "no environment-specific dependencies, install-and-use") — all findings resolved
 
-**P1 — default models assume an OpenCode Go subscription. RESOLVED as (a) + friendly hints**: keep defaults; deployment.md/README document the prerequisite loudly with a commented non-Go config example; plugin-owned dispatch model-failure envelopes carry the remediation hint (§3.1); OpenCode's own agent-selection error surface is documented as out of plugin reach. `MODEL_DEFAULTS` ships `opencode-go/*` IDs for consultant/explorer/analyst/critic/verifier (+ `opencode-go/kimi-k3` writer fallback) and `opencode/claude-sonnet-5` for writer. `simple` adds one more `opencode-go` default under the same policy.
+**P1 — default models assume an OpenCode Go subscription. RESOLVED as (a) + friendly hints**: keep defaults; deployment.md/README document the prerequisite loudly with a commented non-Go config example; plugin-owned dispatch model-failure envelopes carry the remediation hint (§3.1); OpenCode's own agent-selection error surface is documented as out of plugin reach. `MODEL_DEFAULTS` ships `opencode-go/*` IDs for consultant/explorer/analyst/critic/verifier and `opencode/claude-sonnet-5-5` for writer. `simple` adds one more `opencode-go` default under the same policy.
 
 **P2 — RESOLVED:**
 - `script/integration-runtime-evidence.ts` (`.omo/evidence/` leftover) — delete the script entirely (§11); it is the only omo dependency and is referenced by nothing.
@@ -288,17 +291,45 @@ Failure flow (user requirement): when the `build` dispatch fails (agent missing 
 - Packaging: `assets/agents/build-lite.md` into REQUIRED_INSTALLED_FILES; deployment.md/README config fields, permission explanation (the workspace-allow pattern and its risk note), non-Go example gains `build_lite_model`; integration proof asserts the `build-lite` agent key (the `build` role has no plugin-registered agent — no key assertion; its availability surfaces at dispatch time with the friendly hint)
 - Rollout on this machine: remove the personal `~/.config/opencode/agents/build-lite.md` (same never-clobber precedence), restart, verify
 
-## 15. Model-prompt separation (scope extension, approved)
+## 15. Model-prompt library (v2 — supersedes the v1 per-agent design)
 
-Layered prompt assembly for every plugin-owned agent: `role asset + model-adaptation block + runtime bindings`.
+Layered prompt assembly for every plugin-owned agent: `role asset + model-adaptation block + runtime bindings`. The model block is **keyed by model, decoupled from the agent** — this is what makes subscription-allowance rotation safe: swap an agent's model in config and its driving notes follow automatically; a model with no block simply gets none.
 
-- All 8 plugin-owned agent assets carry a `<!-- MODEL-PROMPT -->` placeholder (the 6 existing agents get the placeholder line only — content untouched, zero behavior change when no block resolves)
-- Block resolution per agent: user map `config.<agent>_model_prompts[resolvedModel]` (exact model-id keys; explicit `""` disables) → else the shipped default block `assets/model-prompts/<role>.md` but ONLY when the resolved model equals that agent's `MODEL_DEFAULTS` entry → else empty. Never inject default-model advice into a swapped model
-- Shipped default blocks exist only for the new agents: `assets/model-prompts/simple.md` (DeepSeek V4.1-Flash driving notes: over-formatting clamp, no openers/padding, stop-at-the-answer, say 没查到, as-of dating, one-question focus, dense-OCR caution) and `assets/model-prompts/build-lite.md` (GLM-5.3-Flash driving notes: no protocol byte-precision emphasis, zero-unrelated-changes doubly binding, step-cap/drift guardrails, small-step verification). The 6 existing agents get the mechanism with no shipped default
-- Config schema: eight optional records — `agent_model_prompts` (consultant, matching its `agent_model` prefix), `explorer_model_prompts`, `analyst_model_prompts`, `critic_model_prompts`, `verifier_model_prompts`, `writer_model_prompts` (bundled writer only, keyed on its primary model), `simple_model_prompts`, `build_lite_model_prompts`
-- Excluded: the `build` role and any delegated writer target host-owned agents whose prompts this plugin must not touch
-- Role assets stay model-agnostic in phrasing; role-level rules (answer-first format, report-up discipline) remain in the role asset — the model block carries the per-model emphasis and countermeasures referencing them
-- Injection mechanics: empty block → the asset body passes through byte-identical (placeholder comment stays inert); non-empty block → placeholder replaced (or a `## Driving This Model` section appended when no placeholder exists)
+### Library (shipped defaults)
+
+- `assets/model-prompts/<model-slug>.md`, one file per model, `slug = model id with "/" → "-"`. Seven blocks ship:
+  - `opencode-go-deepseek-v4-pro.md` — consultant
+  - `opencode-go-deepseek-v4.1-flash.md` — simple + explorer
+  - `opencode-go-qwen3.8-max.md` — analyst
+  - `opencode-go-glm-5.3.md` — critic + verifier
+  - `opencode-go-glm-5.3-flash.md` — build-lite
+  - `opencode-claude-sonnet-5-5.md` — writer (default changed from `claude-sonnet-5`)
+  - `opencode-go-kimi-k3.md` — manual rotation target (no longer a fallback; see below)
+- Adding a block later = dropping one `.md` file; `assets/` stages wholesale at install and the resolver discovers files by slug, so no code or install-list logic changes — only a one-line `REQUIRED_INSTALLED_FILES` entry per new file. This is the "easy to extend" property.
+
+### Resolution
+
+`resolveModelPrompt(config, resolvedModel)` — the `role` parameter is gone (the block no longer depends on the agent):
+
+1. `config.model_prompts[resolvedModel]` — the user's global model-keyed override map (exact model-id keys; an explicit `""` disables the block for that model)
+2. else `assets/model-prompts/<slug>.md` if present
+3. else empty (injected as nothing — the placeholder comment stays inert; the role asset runs standalone)
+
+No "only on the default model" gate. Block content must be **model-trait only** — the model's known habits (formatting tendency, verbosity, speed, protocol precision, long-session drift, agentic strengths) — never a role rule ("answer first", "report up", etc.), because one block drives any agent running that model (e.g. `deepseek-v4.1-flash` drives both simple and explorer). The two role-specific phrases that leaked into the v1 blocks are removed in the rewrite.
+
+### Config surface
+
+- `model_prompts: z.record(z.string()).optional()` — replaces the eight per-agent `*_model_prompts` maps (removed; the plugin had shipped only hours earlier with no external users, so no compat shim).
+- Excluded: the `build` role and delegated writers target host-owned agents whose prompts this plugin never touches.
+
+### Fallback removed; seam kept
+
+- `writer_fallback_models` and `WRITER_FALLBACK_MODELS_DEFAULT` are deleted; every agent resolves to a single model. `resolveRoleModelChain` collapses to a single-element chain.
+- The dispatch lifecycle's generic `model_chain` walking stays in place (inert for single-element chains) as the seam for re-adding automatic fallback later: re-enabling allowance-exhaustion fallback = let config populate multi-element chains + inject the per-model block at dispatch time instead of registration time. Choosing manual rotation now (option A) deliberately leaves this seam intact so the later mechanism is a small, localized change.
+
+### Injection mechanics
+
+Empty block → the asset body passes through byte-identical (placeholder comment stays inert); non-empty block → placeholder replaced (or a `## Driving This Model` section appended when no placeholder exists).
 
 ## Non-goals
 
