@@ -1,108 +1,98 @@
 # consultation-agent-plugin
 
-An evidence-driven consultation agent plugin for [OpenCode](https://opencode.ai) with a portable, user-approved memory core.
+An evidence-driven consultation agent team for [OpenCode](https://opencode.ai) — a `consultant` that grades evidence and challenges its own conclusions before answering, an economical `simple` for daily questions, a mechanical `build-lite` coding lane, and a shared local memory that learns from every consultation.
 
-The public experience is a single `consultant` primary agent with six modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (a composite operational playbook for an end-to-end goal), `research` (understand a topic deeply, delivered as a readable report), and `author` (a durable technical document — tutorial, architecture analysis, or technical explanation — delivered behind one outline-approval gate). It assigns bounded evidence, analysis, challenge, influence-audit, and writing tasks to suitable subagents when those checks may matter or cannot be ruled out; caps are ceilings, not dispatch targets. An economical `simple` agent (DeepSeek V4.1-Flash by default) handles daily lightweight consultations — fact lookups, concept explanations, simple how-to finding — and escalates complex questions to `consultant`; the consultant can likewise delegate bounded simple-consultation and search subtasks to it. Every agent's prompt layers a role asset with an optional per-model adaptation block you can configure per model (see [docs/deployment.md](docs/deployment.md)). Coding routes through two more lanes: a `build-lite` mechanical executor (GLM-5.3-Flash) for fully specified bulk changes, and a `build` dispatch role that targets the host's native build agent for judgment-heavy work. The shipped model defaults assume an OpenCode Go subscription; other users override the `*_model` fields (see [docs/deployment.md](docs/deployment.md)). It separates verified facts from inference, audits uncertain user/third-party/promotional source influence, and grades evidence. A local SQLite-backed memory system auto-saves consultation records (question + conclusion summaries), supports browse/edit/delete plus an outcome-feedback loop, and is shared across agents. Canonical records stay independent of classification, summarization, and embedding models.
+## What you get
+
+| Agent | Default model | What it does |
+|-------|---------------|--------------|
+| `consultant` (primary) | `opencode-go/deepseek-v4-pro` | Evidence-driven consultations in six modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (an end-to-end playbook 攻略), `research` (deep topic report), `author` (a durable tutorial / architecture analysis behind one outline approval) |
+| `simple` (primary) | `opencode-go/deepseek-v4.1-flash` | Economical daily consultations — fact lookups, concept explanations, simple how-to finding. Escalates complex or high-risk questions to `consultant` instead of guessing |
+| `consultation-explorer` | `opencode-go/deepseek-v4.1-flash` | Read-only search specialist returning graded, structured evidence reports |
+| `consultation-analyst` | `opencode-go/qwen3.8-max` | Read-only cross-model reasoning over gathered evidence |
+| `consultation-critic` | `opencode-go/glm-5.3` | Read-only adversarial reviewer hunting counter-evidence |
+| `consultation-verifier` | `opencode-go/glm-5.3` | Read-only source-influence auditor (shilling, smear campaigns, undisclosed sponsorship) |
+| `consultation-writer` | `opencode/claude-sonnet-5` | Read-only writing specialist for `author`-mode documents |
+| `build-lite` (subagent) | `opencode-go/glm-5.3-flash` | Mechanical coding lane: fully specified bulk edits, formatting/lint fixes, boilerplate from templates. Workspace edits allowed, everything else asks; stops and reports up on anything ambiguous |
+| `build` (dispatch role) | host's build agent | Routes judgment-heavy coding to your OpenCode's native build agent — if unavailable, you get a hint and the primary codes inline with disclosure |
+| `consultation-memory` (MCP) | — | Local SQLite memory shared across the agents: auto-saved consultation records, recall, edit, delete, outcome feedback |
+
+Every agent's model is configurable (`*_model` fields), and every prompt layers a role asset with an optional per-model adaptation block you can customize per model (`*_model_prompts` maps) — swap a model, keep the role, adapt the driving notes.
+
+## Prerequisites
+
+- [OpenCode](https://opencode.ai) (the agent harness)
+- [Bun](https://bun.sh) >= 1.1 (runs the local memory MCP server and the installer)
+- The shipped model defaults assume an **OpenCode Go subscription** (`opencode-go/*`, `opencode/claude-sonnet-5`). Without one, set every `*_model` to a provider configured on your machine — see the [non-Go example](docs/deployment.md) in the deployment guide. Dispatch failures print a remediation hint naming the exact config field.
+
+## Install
+
+```bash
+git clone https://github.com/Arrowyi/consultation-agent-plugin.git
+cd consultation-agent-plugin
+bun install
+
+# Build and install the packaged bundle into ~/.local/share/consultation-agent-plugin
+bun run install:local
+```
+
+Register the printed entry in `~/.config/opencode/opencode.json` (create if missing):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["file:///home/you/.local/share/consultation-agent-plugin/dist/index.js"]
+}
+```
+
+Restart OpenCode. The plugin registers the agents, the memory MCP, the `consultation` skill, and the dispatch tools automatically.
 
 ## Usage
 
-Select the `consultant` agent and ask anything. The consultant detects what kind of question it is and routes to one of six modes — and it tells you which mode it picked plus a one-line reason (e.g. "这是个购买决策 → select") before answering:
+**Ask the consultant.** It detects the mode, tells you which one it picked and why (e.g. “这是个购买决策 → select”), then delivers:
 
-| Mode | When it triggers | You get |
-|------|------------------|---------|
+| Mode | Triggers on | You get |
+|------|--------------|---------|
 | `select` | choosing among candidates — 买哪个、选课、选工具 | a candidate list with per-candidate evidence grade, contamination note, and trial advice |
 | `verify` | checking a claim or rumor — 这说法是不是真的 | a true / false / unverifiable verdict with a per-claim reasoning chain |
 | `plan` | an actionable plan — 健身、保养、学习路线 | a step plan with support level, basis, risk, alternatives, and a robustness review |
-| `guide` | a composite end-to-end operational package — 攻略、X入门、guide to X | an operational playbook: bottom line, suitability + prerequisites, a recommendation table, a procedure table, background/pitfalls, a completion check, and a next step |
-| `research` | understanding a topic deeply — 深度研究、调查一下、开放话题 | a readable report: bottom line first, plain-language key points, what it means, with evidence and disagreements folded away |
-| `author` | a durable document to keep or share — 教程、课程、架构分析文档、write-up | a tutorial, architecture analysis, or technical explanation behind one outline approval, delivered inline / single file / multi-file with light, targeted, or strict verification: document map, artifact paths, and a verification summary |
+| `guide` | a composite end-to-end package — 攻略、X入门 | an operational playbook: bottom line, recommendation table, procedure, pitfalls, completion check |
+| `research` | understanding a topic deeply — 深度研究、调查一下 | a readable report: bottom line first, plain-language key points, evidence and disagreements folded away |
+| `author` | a durable document to keep or share — 教程、架构分析文档、write-up | a tutorial / architecture analysis behind one outline approval, with proportionate verification |
 
-Routing is two-axis: the **mode** (what to deliver) is detected from intent, and the **tier** (fast / standard / deep) is chosen from risk and complexity. Simple questions get a one-line answer; complex ones get the mode's brief.
+Simple questions get a one-line answer; complex ones get the mode's brief. Facts are separated from inference and labeled with an epistemic status.
 
-Browse or manage saved consultations with the `/consultation-memory` command (list, view, delete, keep-only) in the TUI, or the `consultation-memory` CLI offline.
+**Daily questions go to `simple`.** Select the `simple` agent for lookups and explanations at a fraction of the cost; it escalates to `consultant` (one line, with a reason) when a question needs multi-source adversarial verification or is high-stakes.
 
-## Architecture
+**Memory.** Consultations auto-save (question + conclusion summaries — never transcripts). Browse and manage them with the `/consultation-memory` command or the `consultation-memory` CLI. Prior experience and preferences surface in later consultations, with an outcome-feedback loop.
 
-```text
-User -> OpenCode Adapter -> Consultant Agent
-                              |
-                              v
-                          Consultation Skill
-                              |
-                              v
-                        Consultation Core (tier routing, source grading, decision brief)
-                              |
-                              v
-                          Memory Port
-                              |
-                              v
-                          Memory MCP (local stdio, 5 tools)
-                              |
-                              v
-                          Memory Core (schemas, revision states, retrieval planning)
-                              |
-                              v
-                          SQLite Canonical Ledger + Rebuildable Indexes (FTS5, embeddings)
-```
+**Configuration.** Optional JSONC config at `~/.config/consultation-agent/config.jsonc` (or `$CONSULTATION_CONFIG` / XDG): per-agent models and model-prompt blocks, agent names, enable flags, team caps, memory and embedding settings. The full field reference lives in [docs/deployment.md](docs/deployment.md).
 
-Core packages are harness-neutral (no OpenCode, no MCP SDK, no SQLite imports). Adapters translate host and transport concepts into core ports. See [docs/architecture.md](docs/architecture.md) for the full architecture specification.
-
-## Package Map
-
-| Package | Path | Role |
-|---------|------|------|
-| `@consultation-agent/consultation-core` | `packages/consultation-core/` | Tier routing, source grading, budget enforcement, decision and author brief validation, ports |
-| `@consultation-agent/memory-core` | `packages/memory-core/` | Canonical schemas, revision state machine, retrieval planning, injection/secret detection, MemoryStore port |
-| `@consultation-agent/memory-sqlite` | `packages/memory-sqlite/` | SQLite + FTS5 store implementation, migrations, multi-process-safe WAL access, XDG paths, CLI |
-| `@consultation-agent/memory-mcp` | `packages/memory-mcp/` | Local stdio MCP server exposing 5 memory tools |
-| `@consultation-agent/opencode-adapter` | `packages/opencode-adapter/` | Thin OpenCode plugin: registers the consultant, simple, and build-lite agents, the five read-only team subagents, memory MCP, and consultation skill via the `config` hook |
-
-Assets live under `assets/`:
-- `assets/agents/consultant.md` - the primary-agent prompt
-- `assets/agents/explorer.md`, `assets/agents/analyst.md`, `assets/agents/consultation-critic.md`, `assets/agents/consultation-verifier.md` - the read-only team prompts
-- `assets/agents/writer.md` - the read-only author specialist: blueprint/review before outline approval or usable section/chapter prose from an approved outline and evidence packet; the bundled writer is optional (`writer_enabled`, default true). The consultant verifies, integrates, and writes final files; a configured external writer delegate retains its host permissions.
-- `assets/skills/consultation/SKILL.md` - the reusable consultation skill
-
-## Quickstart
+**Verify your install:**
 
 ```bash
-# 1. Install dependencies (Bun only)
-bun install
-
-# 2. Build and install the packaged bundle
-#    Stages dist/ + assets/ into ~/.local/share/consultation-agent-plugin
-#    and prints the plugin entry to use.
-bun run install:local
-
-# 3. Register the installed bundle
-#    Add the printed entry to ~/.config/opencode/opencode.json:
-#    { "plugin": ["file:///Users/you/.local/share/consultation-agent-plugin/dist/index.js"] }
-
-# 4. Restart OpenCode
-
-# 5. Select the "consultant" agent and ask a question
+CONSULTATION_PLUGIN_ENTRY=~/.local/share/consultation-agent-plugin/dist/index.js bun run integration
 ```
 
-**Deployment rule:** always deploy the packaged bundle. Never point an OpenCode config at `packages/opencode-adapter/src/index.ts` — this project ships to other users, so a deployment must not depend on the repo checkout or its `node_modules`. See [docs/deployment.md](docs/deployment.md#deployment-rule).
+The isolated integration proof spawns a sandboxed OpenCode server and asserts the agents, MCP, skill, and dispatch tools register correctly — it never touches your real config or data.
 
-## Common Commands
+## Development
 
 ```bash
-bun install                  # install dependencies
-bun test                     # run all unit tests
-bun run typecheck            # tsc --noEmit (static gate)
-bun run build                # bundle adapter + memory-mcp server into dist/
-bun run install:local        # build, then install the bundle into the install prefix
-bun run integration          # isolated OpenCode integration proof (skips if opencode is absent)
+bun test                     # all unit tests
+bun run typecheck            # tsc --noEmit
+bun run build                # bundle adapter + memory MCP into dist/
+bun run install:local        # build + install the bundle (replaces the installed one)
+bun run integration          # isolated OpenCode integration proof
 bun run evals/run-evals.ts   # print the evaluation checklist
 ```
 
+TypeScript strict, zod, SQLite FTS5, five-package Bun workspace, no native dependencies. Harness-neutral core packages (`consultation-core`, `memory-core`); host-specific code stays in the adapters.
+
+**Deployment rule:** always deploy the packaged bundle — never point an OpenCode config at the repo source. The installed bundle is self-contained (no `node_modules` required at runtime).
+
 ## Documentation
 
-- [docs/deployment.md](docs/deployment.md) - detailed local deployment guide
-- [docs/architecture.md](docs/architecture.md) - full architecture specification
-- [evals/README.md](evals/README.md) - evaluation fixtures and two-tier grading
-
-## Tech Stack
-
-Bun >= 1.1, TypeScript strict, zod ^3.25, @modelcontextprotocol/sdk ^1.29, SQLite FTS5. No native dependencies. One Bun workspace with five internal packages.
+- [docs/deployment.md](docs/deployment.md) — install, full configuration reference, model prerequisites, uninstall
+- [docs/architecture.md](docs/architecture.md) — architecture specification
+- [evals/README.md](evals/README.md) — evaluation fixtures and grading
