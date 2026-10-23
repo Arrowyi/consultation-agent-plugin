@@ -4,7 +4,7 @@
 
 **Goal:** Add a `simple` agent (DeepSeek V4.1-Flash, mode `all`, patterned permissions, own writable workspace) and a `build-lite` mechanical coding lane (GLM-5.3-Flash, mode `subagent`, workspace-allow edits, leaf node) plus a `build` dispatch role routing to the host's native build agent — all packaged together, with friendly model-failure hints, docs, packaging, and repo cleanup.
 
-**Architecture:** `simple` and `build-lite` register via the existing `config` hook; `simple` and `build-lite` join the recoverable dispatch lifecycle (`DISPATCH_ROLES` + `resolveRoleTarget` + enabled map) alongside the `build` role that targets the host agent by name. `simple` gets runtime bindings injected into its asset like `consultant`; `build-lite` is a static prompt (leaf, never dispatches). Model-failure remediation hints are appended at the three existing failure-message sites using an explicit role→config-field map. Docs/deployment/README/evals/integration proof gain both agents. Repo cleanup removes the last omo dependency and moves `userdoc/` out of version control.
+**Architecture:** `simple` and `build-lite` register via the existing `config` hook; `simple` and `build-lite` join the recoverable dispatch lifecycle (`DISPATCH_ROLES` + `resolveRoleTarget` + enabled map) alongside the `build` role that targets the host agent by name. Every plugin-owned agent's prompt assembles in three layers — role asset + per-model adaptation block (user `*_model_prompts` map by exact model id, else a shipped default only when the resolved model is the agent's default, else nothing) + runtime bindings. `simple` gets runtime bindings injected into its asset like `consultant`; `build-lite` is a leaf with a static role asset plus its model block. Model-failure remediation hints are appended at the three existing failure-message sites using an explicit role→config-field map. Docs/deployment/README/evals/integration proof gain both agents. Repo cleanup removes the last omo dependency and moves `userdoc/` out of version control.
 
 **Tech Stack:** TypeScript (Bun runtime), zod v3, bun:test, @opencode-ai/plugin 1.18.x (agent `mode: "primary" | "subagent" | "all"`, `steps` field — `maxSteps` deprecated; permission pattern objects, last matching rule wins, key order is policy, no-match defaults to ask; edit permission `resource` is location-relative for workspace paths and absolute for external paths — all verified from OpenCode source 2026-10-23).
 
@@ -114,6 +114,23 @@ describe("build-lite and build role configuration", () => {
     expect(cfg.build_model).toBe("test/build-m")
   })
 })
+
+describe("model-adaptation prompt maps", () => {
+  it("parses per-agent model-prompt records keyed by exact model id", () => {
+    // given
+    const cfg = config({
+      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "clamp formatting" },
+      build_lite_model_prompts: { "opencode-go/glm-5.3-flash": "" },
+      agent_model_prompts: { "my-provider/model": "block" },
+    })
+
+    // when // then
+    expect(cfg.simple_model_prompts?.["opencode-go/deepseek-v4.1-flash"]).toBe("clamp formatting")
+    expect(cfg.build_lite_model_prompts?.["opencode-go/glm-5.3-flash"]).toBe("")
+    expect(cfg.agent_model_prompts?.["my-provider/model"]).toBe("block")
+    expect(cfg.explorer_model_prompts).toBeUndefined()
+  })
+})
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -136,6 +153,16 @@ Expected: FAIL — `cfg.simple_agent` is `undefined` (type error on the new fiel
   build_agent: z.string().default("build"),
   build_model: z.string().optional(),
   build_enabled: z.boolean().default(true),
+  // Per-agent model-adaptation prompt maps, keyed by the exact resolved model
+  // id ("provider/model"). An explicit "" disables that model's block.
+  agent_model_prompts: z.record(z.string()).optional(),
+  explorer_model_prompts: z.record(z.string()).optional(),
+  analyst_model_prompts: z.record(z.string()).optional(),
+  critic_model_prompts: z.record(z.string()).optional(),
+  verifier_model_prompts: z.record(z.string()).optional(),
+  writer_model_prompts: z.record(z.string()).optional(),
+  simple_model_prompts: z.record(z.string()).optional(),
+  build_lite_model_prompts: z.record(z.string()).optional(),
 ```
 
 3b. Extend the model comment block (before `MODEL_DEFAULTS`) with two lines:
@@ -163,21 +190,317 @@ Expected: FAIL — `cfg.simple_agent` is `undefined` (type error on the new fiel
       return config.build_lite_model ?? MODEL_DEFAULTS["build-lite"]
 ```
 
+3e. Extend every full `ConsultationPluginConfig` literal so typecheck stays green — three files construct them:
+
+`packages/opencode-adapter/src/agent-registration.test.ts` (`makeConfig`), `packages/opencode-adapter/src/mcp-registration.test.ts` (`makeConfig`), and `packages/opencode-adapter/src/dispatch-prompt.test.ts` (`pluginConfig`) — in each, after `writer_enabled: true,` add:
+
+```ts
+    simple_agent: "simple",
+    simple_enabled: true,
+    build_lite_agent: "build-lite",
+    build_lite_enabled: true,
+    build_agent: "build",
+    build_enabled: true,
+```
+
 - [ ] **Step 4: Run tests to verify pass**
 
 Run: `bun test packages/opencode-adapter/src/plugin-config.test.ts`
-Expected: PASS (all, including the four new cases).
+Expected: PASS (all, including the new cases).
 
 - [ ] **Step 5: Typecheck**
 
 Run: `bun run typecheck`
-Expected: no errors. Note: other files constructing literal `ConsultationPluginConfig` objects may now fail typecheck (missing required-with-default fields are only required in the OUTPUT type when written as literals) — if any file fails, that is expected and fixed in its own task; do not fix them here unless the failure is inside `plugin-config.ts` itself.
+Expected: no errors across the workspace (the three literals extended in 3e keep the output type satisfied).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/opencode-adapter/src/plugin-config.ts packages/opencode-adapter/src/plugin-config.test.ts
-git commit -m "Add simple role config schema and model default"
+git add packages/opencode-adapter/src/plugin-config.ts packages/opencode-adapter/src/plugin-config.test.ts packages/opencode-adapter/src/agent-registration.test.ts packages/opencode-adapter/src/mcp-registration.test.ts packages/opencode-adapter/src/dispatch-prompt.test.ts
+git commit -m "Add simple and coding-lane config schema and model defaults"
+```
+
+---
+
+### Task 1b: Model-prompt mechanism + retrofit of existing agents
+
+**Files:**
+- Modify: `packages/opencode-adapter/src/agent-registration.ts`
+- Modify: `assets/agents/consultant.md`, `assets/agents/explorer.md`, `assets/agents/analyst.md`, `assets/agents/consultation-critic.md`, `assets/agents/consultation-verifier.md`, `assets/agents/writer.md` (placeholder line only)
+- Test: `packages/opencode-adapter/src/agent-registration.test.ts`
+
+**Interfaces:**
+- Consumes: the eight `*_model_prompts` record fields from Task 1; `MODEL_DEFAULTS`, `ModelRole`
+- Produces (Tasks 2/3b and the existing registrations rely on these exact names):
+  - `resolveModelPrompt(pluginConfig: ConsultationPluginConfig, role: ModelRole, resolvedModel: string): Promise<string>` — user map entry for the exact resolved model id (explicit `""` returned as-is, meaning "disabled") → else the shipped default `assets/model-prompts/<role>.md` but only when `resolvedModel === MODEL_DEFAULTS[role]` → else `""`
+  - `injectModelPrompt(body: string, block: string): string` — empty block → body unchanged; else replaces the `<!-- MODEL-PROMPT ... -->` placeholder, or appends `\n\n## Driving This Model\n\n<block>` when no placeholder exists
+  - `registerReadOnlySubagent` options gain `pluginConfig: ConsultationPluginConfig` and `role: ModelRole`; all six existing agent assets carry an inert `<!-- MODEL-PROMPT: ... -->` placeholder line
+
+- [ ] **Step 1: Write the failing tests in `agent-registration.test.ts`**
+
+```ts
+describe("injectModelPrompt", () => {
+  it("replaces the MODEL-PROMPT placeholder when a block resolves", () => {
+    // given
+    const body = "# Agent\n\n## Role\n\nstuff\n\n<!-- MODEL-PROMPT: injected by the adapter. -->\n"
+    // when
+    const result = injectModelPrompt(body, "clamp formatting")
+    // then
+    expect(result).not.toContain("<!-- MODEL-PROMPT")
+    expect(result).toContain("clamp formatting")
+    expect(result).toContain("# Agent")
+  })
+
+  it("returns the body byte-identical when the block is empty", () => {
+    // given
+    const body = "# Agent\n\n<!-- MODEL-PROMPT: injected by the adapter. -->\n"
+    // when
+    const result = injectModelPrompt(body, "")
+    // then
+    expect(result).toBe(body)
+  })
+
+  it("appends a Driving This Model section when no placeholder exists", () => {
+    // given
+    const body = "# Agent\n\n## Role\n\nstuff"
+    // when
+    const result = injectModelPrompt(body, "drive carefully")
+    // then
+    expect(result).toContain("# Agent")
+    expect(result).toContain("## Driving This Model")
+    expect(result).toContain("drive carefully")
+  })
+})
+
+describe("resolveModelPrompt", () => {
+  it("returns the user map entry for the exact resolved model, including an explicit empty string", async () => {
+    // given
+    const config = makeConfig({
+      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "user block", "other/model": "" },
+    })
+
+    // when // then
+    expect(await resolveModelPrompt(config, "simple", "opencode-go/deepseek-v4.1-flash")).toBe("user block")
+    expect(await resolveModelPrompt(config, "simple", "other/model")).toBe("")
+  })
+
+  it("returns empty for a non-default model with no user entry (never default-model advice on a swapped model)", async () => {
+    // given
+    const config = makeConfig()
+
+    // when // then
+    expect(await resolveModelPrompt(config, "explorer", "some/other-model")).toBe("")
+  })
+
+  it("returns empty for the default model when no shipped block file exists", async () => {
+    // given — critic's default model has no shipped block in this repo
+    const config = makeConfig()
+
+    // when // then
+    expect(await resolveModelPrompt(config, "critic", "opencode-go/glm-5.3")).toBe("")
+  })
+})
+
+describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
+  it("every plugin-owned agent asset contains the placeholder", async () => {
+    // given
+    const assets = [
+      "agents/consultant.md",
+      "agents/explorer.md",
+      "agents/analyst.md",
+      "agents/consultation-critic.md",
+      "agents/consultation-verifier.md",
+      "agents/writer.md",
+    ]
+
+    // when // then
+    for (const asset of assets) {
+      const source = await readFile(resolveAsset(asset), "utf8")
+      expect(source).toContain("<!-- MODEL-PROMPT")
+    }
+  })
+
+  it("assembles consultant byte-stably when no model block resolves (placeholder stays inert)", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerConsultantAgent(config, pluginConfig, "oc-ns")
+
+    // then
+    const consultant = config.agent?.["consultant"] as { prompt: string }
+    expect(consultant.prompt).toContain("<!-- MODEL-PROMPT")
+    expect(consultant.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+  })
+
+  it("injects a user model block into the consultant and still injects runtime bindings", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      agent_model: "my-provider/consultant-m",
+      agent_model_prompts: { "my-provider/consultant-m": "drive the consultant carefully" },
+    })
+
+    // when
+    await registerConsultantAgent(config, pluginConfig, "oc-ns")
+
+    // then
+    const consultant = config.agent?.["consultant"] as { prompt: string }
+    expect(consultant.prompt).not.toContain("<!-- MODEL-PROMPT")
+    expect(consultant.prompt).toContain("drive the consultant carefully")
+    expect(consultant.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+  })
+
+  it("injects a user model block into a read-only specialist", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      critic_model: "my/critic-m",
+      critic_model_prompts: { "my/critic-m": "challenge aggressively" },
+    })
+
+    // when
+    await registerConsultationCritic(config, pluginConfig)
+
+    // then
+    const critic = config.agent?.["consultation-critic"] as { prompt: string }
+    expect(critic.prompt).toContain("challenge aggressively")
+    expect(critic.prompt).not.toContain("<!-- MODEL-PROMPT")
+  })
+})
+```
+
+Add `injectModelPrompt`, `resolveModelPrompt` to the imports from `./agent-registration.ts`; ensure `readFile` (node:fs/promises) and `resolveAsset` are imported.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `bun test packages/opencode-adapter/src/agent-registration.test.ts`
+Expected: FAIL — `injectModelPrompt`/`resolveModelPrompt` not exported; placeholder assertions fail.
+
+- [ ] **Step 3: Implement in `agent-registration.ts`**
+
+3a. Add the placeholder regex and helpers (near the existing `RUNTIME_BINDINGS_PLACEHOLDER`):
+
+```ts
+const MODEL_PROMPT_PLACEHOLDER = /<!--\s*MODEL-PROMPT[\s\S]*?-->/
+
+/**
+ * Per-agent model-adaptation prompt maps from the plugin config.
+ */
+function modelPromptsFor(
+  pluginConfig: ConsultationPluginConfig,
+  role: ModelRole,
+): Record<string, string> | undefined {
+  switch (role) {
+    case "consultant":
+      return pluginConfig.agent_model_prompts
+    case "explorer":
+      return pluginConfig.explorer_model_prompts
+    case "analyst":
+      return pluginConfig.analyst_model_prompts
+    case "critic":
+      return pluginConfig.critic_model_prompts
+    case "verifier":
+      return pluginConfig.verifier_model_prompts
+    case "writer":
+      return pluginConfig.writer_model_prompts
+    case "simple":
+      return pluginConfig.simple_model_prompts
+    case "build-lite":
+      return pluginConfig.build_lite_model_prompts
+  }
+}
+
+/**
+ * Resolve the model-adaptation block for a plugin-owned agent. The user map
+ * wins (exact resolved-model id keys; an explicit "" disables). The shipped
+ * default `assets/model-prompts/<role>.md` applies only when the resolved
+ * model IS the agent's default model — default-model advice is never
+ * injected into a swapped model. Otherwise empty.
+ */
+export async function resolveModelPrompt(
+  pluginConfig: ConsultationPluginConfig,
+  role: ModelRole,
+  resolvedModel: string,
+): Promise<string> {
+  const override = modelPromptsFor(pluginConfig, role)?.[resolvedModel]
+  if (override !== undefined) return override
+  if (resolvedModel !== MODEL_DEFAULTS[role]) return ""
+  try {
+    return await readFile(resolveAsset(`model-prompts/${role}.md`), "utf8")
+  } catch {
+    return ""
+  }
+}
+
+/**
+ * Inject the model-adaptation block into an agent asset body. An empty block
+ * returns the body unchanged (the placeholder comment stays inert), so
+ * no-block assembly is byte-identical to the raw asset.
+ */
+export function injectModelPrompt(body: string, block: string): string {
+  if (block.length === 0) return body
+  if (MODEL_PROMPT_PLACEHOLDER.test(body)) {
+    return body.replace(MODEL_PROMPT_PLACEHOLDER, block)
+  }
+  return `${body}\n\n## Driving This Model\n\n${block}`
+}
+```
+
+(Import `MODEL_DEFAULTS` and `type ModelRole` from `./plugin-config.ts` — extend the existing import.)
+
+3b. In `registerConsultantAgent`, after reading the body and before the runtime-bindings injection:
+
+```ts
+  const modelBlock = await resolveModelPrompt(pluginConfig, "consultant", resolveRoleModel(pluginConfig, "consultant"))
+  const withModelPrompt = injectModelPrompt(consultantBody, modelBlock)
+  const runtimeBlock = buildRuntimeBindings(pluginConfig, namespace)
+  const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
+```
+
+(Replace the previous direct `injectRuntimeBindings(consultantBody, runtimeBlock)` call; the rest of the function is unchanged.)
+
+3c. In `registerReadOnlySubagent`, extend the options with `pluginConfig: ConsultationPluginConfig` and `role: ModelRole`; after reading the body:
+
+```ts
+  const modelBlock = await resolveModelPrompt(options.pluginConfig, options.role, options.model)
+  const body = injectModelPrompt(await readFile(resolveAsset(options.assetFile), "utf8"), modelBlock)
+```
+
+(Keep the existing `entry.prompt = body` and permission logic unchanged.) Update all five callers to pass `pluginConfig` and their `role`:
+
+- `registerExplorer`: `role: "explorer"`
+- `registerAnalyst`: `role: "analyst"`
+- `registerConsultationCritic`: `role: "critic"`
+- `registerVerifier`: `role: "verifier"`
+- `registerWriter`: `role: "writer"` (skip path when `writer_delegate_agent` is set stays unchanged)
+
+- [ ] **Step 4: Add the inert placeholder line to the six existing agent assets**
+
+In `assets/agents/consultant.md`, insert directly ABOVE the `## Runtime Bindings` heading:
+
+```markdown
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->
+```
+
+In `assets/agents/explorer.md`, `analyst.md`, `consultation-critic.md`, `consultation-verifier.md`, `writer.md`, append at the END of the file:
+
+```markdown
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->
+```
+
+- [ ] **Step 5: Run tests to verify pass**
+
+Run: `bun test packages/opencode-adapter/src/agent-registration.test.ts packages/opencode-adapter/src/dispatch-prompt.test.ts packages/opencode-adapter/src/plugin.test.ts`
+Expected: PASS — the "passes the complete asset through" specialist tests still hold (no block resolves for them by default, so prompt === source including the inert placeholder comment); consultant assembly keeps all its existing assertions.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/opencode-adapter/src/agent-registration.ts packages/opencode-adapter/src/agent-registration.test.ts assets/agents/consultant.md assets/agents/explorer.md assets/agents/analyst.md assets/agents/consultation-critic.md assets/agents/consultation-verifier.md assets/agents/writer.md
+git commit -m "Layer per-model adaptation prompts over agent roles"
 ```
 
 ---
@@ -285,19 +608,32 @@ You share the consultation memory with `consultant` (same namespace, reported un
 - Never claim a search, check, or command succeeded without its actual result.
 - Answer the question; do not narrate your process unless the user asks.
 
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->
+
 ## Runtime Bindings
 
 <!-- RUNTIME-BINDINGS: the opencode adapter appends memory availability, models, workspace, and job-tool discipline here. Do not edit. -->
 ````
 
+- [ ] **Step 1b: Create `assets/model-prompts/simple.md` with this exact content** (the shipped DeepSeek V4.1-Flash driving block — applied only when simple's resolved model is `opencode-go/deepseek-v4.1-flash` and the user has no override)
+
+````markdown
+## Driving DeepSeek V4.1-Flash
+
+You are carried by DeepSeek V4.1-Flash — fast and cheap, with elite instruction-following. Known failure modes and their countermeasures:
+
+- Over-formatting is the default drift: clamp to the Answer Format — lists only for genuinely enumerable items, never nested; bold only a key conclusion; no emoji unless the user used one first.
+- No openers before the answer and no "总而言之" padding after it; the first sentence is the answer, every time.
+- Stop at the answer: once the question is answered, end the reply. Do not explore, restate, or summarize further.
+- Say 没查到 / 不确定 / 两说 plainly — never pad an empty answer or invent a URL, number, or quote.
+- Your knowledge has a cutoff: for anything time-sensitive, search before asserting, and carry "as of <date>" on the fact.
+- One question in focus per reply: if a second question appears, answer it in its own turn rather than weaving both into one.
+- Small dense text in images: report what you can read and suggest human verification for load-bearing details.
+````
+
 - [ ] **Step 2: Write the failing tests in `agent-registration.test.ts`**
 
-2a. Extend the `makeConfig` literal (after `writer_enabled: true,`) with:
-
-```ts
-    simple_agent: "simple",
-    simple_enabled: true,
-```
+2a. The `makeConfig` literal was already extended with all six new fields in Task 1 Step 3e — no further change here.
 
 2b. Extend the imports at the top:
 
@@ -450,6 +786,8 @@ describe("registerSimple", () => {
       expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
       expect(simple.description).toContain("Economical daily-consultation agent")
       expect(simple.prompt).toContain("# Simple")
+      expect(simple.prompt).toContain("## Driving DeepSeek V4.1-Flash")
+      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
       expect(simple.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
       expect(simple.prompt).toContain("oc-testns")
       expect(simple.prompt).toContain(workspace)
@@ -457,6 +795,51 @@ describe("registerSimple", () => {
       expect(simple.permission.webfetch).toBe("allow")
       const edit = simple.permission.edit as Record<string, string>
       expect(edit[`${workspace}/**`]).toBe("allow")
+    } finally {
+      rmSync(workspaceParent, { recursive: true, force: true })
+    }
+  })
+
+  it("skips the default model block when the model is swapped and no user block exists", async () => {
+    // given — a swapped model with no user model-prompt entry
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      simple_workspace_dir: join(workspaceParent, "simple"),
+      simple_model: "my-provider/other-model",
+    })
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      const simple = config.agent?.["simple"] as { prompt: string }
+      expect(simple.prompt).toContain("<!-- MODEL-PROMPT")
+      expect(simple.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
+    } finally {
+      rmSync(workspaceParent, { recursive: true, force: true })
+    }
+  })
+
+  it("injects the user model block over the shipped default", async () => {
+    // given
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      simple_workspace_dir: join(workspaceParent, "simple"),
+      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "user flash block" },
+    })
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      const simple = config.agent?.["simple"] as { prompt: string }
+      expect(simple.prompt).toContain("user flash block")
+      expect(simple.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
+      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
     } finally {
       rmSync(workspaceParent, { recursive: true, force: true })
     }
@@ -718,7 +1101,19 @@ export async function registerSimple(
 }
 ```
 
-4c. In `buildRuntimeBindings`, after the `const teamLine = ...` line and before the `caps` line, add:
+4d. In `registerSimple`, layer the model block between the raw body and the runtime bindings:
+
+```ts
+  const body = await readFile(resolveAsset("agents/simple.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, "simple", resolveRoleModel(pluginConfig, "simple"))
+  const withModelPrompt = injectModelPrompt(body, modelBlock)
+  const runtimeBlock = buildSimpleRuntimeBindings(pluginConfig, workspaceDir, namespace)
+  const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
+```
+
+(Replace the previous direct `injectRuntimeBindings(body, runtimeBlock)` wiring; everything else in the function is unchanged.)
+
+4e. In `buildRuntimeBindings`, after the `const teamLine = ...` line and before the `caps` line, add:
 
 ```ts
   const simpleLine = pluginConfig.simple_enabled
@@ -736,7 +1131,7 @@ Expected: PASS — all new describes green, all existing cases unchanged (except
 - [ ] **Step 6: Commit**
 
 ```bash
-git add assets/agents/simple.md packages/opencode-adapter/src/agent-registration.ts packages/opencode-adapter/src/agent-registration.test.ts
+git add assets/agents/simple.md assets/model-prompts/simple.md packages/opencode-adapter/src/agent-registration.ts packages/opencode-adapter/src/agent-registration.test.ts
 git commit -m "Register simple agent with patterned permissions and workspace"
 ```
 
@@ -820,9 +1215,8 @@ git commit -m "Register simple agent with patterned permissions and workspace"
 
 3b. In `dispatch-prompt.test.ts`:
 
-- add `registerSimple` to the imports from `./agent-registration.ts`;
-- extend the literal `pluginConfig` with `simple_agent: "simple", simple_enabled: true,` (after `writer_enabled: true,`);
-- add after the `roles` loop (NOT inside it — simple's prompt gets bindings injected, so `prompt === source` does not hold for it):
+- add `registerSimple` to the imports from `./agent-registration.ts` (the `pluginConfig` literal was already extended in Task 1 Step 3e);
+- add after the `roles` loop (NOT inside it — simple's prompt gets bindings and its model block injected, so `prompt === source` does not hold for it):
 
 ```ts
   it("exposes nonterminal status identifiers when loading simple.md", async () => {
@@ -958,18 +1352,27 @@ When a task hits Never-Take, or mid-execution you discover it exceeds your scope
 ## Output
 
 Always end with three things: the changed-file list (absolute paths), the verification commands you ran and their results, and any unverified items marked honestly. Reports follow the Report-Up format above.
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->
+````
+
+- [ ] **Step 1b: Create `assets/model-prompts/build-lite.md` with this exact content** (the shipped GLM-5.3-Flash driving block — applied only when build-lite's resolved model is `opencode-go/glm-5.3-flash` and the user has no override)
+
+````markdown
+## Driving GLM-5.3-Flash
+
+You are carried by GLM-5.3-Flash — agentic-strong (tool loops, structured multi-file edits) at flash cost. Known cautions and their countermeasures:
+
+- Protocol / wire-format / contract byte-exact conformance is out of scope on this model family — doubly so. If a task demands it, that is a Report-Up blocker, not a challenge to attempt.
+- Verbosity drift is the family habit: Zero unrelated changes is doubly binding — 不硬改、不多改. Touch only what the spec names; resist the urge to "improve" anything adjacent.
+- Long-session drift: the step cap and stop-and-report are your guardrails, not inconveniences. When in doubt about remaining scope, report up early rather than pushing one more edit.
+- Small steps with verification each round keep you anchored: one group of changes, verify, continue.
+- You are fast on structure and slower on prose: prefer exact, minimal diffs over explanatory rewrites.
 ````
 
 - [ ] **Step 2: Write the failing tests in `agent-registration.test.ts`**
 
-2a. Extend the `makeConfig` literal (after `simple_enabled: true,`) with:
-
-```ts
-    build_lite_agent: "build-lite",
-    build_lite_enabled: true,
-    build_agent: "build",
-    build_enabled: true,
-```
+2a. The `makeConfig` literal was already extended with all six new fields in Task 1 Step 3e — no further change here.
 
 2b. Extend imports to include `registerBuildLite`, `buildBuildLitePermission` (from `./agent-registration.ts`).
 
@@ -996,7 +1399,7 @@ describe("buildBuildLitePermission", () => {
 })
 
 describe("registerBuildLite", () => {
-  it("registers a leaf subagent with steps 50 and the static build-lite.md body", async () => {
+  it("registers a leaf subagent with steps 50, the role body, and the default GLM driving block", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -1019,9 +1422,40 @@ describe("registerBuildLite", () => {
     expect(lite.description).toContain("mechanical coding")
     expect(lite.prompt).toContain("# Build-Lite")
     expect(lite.prompt).toContain("Report-Up discipline")
+    expect(lite.prompt).toContain("## Driving GLM-5.3-Flash")
+    expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
     expect(lite.permission.task).toBe("deny")
+  })
+
+  it("keeps the asset byte-identical when the model is swapped and no user block exists", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ build_lite_model: "my-provider/other-model" })
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { prompt: string }
     const source = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
     expect(lite.prompt).toBe(source)
+  })
+
+  it("injects the user model block over the shipped default", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      build_lite_model_prompts: { "opencode-go/glm-5.3-flash": "user glm block" },
+    })
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { prompt: string }
+    expect(lite.prompt).toContain("user glm block")
+    expect(lite.prompt).not.toContain("Driving GLM-5.3-Flash")
+    expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
   })
 
   it("overrides the model from build_lite_model", async () => {
@@ -1140,11 +1574,13 @@ export async function registerBuildLite(
   if (config.agent?.[pluginConfig.build_lite_agent]) return
 
   const body = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, "build-lite", resolveRoleModel(pluginConfig, "build-lite"))
+  const prompt = injectModelPrompt(body, modelBlock)
 
   const entry: BuildLiteAgentEntry = {
     mode: "subagent",
     description: BUILD_LITE_DESCRIPTION,
-    prompt: body,
+    prompt,
     model: resolveRoleModel(pluginConfig, "build-lite"),
     steps: 50,
     permission: buildBuildLitePermission(),
@@ -1226,7 +1662,7 @@ Expected: PASS after Step 4+5.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add assets/agents/build-lite.md packages/opencode-adapter/src/agent-registration.ts packages/opencode-adapter/src/agent-registration.test.ts packages/opencode-adapter/src/plugin.ts packages/opencode-adapter/src/plugin.test.ts
+git add assets/agents/build-lite.md assets/model-prompts/build-lite.md packages/opencode-adapter/src/agent-registration.ts packages/opencode-adapter/src/agent-registration.test.ts packages/opencode-adapter/src/plugin.ts packages/opencode-adapter/src/plugin.test.ts
 git commit -m "Register the build-lite mechanical coding lane"
 ```
 
@@ -1780,17 +2216,21 @@ Add next to the existing REQUIRED_INSTALLED_FILES assertions:
 ```ts
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/simple.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/build-lite.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/simple.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/build-lite.md")
 ```
 
 Run: `bun test script/install-local.test.ts` — Expected: FAIL.
 
 - [ ] **Step 2: Add the files to `REQUIRED_INSTALLED_FILES` in `install-local.ts`**
 
-Insert alphabetically (`assets/agents/build-lite.md` before `assets/agents/consultant.md`; `assets/agents/simple.md` between `consultation-verifier.md` and `explorer.md`):
+Insert alphabetically:
 
 ```ts
   "assets/agents/build-lite.md",
   "assets/agents/simple.md",
+  "assets/model-prompts/build-lite.md",
+  "assets/model-prompts/simple.md",
 ```
 
 Run: `bun test script/install-local.test.ts` — Expected: PASS.
@@ -1887,6 +2327,39 @@ Bounded, low-risk simple-consultation and search subtasks may route to the `simp
 6. **Remove simple's workspace (optional):** `rm -rf ~/.local/share/consultation-agent/simple`.
 ```
 
+3h. Add a "Model-adaptation prompts" subsection to Step 4 (after the Field Reference table), and extend the 3b config example with one commented illustration line inside the simple block:
+
+```jsonc
+  // Optional per-model adaptation block, keyed by the exact model id —
+  // overrides the shipped block for that model ("": disables it).
+  // "simple_model_prompts": { "opencode-go/deepseek-v4.1-flash": "…" },
+```
+
+The new subsection text:
+
+```markdown
+### Model-adaptation prompts
+
+Every plugin-owned agent's prompt assembles in three layers: the role asset
+(`assets/agents/<agent>.md` — identity, scope, workflow, discipline) plus a
+model-adaptation block plus the runtime bindings. The model block resolves per
+agent: your `<agent>_model_prompts` map entry for the exact resolved model id
+wins (an explicit `""` disables it); otherwise the shipped default block
+(`assets/model-prompts/<agent>.md`, currently shipped for `simple` and
+`build-lite` only) applies only while the agent runs its default model; an
+agent whose model you swapped runs the role prompt alone unless you provide a
+block — default-model advice is never injected into a different model.
+
+To adapt an agent to your own model: read the shipped block for its default
+model as a template (`assets/model-prompts/simple.md`,
+`assets/model-prompts/build-lite.md`), write your block for your model, and set
+it under the agent's `_model_prompts` key. The eight keys are `agent_model_prompts`
+(consultant), `explorer_model_prompts`, `analyst_model_prompts`,
+`critic_model_prompts`, `verifier_model_prompts`, `writer_model_prompts`,
+`simple_model_prompts`, and `build_lite_model_prompts`. The `build` role and
+delegated writers target host-owned agents and take no model prompts.
+```
+
 - [ ] **Step 4: Update `README.md`**
 
 4a. In the intro paragraph, after "It assigns bounded evidence, analysis, challenge, influence-audit, and writing tasks to suitable subagents when those checks may matter or cannot be ruled out; caps are ceilings, not dispatch targets." add:
@@ -1896,6 +2369,8 @@ An economical `simple` agent (DeepSeek V4.1-Flash by default) handles daily ligh
 ```
 
 4b. In the Package Map `opencode-adapter` row, "registers the consultant agent, the five read-only team subagents" → "registers the consultant, simple, and build-lite agents, the five read-only team subagents".
+
+4c. In the intro paragraph's simple sentence (added in 4a), append one clause about layering: after "…the consultant can likewise delegate bounded simple-consultation and search subtasks to it." add "Every agent's prompt layers a role asset with an optional per-model adaptation block you can configure per model (see [docs/deployment.md](docs/deployment.md))."
 
 - [ ] **Step 5: Add the eval cases**
 
@@ -2051,7 +2526,7 @@ Run: `bun run typecheck` — Expected: no errors.
 - [ ] **Step 2: Build + install (replaces the stale local bundle)**
 
 Run: `bun run install:local`
-Expected: build succeeds; staging succeeds; "installed 11 required files" (9 + simple.md + build-lite.md); prints the plugin entry.
+Expected: build succeeds; staging succeeds; "installed 13 required files" (9 + simple.md + build-lite.md + model-prompts/simple.md + model-prompts/build-lite.md); prints the plugin entry.
 
 - [ ] **Step 3: Installed-artifact integration proof**
 
