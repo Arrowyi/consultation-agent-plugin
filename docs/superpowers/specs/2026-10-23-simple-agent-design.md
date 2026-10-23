@@ -29,6 +29,8 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 12 | build-lite permissions are option B: within-project edits allowed, outside asks — source-proven pattern `edit: {"*": "allow", "/*": "ask"}` (resource is location-relative for workspace paths, absolute for external; last matching rule wins; key order is policy) — with a prompt that hard-constrains no forceful edits and no extra changes (不硬改、不多改) |
 | 13 | build-lite is a lane, not an entry point: mode `subagent`, `steps: 50`, `task: deny` (leaf node — never dispatches further, always reports up), no memory protocol, no runtime bindings (static prompt) |
 | 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
+| 15 | Every agent's model is user-configurable (pre-existing: all `*_model` fields override `MODEL_DEFAULTS`) — confirmed, no new work |
+| 16 | Prompts are layered: `assembled = role asset + model-adaptation block + runtime bindings`; the model block resolves per agent from the user's `<agent>_model_prompts[resolved model id]` map, else the shipped default block (only when the resolved model IS the agent's default model), else empty — never injecting default-model advice into a swapped model; `build` role and delegated writers are excluded (host-owned prompts) |
 
 ## 1. Config and model
 
@@ -195,6 +197,7 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 |---|---|
 | plugin-config.ts | build_lite_* and build_* schema defaults + compat (old config parses); MODEL_DEFAULTS for both roles |
 | agent-registration.ts | `registerBuildLite` describe: mode "subagent", steps 50, permission object (workspace-allow edit pattern, task deny, read-only bash), model default/override, no-clobber, disabled skip via plugin.test.ts |
+| model-prompt mechanism | `resolveModelPrompt` (user map → shipped default only on the default model → empty; `""` disables), `injectModelPrompt` (empty block → byte-identical passthrough; placeholder replaced; fallback append section), all 8 assets carry the placeholder, consultant + specialists assembled unchanged when no block resolves |
 | dispatch-tool.ts / dispatch-contract.ts | DISPATCH_ROLES equality (8 roles); resolveRoleTarget for both new roles (build routes to `build_agent` with optional model); disabled rejections; tool description |
 | dispatch-test-fixtures.ts | build-lite and build job-spec fixtures |
 | agent-registration.test.ts / plugin.test.ts | consultant and simple runtime bindings carry the coding-lane lines and their DISABLED variants |
@@ -284,6 +287,18 @@ Failure flow (user requirement): when the `build` dispatch fails (agent missing 
 - Routing prose: consultant.md Team Orchestration gains the coding-lane paragraph (mechanical → build-lite, including author-mode bulk artifact writing after outline approval; judgment/debug/design/protocol/cross-module/security → `build`; failure → ask user → else inline with disclosure); simple.md Scope/Search Path gains: mechanical code changes beyond a trivial one-liner → dispatch `build-lite`; deeper coding → dispatch `build` or escalate to consultant; SKILL.md routing table gains `build-lite` and `build` rows plus a short paragraph
 - Packaging: `assets/agents/build-lite.md` into REQUIRED_INSTALLED_FILES; deployment.md/README config fields, permission explanation (the workspace-allow pattern and its risk note), non-Go example gains `build_lite_model`; integration proof asserts the `build-lite` agent key (the `build` role has no plugin-registered agent — no key assertion; its availability surfaces at dispatch time with the friendly hint)
 - Rollout on this machine: remove the personal `~/.config/opencode/agents/build-lite.md` (same never-clobber precedence), restart, verify
+
+## 15. Model-prompt separation (scope extension, approved)
+
+Layered prompt assembly for every plugin-owned agent: `role asset + model-adaptation block + runtime bindings`.
+
+- All 8 plugin-owned agent assets carry a `<!-- MODEL-PROMPT -->` placeholder (the 6 existing agents get the placeholder line only — content untouched, zero behavior change when no block resolves)
+- Block resolution per agent: user map `config.<agent>_model_prompts[resolvedModel]` (exact model-id keys; explicit `""` disables) → else the shipped default block `assets/model-prompts/<role>.md` but ONLY when the resolved model equals that agent's `MODEL_DEFAULTS` entry → else empty. Never inject default-model advice into a swapped model
+- Shipped default blocks exist only for the new agents: `assets/model-prompts/simple.md` (DeepSeek V4.1-Flash driving notes: over-formatting clamp, no openers/padding, stop-at-the-answer, say 没查到, as-of dating, one-question focus, dense-OCR caution) and `assets/model-prompts/build-lite.md` (GLM-5.3-Flash driving notes: no protocol byte-precision emphasis, zero-unrelated-changes doubly binding, step-cap/drift guardrails, small-step verification). The 6 existing agents get the mechanism with no shipped default
+- Config schema: eight optional records — `agent_model_prompts` (consultant, matching its `agent_model` prefix), `explorer_model_prompts`, `analyst_model_prompts`, `critic_model_prompts`, `verifier_model_prompts`, `writer_model_prompts` (bundled writer only, keyed on its primary model), `simple_model_prompts`, `build_lite_model_prompts`
+- Excluded: the `build` role and any delegated writer target host-owned agents whose prompts this plugin must not touch
+- Role assets stay model-agnostic in phrasing; role-level rules (answer-first format, report-up discipline) remain in the role asset — the model block carries the per-model emphasis and countermeasures referencing them
+- Injection mechanics: empty block → the asset body passes through byte-identical (placeholder comment stays inert); non-empty block → placeholder replaced (or a `## Driving This Model` section appended when no placeholder exists)
 
 ## Non-goals
 
