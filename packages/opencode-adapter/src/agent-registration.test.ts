@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { existsSync, mkdtempSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -1116,5 +1116,23 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
     const critic = config.agent?.["consultation-critic"] as { prompt: string }
     expect(critic.prompt).toContain("challenge aggressively")
     expect(critic.prompt).not.toContain("<!-- MODEL-PROMPT")
+  })
+})
+
+describe("model-prompt blocks are trait-only", () => {
+  it("contains no role-rule tokens", async () => {
+    // given
+    const dir = resolveAsset("model-prompts")
+    const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
+    expect(files.length).toBeGreaterThan(0)
+    const forbidden = ["report up", "report-up", "stop-and-report", "step cap", "doubly binding", "approved outline", "evidence packet", "answer first", "Answer Format"]
+
+    // when // then
+    for (const file of files) {
+      const source = await readFile(join(dir, file), "utf8")
+      for (const token of forbidden) {
+        expect(source.toLowerCase().includes(token.toLowerCase())).toBe(false)
+      }
+    }
   })
 })
