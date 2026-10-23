@@ -283,7 +283,7 @@ Per-tier **maximum** instance counts (`TIER_ROLE_CAPS`, mirrored by the adapter'
 
 ### 6.4 Recoverable Dispatch API
 
-All roles share the same recoverable dispatch lifecycle; only the bundled writer has a configured model-fallback chain.
+All roles share the same recoverable dispatch lifecycle; every agent resolves to a single configured model with no plugin fallback chain.
 
 | Tool | Arguments | Contract |
 |---|---|---|
@@ -295,11 +295,11 @@ Launch uses a 300000 ms soft observation window, not a specialist execution dead
 
 Expiry or an observation-context abort stops waiting, not the child job. Pending means work remains active; unknown means available host evidence does not establish the outcome, not confirmed failure. Keep the same job ID for later waits, including through a fresh coordinator after restart, without a duplicate generating request. Wait/cancel enforce the caller's parent session and workspace ownership. Only explicit cancellation requests may abort work; cancellation remains `cancelling` until reconciled.
 
-Each job is a durable host session rooted under the caller's session (`[consultation-dispatch:v1] <role>`). The first attempt's generation runs directly in that job session, so the dispatched prompt and the specialist's live messages are visible there; journal records are written as ignored/synthetic user messages and stay out of the conversation. A writer fallback attempt advances into a child session (`[consultation-dispatch:v1] attempt <role>`) only after a confirmed retryable terminal failure of the previous attempt.
+Each job is a durable host session rooted under the caller's session (`[consultation-dispatch:v1] <role>`). The first attempt's generation runs directly in that job session, so the dispatched prompt and the specialist's live messages are visible there; journal records are written as ignored/synthetic user messages and stay out of the conversation. Every job is a single attempt; the child-session advance seam (`[consultation-dispatch:v1] attempt <role>`) is retained for a possible future re-added fallback and is inert while every chain is single-element.
 
 The consultant may do independent preparation within existing permissions and caps while waiting, but must integrate the eventual specialist report before dependent synthesis and cannot silently substitute inline work or claim an independent check that did not return. Execution status comes from host session/message evidence, not from specialist liveness assertions. A verifier's evidence-quality `unknown` is distinct from a dispatch execution `unknown`.
 
-Non-writer roles have one configured attempt. The bundled writer uses its primary model plus `writer_fallback_models` and advances only after a confirmed terminal retryable model error; pending, unknown and non-retryable failures never advance. A delegated writer also has one configured attempt, with either a pinned model or host model selection (`null` in the durable spec), and retains host-defined permissions. This describes plugin fallback selection, not the external host's internal retry policy. See [the per-role audit matrix and verification levels](../evals/README.md#per-role-audit-matrix).
+Every role has one configured attempt and every agent resolves to a single model; no failure kind — pending, unknown, non-retryable, or confirmed retryable — triggers a plugin fallback advance (the `writer_fallback_models` chain was removed; the generic chain-walking seam stays inert). A delegated writer also has one configured attempt, with either a pinned model or host model selection (`null` in the durable spec), and retains host-defined permissions. This describes plugin model resolution, not the external host's internal retry policy. See [the per-role audit matrix and verification levels](../evals/README.md#per-role-audit-matrix).
 
 ## 7. Epistemic Model
 

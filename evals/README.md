@@ -98,7 +98,7 @@ mapping by design.
 These five cases are deterministic **at the tool/observer contract level**:
 pending-live recovery, unknown classification without resubmission, late-result
 recovery through a fresh coordinator, normal completion winning cancellation,
-and configured writer fallback selection. Their notes name exact regression
+and terminal model failure without a fallback advance. Their notes name exact regression
 tests. Run the cited `bun test` files (or the full suite) to prove those contracts.
 The coordinator tests use controlled SDK evidence and clocks; they are not an
 installed-host restart proof. `dispatch-prompt.test.ts` separately checks
@@ -124,10 +124,10 @@ of repository evidence; retain only redacted structural observations and verdict
 
 All dispatch roles share the identical recoverable launch/wait/cancel lifecycle:
 `consultation_dispatch{role,prompt}`, `consultation_dispatch_wait{job_id,wait_ms?}`,
-and `consultation_dispatch_cancel{job_id}`. Only the bundled writer has a configured
-multi-model fallback chain (primary + `writer_fallback_models`). Non-writer roles
-and delegate writer each have exactly one configured attempt, no fallback advance.
-A delegate model may be `null` in the durable job spec (host model selection),
+and `consultation_dispatch_cancel{job_id}`. Every role has exactly one configured
+attempt and resolves to a single-model chain — the plugin ships no model-fallback
+advance (`writer_fallback_models` was removed; the generic chain-walking seam
+stays inert). A delegate model may be `null` in the durable job spec (host model selection),
 and its host permissions are retained, not replaced by bundled restrictions.
 
 | Role/target | Recoverable lifecycle | Configured attempts | Audit emphasis |
@@ -136,7 +136,7 @@ and its host permissions are retained, not replaced by bundled restrictions.
 | analyst | Same launch/wait/cancel | One | Integrate returned analysis; inline reasoning is not an independent check |
 | critic | Same launch/wait/cancel | One | Await challenge before dependent synthesis; no false review credit |
 | verifier | Same launch/wait/cancel | One | Separate execution status from evidence-quality uncertainty |
-| bundled writer | Same launch/wait/cancel | Primary + configured fallbacks | Advance only on confirmed terminal retryable failure; preserve outline gate |
+| bundled writer | Same launch/wait/cancel | One (single-model chain) | No fallback advance — a confirmed terminal retryable failure ends the job after one attempt; preserve outline gate |
 | delegate writer | Same launch/wait/cancel | One, pinned model or host selection | No plugin fallback advance; retain external host permissions |
 
 Exercise pending/unknown/recovery/cancel for each role and both delegate model

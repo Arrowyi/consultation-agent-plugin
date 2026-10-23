@@ -6,24 +6,24 @@ An evidence-driven consultation agent team for [OpenCode](https://opencode.ai) �
 
 | Agent | Default model | What it does |
 |-------|---------------|--------------|
-| `consultant` (primary) | `opencode-go/deepseek-v4-pro` | Evidence-driven consultations in six modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (an end-to-end playbook 攻略), `research` (deep topic report), `author` (a durable tutorial / architecture analysis behind one outline approval) |
+| `consultant` (primary) | `opencode-go/glm-5.3` | Evidence-driven consultations in six modes: `select` (choose among candidates), `verify` (verdict on a claim), `plan` (an actionable plan), `guide` (an end-to-end playbook 攻略), `research` (deep topic report), `author` (a durable tutorial / architecture analysis behind one outline approval) |
 | `simple` (primary) | `opencode-go/deepseek-v4.1-flash` | Economical daily consultations — fact lookups, concept explanations, simple how-to finding. Escalates complex or high-risk questions to `consultant` instead of guessing |
 | `consultation-explorer` | `opencode-go/deepseek-v4.1-flash` | Read-only search specialist returning graded, structured evidence reports |
 | `consultation-analyst` | `opencode-go/qwen3.8-max` | Read-only cross-model reasoning over gathered evidence |
-| `consultation-critic` | `opencode-go/glm-5.3` | Read-only adversarial reviewer hunting counter-evidence |
-| `consultation-verifier` | `opencode-go/glm-5.3` | Read-only source-influence auditor (shilling, smear campaigns, undisclosed sponsorship) |
-| `consultation-writer` | `opencode/claude-sonnet-5` | Read-only writing specialist for `author`-mode documents |
+| `consultation-critic` | `opencode/gemini-3.8-flash` | Read-only adversarial reviewer hunting counter-evidence |
+| `consultation-verifier` | `opencode/gemini-3.8-flash` | Read-only source-influence auditor (shilling, smear campaigns, undisclosed sponsorship) |
+| `consultation-writer` | `opencode/claude-sonnet-5-5` | Read-only writing specialist for `author`-mode documents |
 | `build-lite` (subagent) | `opencode-go/glm-5.3-flash` | Mechanical coding lane: fully specified bulk edits, formatting/lint fixes, boilerplate from templates. Workspace edits allowed, everything else asks; stops and reports up on anything ambiguous |
 | `build` (dispatch role) | host's build agent | Routes judgment-heavy coding to your OpenCode's native build agent — if unavailable, you get a hint and the primary codes inline with disclosure |
 | `consultation-memory` (MCP) | — | Local SQLite memory shared across the agents: auto-saved consultation records, recall, edit, delete, outcome feedback |
 
-Every agent's model is configurable (`*_model` fields), and every prompt layers a role asset with an optional per-model adaptation block you can customize per model (`*_model_prompts` maps) — swap a model, keep the role, adapt the driving notes.
+Every agent's model is configurable (`*_model` fields), and every prompt layers a role asset with an optional model-adaptation block keyed by the model (`model_prompts` map overrides the shipped `assets/model-prompts/` library, extendable by dropping a file) — swap a model, keep the role, and the driving notes follow the model.
 
 ## Prerequisites
 
 - [OpenCode](https://opencode.ai) (the agent harness)
 - [Bun](https://bun.sh) >= 1.1 (runs the local memory MCP server and the installer)
-- The shipped model defaults assume an **OpenCode Go subscription** (`opencode-go/*`, `opencode/claude-sonnet-5`). Without one, set every `*_model` to a provider configured on your machine — see the [non-Go example](docs/deployment.md) in the deployment guide. Dispatch failures print a remediation hint naming the exact config field.
+- The shipped model defaults assume an **OpenCode Go subscription** for the `opencode-go/*` pool models, plus the `opencode` provider for the writer (`claude-sonnet-5-5`) and critic/verifier (`gemini-3.8-flash`, Zen pay-per-use). Without these, set every `*_model` to a provider configured on your machine — see the [non-Go example](docs/deployment.md) in the deployment guide. Dispatch failures print a remediation hint naming the exact config field.
 
 ## Install
 

@@ -31,7 +31,7 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
 | 15 | Every agent's model is user-configurable (pre-existing: all `*_model` fields override `MODEL_DEFAULTS`) — confirmed, no new work |
 | 16 | Prompts are layered: `role asset + model-adaptation block + runtime bindings`. v2: the model block is keyed by model and decoupled from the agent — resolved from the user's global `model_prompts[model id]` map (exact ids, `""` disables), else the shipped `assets/model-prompts/<slug>.md` block (model-keyed, no default-model gate), else empty. `build` role and delegated writers are excluded (host-owned prompts). Supersedes the v1 per-agent `*_model_prompts` maps (§15) |
-| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<slug>.md`, 7 shipped blocks (6 default models + kimi-k3 as a manual-rotation target), content strictly model-trait (never role references), extensible by dropping a single file |
+| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<slug>.md`, six shipped blocks (one per shipped default model), content strictly model-trait (never role references), extensible by dropping a single file |
 | 18 | Fallback chains removed: `writer_fallback_models` and its default are deleted, every agent resolves to a single model; the generic `model_chain` walking seam is kept so re-adding automatic allowance-exhaustion fallback later stays a localized change |
 | 19 | Writer default model changed `opencode/claude-sonnet-5` → `opencode/claude-sonnet-5-5` (live-endpoint verified 2026-10-23; claude-sonnet-5's reputation collapsed) |
 | 20 | `MODEL_DEFAULTS` synced to the maintainer's verified set (§16): consultant → `opencode-go/glm-5.3`, critic/verifier → `opencode/gemini-3.8-flash` (restores the cross-family audit structure: challenger ≠ consultant ≠ analyst), writer → `opencode/claude-sonnet-5-5`; fallback removed |
@@ -177,7 +177,7 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 
 - `assets/agents/simple.md` ships automatically (assets/ staged wholesale); add to `REQUIRED_INSTALLED_FILES` in script/install-local.ts
 - docs/deployment.md: config example + field reference rows (`simple_agent`, `simple_model`, `simple_enabled`, `simple_workspace_dir`), registration step list (registerSimple, mode all, permission summary incl. workspace + bash allowlist philosophy), verify-install steps (simple appears in agent picker; dispatch role works)
-- docs/deployment.md Prerequisites gains a loud model-prerequisites note (P1 decision 9): the shipped model defaults (`opencode-go/*`, `opencode/claude-sonnet-5-5`) assume an OpenCode Go subscription; non-Go users copy the commented non-Go config example into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider they have; dispatch failures print this remediation hint. README gains the same note in condensed form.
+- docs/deployment.md Prerequisites gains a loud model-prerequisites note (P1 decision 9): the shipped model defaults assume an OpenCode Go subscription for the `opencode-go/*` pool models plus the `opencode` provider for writer/critic/verifier (post-§16-sync set; critic/verifier run `gemini-3.8-flash` on Zen pay-per-use); non-Go users copy the commented non-Go config example into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider they have; dispatch failures print this remediation hint. README gains the same note in condensed form.
 - README.md: agent inventory — `simple` alongside the five read-only specialists with its positioning
 - Note in deployment.md: a user-defined agent file named `simple` under `~/.config/opencode/agents/` takes precedence (never-clobber); remove it to use the plugin's
 
@@ -216,7 +216,7 @@ Full gate: `bun test` + `bun run typecheck` + `bun run install:local` + `CONSULT
 
 ## Release-readiness audit (requested 2026-10-23: "no environment-specific dependencies, install-and-use") — all findings resolved
 
-**P1 — default models assume an OpenCode Go subscription. RESOLVED as (a) + friendly hints**: keep defaults; deployment.md/README document the prerequisite loudly with a commented non-Go config example; plugin-owned dispatch model-failure envelopes carry the remediation hint (§3.1); OpenCode's own agent-selection error surface is documented as out of plugin reach. `MODEL_DEFAULTS` ships `opencode-go/*` IDs for consultant/explorer/analyst/critic/verifier and `opencode/claude-sonnet-5-5` for writer. `simple` adds one more `opencode-go` default under the same policy.
+**P1 — default models assume an OpenCode Go subscription. RESOLVED as (a) + friendly hints**: keep defaults; deployment.md/README document the prerequisite loudly with a commented non-Go config example; plugin-owned dispatch model-failure envelopes carry the remediation hint (§3.1); OpenCode's own agent-selection error surface is documented as out of plugin reach. `MODEL_DEFAULTS` ships `opencode-go/*` IDs for consultant/explorer/analyst, `opencode/claude-sonnet-5-5` for writer, and `opencode/gemini-3.8-flash` (Zen pay-per-use) for critic/verifier (§16 sync). `simple` adds one more `opencode-go` default under the same policy.
 
 **P2 — RESOLVED:**
 - `script/integration-runtime-evidence.ts` (`.omo/evidence/` leftover) — delete the script entirely (§11); it is the only omo dependency and is referenced by nothing.
@@ -298,14 +298,13 @@ Layered prompt assembly for every plugin-owned agent: `role asset + model-adapta
 
 ### Library (shipped defaults)
 
-- `assets/model-prompts/<model-slug>.md`, one file per model, `slug = model id with "/" → "-"`. Seven blocks ship:
-  - `opencode-go-deepseek-v4-pro.md` — consultant
+- `assets/model-prompts/<model-slug>.md`, one file per model, `slug = model id with "/" → "-"`. Six blocks ship, one per shipped default model:
+  - `opencode-go-glm-5.3.md` — consultant
   - `opencode-go-deepseek-v4.1-flash.md` — simple + explorer
   - `opencode-go-qwen3.8-max.md` — analyst
-  - `opencode-go-glm-5.3.md` — critic + verifier
+  - `opencode-gemini-3.8-flash.md` — critic + verifier
   - `opencode-go-glm-5.3-flash.md` — build-lite
   - `opencode-claude-sonnet-5-5.md` — writer (default changed from `claude-sonnet-5`)
-  - `opencode-go-kimi-k3.md` — manual rotation target (no longer a fallback; see below)
 - Adding a block later = dropping one `.md` file; `assets/` stages wholesale at install and the resolver discovers files by slug, so no code or install-list logic changes — only a one-line `REQUIRED_INSTALLED_FILES` entry per new file. This is the "easy to extend" property.
 
 ### Resolution

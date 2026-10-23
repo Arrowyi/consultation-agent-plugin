@@ -20,7 +20,7 @@ export async function createRuntimeHost(providerURL: string) {
     snapshot: false, share: "disabled", compaction: { auto: false },
   }
   writeFileSync(join(configHome, "opencode/opencode.json"), JSON.stringify(config))
-  const pluginConfig = { agent_model: "fixture/consultant", explorer_model: "fixture/explorer", analyst_model: "fixture/analyst", critic_model: "fixture/critic", verifier_model: "fixture/verifier", writer_model: "fixture/writer", writer_fallback_models: ["fixture/backup"], memory_enabled: false }
+  const pluginConfig = { agent_model: "fixture/consultant", explorer_model: "fixture/explorer", analyst_model: "fixture/analyst", critic_model: "fixture/critic", verifier_model: "fixture/verifier", writer_model: "fixture/writer", memory_enabled: false }
   const pluginConfigPath = join(configHome, "consultation-agent/config.jsonc")
   writeFileSync(pluginConfigPath, JSON.stringify(pluginConfig))
   writeFileSync(join(project, "fixture.txt"), "deterministic read fixture")

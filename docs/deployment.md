@@ -19,17 +19,16 @@ Any change that reintroduces an external runtime import, or a config entry point
 
 - **Bun >= 1.1** - the runtime and package manager. Install from <https://bun.sh>.
 - **OpenCode** - the agent harness. Install from <https://opencode.ai> or your package manager. Verify with `opencode --version`.
-- **Model providers** — the shipped defaults (`opencode-go/*`, `opencode/claude-sonnet-5`) assume an **OpenCode Go subscription**. Without one, the agents register but fail at model resolution when used. Non-Go users: copy the config below into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider configured on your machine. Dispatch failures print this remediation hint with the exact field name.
+- **Model providers** — the shipped defaults assume an **OpenCode Go subscription** for the `opencode-go/*` pool models, plus the `opencode` provider for the writer (`opencode/claude-sonnet-5-5`) and the critic/verifier (`opencode/gemini-3.8-flash`, Zen pay-per-use). Without these providers, the agents register but fail at model resolution when used. Non-Go users: copy the config below into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider configured on your machine. Dispatch failures print this remediation hint with the exact field name.
 
   ```jsonc
   {
-    "agent_model": "<your-provider>/deepseek-v4-pro-or-equivalent",
+    "agent_model": "<your-provider>/strong-agentic-model",
     "explorer_model": "<your-provider>/fast-cheap-model",
     "analyst_model": "<your-provider>/reasoning-model",
     "critic_model": "<your-provider>/different-family-model",
     "verifier_model": "<your-provider>/different-family-model",
     "writer_model": "<your-provider>/writing-model",
-    "writer_fallback_models": ["<your-provider>/fallback-model"],
     "simple_model": "<your-provider>/fast-cheap-model",
     "build_lite_model": "<your-provider>/mechanical-coding-model",
     "build_model": "<your-provider>/strong-coding-model"
@@ -72,6 +71,7 @@ Installed layout:
   dist/index.js               bundled adapter plugin (self-contained)
   dist/memory-mcp-server.js   bundled memory MCP server (self-contained)
   assets/agents/*.md          agent prompts (read at startup)
+  assets/model-prompts/*.md   model-adaptation blocks (keyed by model slug)
   assets/skills/consultation/SKILL.md
   package.json                provenance
   build-meta.json             version / git sha / build time
@@ -98,7 +98,7 @@ Restart OpenCode so it picks up the new plugin entry. On startup the plugin's `c
 
 ### Recoverable team jobs
 
-All roles share the same recoverable dispatch lifecycle; only the bundled writer has a configured model-fallback chain. Launch observes for a 300000 ms soft wait window. Expiry returns a recoverable job envelope, not specialist failure, and never aborts the child. Wait uses the same `job_id`, including after a coordinator restart; `wait_ms` is an optional integer 0..300000 (default 300000; zero is a snapshot). Pending/unknown jobs must not trigger duplicate launches, backup models, or silent inline substitution. The consultant integrates the eventual original report and discloses any unresolved independent check.
+All roles share the same recoverable dispatch lifecycle; every agent resolves to a single configured model with no plugin fallback chain. Launch observes for a 300000 ms soft wait window. Expiry returns a recoverable job envelope, not specialist failure, and never aborts the child. Wait uses the same `job_id`, including after a coordinator restart; `wait_ms` is an optional integer 0..300000 (default 300000; zero is a snapshot). Pending/unknown jobs must not trigger duplicate launches, backup models, or silent inline substitution. The consultant integrates the eventual original report and discloses any unresolved independent check.
 
 Cancel is explicit and may return `cancelling` until durable abort evidence confirms `cancelled`; normal completion racing cancellation wins and returns the report. Nonterminal envelopes name `consultation_dispatch_wait` as their next action. Wait/cancel use the caller's parent session and workspace for ownership, not routing overrides. See [the architecture API contract](architecture.md#64-recoverable-dispatch-api).
 
@@ -119,17 +119,18 @@ A missing file is fine; all fields have defaults. Create the file to override de
   // verification (consultant vs analyst vs critic use different families;
   // the verifier reuses the critic's model by configuration, keeping it
   // different from the analyst; this is not a claim of model superiority).
-  "agent_model": "opencode-go/deepseek-v4-pro",
+  "agent_model": "opencode-go/glm-5.3",
   "explorer_model": "opencode-go/deepseek-v4.1-flash",
   "analyst_model": "opencode-go/qwen3.8-max",
-  "critic_model": "opencode-go/glm-5.3",
-  "verifier_model": "opencode-go/glm-5.3",
-  "writer_model": "opencode/claude-sonnet-5",
+  "critic_model": "opencode/gemini-3.8-flash",
+  "verifier_model": "opencode/gemini-3.8-flash",
+  "writer_model": "opencode/claude-sonnet-5-5",
 
-  // Bundled writer only: on confirmed terminal retryable model errors
-  // the dispatch tool walks the fallback chain in order. Defaults shown.
-  // Pending, unknown and non-retryable errors never trigger fallback.
-  "writer_fallback_models": ["opencode-go/kimi-k3"],
+  // Optional global model-adaptation blocks, keyed by the exact model id —
+  // overrides the shipped library block for that model; an explicit ""
+  // disables it.
+  // "model_prompts": { "provider/model": "…" },
+
   // Prefer a stronger host-provided writing agent over the bundled one.
   // When set, the bundled writer is not registered; dispatch routes to this
   // agent and only pins a model when writer_delegate_model is also set.
@@ -142,9 +143,6 @@ A missing file is fine; all fields have defaults. Create the file to override de
   "simple_enabled": true,
   // simple's pre-approved writable workspace. Default shown; any absolute path.
   // "simple_workspace_dir": "~/.local/share/consultation-agent/simple",
-  // Optional per-model adaptation block, keyed by the exact model id —
-  // overrides the shipped block for that model ("": disables it).
-  // "simple_model_prompts": { "opencode-go/deepseek-v4.1-flash": "…" },
 
   // build-lite — the mechanical coding lane (mode: subagent, leaf, steps 50).
   // Workspace edits are allowed without asking; external edits ask.
@@ -214,20 +212,19 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `agent_model` | string (optional) | `opencode-go/deepseek-v4-pro` | Model for the `consultant` agent |
+| `agent_model` | string (optional) | `opencode-go/glm-5.3` | Model for the `consultant` agent |
 | `explorer_agent` | string | `"consultation-explorer"` | Name of the search/gathering subagent |
 | `explorer_model` | string (optional) | `opencode-go/deepseek-v4.1-flash` | Model for the explorer subagent |
 | `analyst_agent` | string | `"consultation-analyst"` | Name of the analysis subagent |
 | `analyst_model` | string (optional) | `opencode-go/qwen3.8-max` | Model for the analyst subagent |
 | `critic_agent` | string | `"consultation-critic"` | Name of the adversarial critic subagent |
-| `critic_model` | string (optional) | `opencode-go/glm-5.3` | Model for the critic subagent |
+| `critic_model` | string (optional) | `opencode/gemini-3.8-flash` | Model for the critic subagent |
 | `critic_enabled` | boolean | `true` | Whether to register the critic subagent |
 | `verifier_agent` | string | `"consultation-verifier"` | Name of the bounded source-influence and independence-audit subagent |
-| `verifier_model` | string (optional) | `opencode-go/glm-5.3` | Model for the verifier subagent |
+| `verifier_model` | string (optional) | `opencode/gemini-3.8-flash` | Model for the verifier subagent |
 | `verifier_enabled` | boolean | `true` | Whether to register the verifier subagent |
 | `writer_agent` | string | `"consultation-writer"` | Name of the blueprint/review and approved-section-drafting subagent (`author` mode) |
-| `writer_model` | string (optional) | `opencode/claude-sonnet-5` | Primary model for the writer subagent |
-| `writer_fallback_models` | string[] (optional) | `["opencode-go/kimi-k3"]` | Bundled-writer chain tried only after confirmed terminal retryable model errors, in order; never for pending/unknown/non-retryable outcomes or delegate writer |
+| `writer_model` | string (optional) | `opencode/claude-sonnet-5-5` | Model for the writer subagent |
 | `writer_delegate_agent` | string (optional) | (none) | Host-provided writing agent preferred over the bundled writer; the bundled writer is not registered when set, and its permissions are controlled by the host |
 | `writer_delegate_model` | string (optional) | (none) | Model pinned on the delegate agent; when unset the delegate uses its own model |
 | `writer_enabled` | boolean | `true` | Whether to register the writer subagent |
@@ -241,6 +238,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `build_agent` | string | `"build"` | Target agent name for the `build` dispatch role (the host's native build agent by default) |
 | `build_model` | string (optional) | (none — host default) | Model pinned on the `build` role's target agent |
 | `build_enabled` | boolean | `true` | Whether the `build` dispatch role accepts work |
+| `model_prompts` | object (optional) | (none) | Global model-keyed adaptation-prompt map; key = exact model id ("provider/model"), value = the block; an explicit "" disables the block for that model |
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
 | `team_caps.critic_search_cap` | number | `5` | Max critic verification searches per round |
@@ -256,7 +254,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
 The `embedding` block is all-or-nothing: set all four sub-fields or omit the block.
 
-Non-writer roles and delegate writer each have one configured attempt, with no plugin fallback advance. A delegate without `writer_delegate_model` uses host model selection (`null` in the durable job spec); it keeps host permissions and host-internal retry behavior. Neither wait expiry nor unknown observation authorizes a backup model.
+Every role has one configured attempt and every agent resolves to a single model, with no plugin fallback advance. A delegate without `writer_delegate_model` uses host model selection (`null` in the durable job spec); it keeps host permissions and host-internal retry behavior. Neither wait expiry nor unknown observation authorizes a backup model.
 
 The consultant routes bounded tasks to suitable specialist agents: `explorer` gathers missing evidence, `analyst` interprets material disputes, `critic` independently challenges consequential conclusions, `verifier` triages unclear influence or independence of user/third-party/promotional sources, and `writer` produces a blueprint before outline approval or usable section/chapter prose afterward. A potentially relevant check is delegated when its necessity cannot be ruled out; a role is skipped only with a task-specific reason. These roles are not a tier-dependent required roster. Plugin-owned subagents have `permission.edit = "deny"`; the bundled writer also has `permission.bash = "deny"`. An external `writer_delegate_agent` keeps its host-defined permissions and does not inherit these restrictions. Analyst follows evidence, critic follows a draft conclusion, writer's substantive prose follows approved scope and evidence, and the consultant verifies, integrates and writes final files. The default consultant, analyst and critic use different model families; verifier reuses critic's configured model, without a performance guarantee from that choice. Role caps are advisory ceilings rather than a runtime-enforced scheduler. Bounded, low-risk simple-consultation and search subtasks may route to the `simple` generalist instead; answers produced through simple are relayed in simple's answer-first format, and a specialist profile is never substituted by simple. Coding routes through two lanes: fully specified mechanical coding and file tasks go to the `build-lite` lane (workspace edits allowed, external edits ask, further dispatch denied — its stop-and-report is a legitimate partial outcome the dispatcher integrates); judgment-heavy coding goes to the `build` role targeting the host's native build agent, and when that fails the dispatch prints a remediation hint naming `build_agent`/`build_model`.
 
@@ -264,22 +262,36 @@ The consultant routes bounded tasks to suitable specialist agents: `explorer` ga
 
 Every plugin-owned agent's prompt assembles in three layers: the role asset
 (`assets/agents/<agent>.md` — identity, scope, workflow, discipline) plus a
-model-adaptation block plus the runtime bindings. The model block resolves per
-agent: your `<agent>_model_prompts` map entry for the exact resolved model id
-wins (an explicit `""` disables it); otherwise the shipped default block
-(`assets/model-prompts/<agent>.md`, currently shipped for `simple` and
-`build-lite` only) applies only while the agent runs its default model; an
-agent whose model you swapped runs the role prompt alone unless you provide a
-block — default-model advice is never injected into a different model.
+model-adaptation block plus the runtime bindings. The model block is keyed by
+the **model**, not the agent: swap an agent's model in config and its driving
+notes follow automatically; a model with no block simply gets none. For the
+exact resolved model id, resolution is:
 
-To adapt an agent to your own model: read the shipped block for its default
-model as a template (`assets/model-prompts/simple.md`,
-`assets/model-prompts/build-lite.md`), write your block for your model, and set
-it under the agent's `_model_prompts` key. The eight keys are `agent_model_prompts`
-(consultant), `explorer_model_prompts`, `analyst_model_prompts`,
-`critic_model_prompts`, `verifier_model_prompts`, `writer_model_prompts`,
-`simple_model_prompts`, and `build_lite_model_prompts`. The `build` role and
-delegated writers target host-owned agents and take no model prompts.
+1. your `model_prompts` entry for that model id wins (an explicit `""` disables
+   the block for that model);
+2. else the shipped library block `assets/model-prompts/<model-slug>.md`, where
+   the slug is the model id with every `/` replaced by `-` (so
+   `opencode-go/glm-5.3` → `opencode-go-glm-5.3.md`);
+3. else empty — the role asset runs standalone.
+
+Six blocks ship, one per shipped default model: `opencode-go-glm-5.3.md`
+(consultant), `opencode-go-deepseek-v4.1-flash.md` (simple, explorer),
+`opencode-go-qwen3.8-max.md` (analyst), `opencode-gemini-3.8-flash.md` (critic,
+verifier), `opencode-go-glm-5.3-flash.md` (build-lite), and
+`opencode-claude-sonnet-5-5.md` (writer).
+
+To add a block for a model that has none: drop
+`assets/model-prompts/<provider>-<model>.md` into the library — the resolver
+discovers blocks by slug — and add the file to `REQUIRED_INSTALLED_FILES` in
+`script/install-local.ts` (a fork; installs verify the file). On an installed
+plugin you cannot drop files: point `model_prompts` at your own block text for
+that model id instead.
+
+Block content is model-trait only — the model's known habits (formatting
+tendency, verbosity, speed, protocol precision, long-session drift, agentic
+strengths) — never a role rule ("answer first", "report up", …), because one
+block drives every agent running that model. The `build` role and delegated
+writers target host-owned agents and take no model prompts.
 
 ## Data, State, and Cache Paths
 
