@@ -92,9 +92,9 @@ describe("resolveRoleTarget", () => {
 
     expect(explorer).toEqual({ agentName: "consultation-explorer", model: "opencode-go/deepseek-v4.1-flash" })
     expect(analyst).toEqual({ agentName: "consultation-analyst", model: "opencode-go/qwen3.8-max" })
-    expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.3" })
-    expect(verifier).toEqual({ agentName: "consultation-verifier", model: "opencode-go/glm-5.3" })
-    expect(writer).toEqual({ agentName: "consultation-writer", model: "opencode/claude-sonnet-5" })
+    expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode/gemini-3.8-flash" })
+    expect(verifier).toEqual({ agentName: "consultation-verifier", model: "opencode/gemini-3.8-flash" })
+    expect(writer).toEqual({ agentName: "consultation-writer", model: "opencode/claude-sonnet-5-5" })
     const simple = resolveRoleTarget(config(), "simple")
     expect(simple).toEqual({ agentName: "simple", model: "opencode-go/deepseek-v4.1-flash" })
     const buildLite = resolveRoleTarget(config(), "build-lite")
@@ -138,7 +138,7 @@ describe("resolveRoleTarget", () => {
 
 describe("splitModel", () => {
   it("splits provider/model on the first slash", () => {
-    expect(splitModel("deepseek/deepseek-v4-pro")).toEqual({ providerID: "deepseek", modelID: "deepseek-v4-pro" })
+    expect(splitModel("deepseek/deepseek-v4.1-flash")).toEqual({ providerID: "deepseek", modelID: "deepseek-v4.1-flash" })
     expect(splitModel("opencode-go/qwen3.8-max")).toEqual({ providerID: "opencode-go", modelID: "qwen3.8-max" })
   })
 
@@ -224,46 +224,38 @@ describe("createConsultationDispatchTool", () => {
     expect(result).not.toContain("model auth failed")
   })
 
-  it("falls back to kimi-k3 when the writer model hits a quota error", async () => {
+  it("fails after one attempt when a retryable quota error hits the single-model writer chain", async () => {
     const clock = createFakeClock()
     const fake = createFakeSdk()
     const base = fake.session.promptAsync.bind(fake.session)
-    let attempt = 0
     fake.session.promptAsync = async (input) => {
       const result = await base(input)
-      attempt++
       const requestMessageID = input.body.messageID!
       const sessionID = input.path.id
-      if (attempt === 1) {
-        fake.seedMessages(sessionID, [
-          {
-            info: {
-              id: `msg-fail-${sessionID}`,
-              sessionID,
-              role: "assistant",
-              parentID: requestMessageID,
-              time: { created: clock.now(), completed: clock.now() },
-              modelID: "m",
-              providerID: "p",
-              error: { name: "APIError", data: { isRetryable: true, status: 402, message: "quota exhausted" } },
-            } as SdkAssistantMessage,
-            parts: [],
-          },
-        ])
-      } else {
-        fake.seedMessages(sessionID, [completedAssistantMessage(requestMessageID, "kimi wrote it", { sessionID, id: `msg-success-${sessionID}` })])
-      }
+      fake.seedMessages(sessionID, [
+        {
+          info: {
+            id: `msg-fail-${sessionID}`,
+            sessionID,
+            role: "assistant",
+            parentID: requestMessageID,
+            time: { created: clock.now(), completed: clock.now() },
+            modelID: "m",
+            providerID: "p",
+            error: { name: "APIError", data: { isRetryable: true, status: 402, message: "quota exhausted" } },
+          } as SdkAssistantMessage,
+          parts: [],
+        },
+      ])
       return result
     }
     const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
-    expect(result).toBe("kimi wrote it")
-    expect(promptAsyncCount(fake)).toBe(2)
-    const asyncs = fake.calls.filter((c) => (c as { method: string }).method === "promptAsync")
-    expect((asyncs[0] as { input: { body: { model?: { providerID: string; modelID: string } } } }).input.body.model).toEqual({ providerID: "opencode", modelID: "claude-sonnet-5" })
-    expect((asyncs[1] as { input: { body: { model?: { providerID: string; modelID: string } } } }).input.body.model).toEqual({ providerID: "opencode-go", modelID: "kimi-k3" })
+    expect(result).toContain("writer dispatch failed")
+    expect(result).toContain("opencode/claude-sonnet-5-5")
+    expect(promptAsyncCount(fake)).toBe(1)
   })
 
   it("reports every tried model when the whole chain fails", async () => {
@@ -295,8 +287,7 @@ describe("createConsultationDispatchTool", () => {
 
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
-    expect(result).toContain("opencode/claude-sonnet-5")
-    expect(result).toContain("opencode-go/kimi-k3")
+    expect(result).toContain("opencode/claude-sonnet-5-5")
     expect(result).toContain("degrade")
   })
 

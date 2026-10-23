@@ -77,7 +77,7 @@ describe("journal record parsing", () => {
     if (reservation.kind === "attempt-reservation") {
       expect(reservation.job_id).toBe(FAKE_JOB_ID)
       expect(reservation.attempt_index).toBe(0)
-      expect(reservation.model).toBe("opencode/claude-sonnet-5")
+      expect(reservation.model).toBe("opencode/claude-sonnet-5-5")
       expect(reservation.message_id).toBe(FAKE_MESSAGE_ID)
     }
 
@@ -122,7 +122,7 @@ describe("envelope parsing and serialization", () => {
     expect(parsedPending.status).toBe("pending")
     expect(parsedPending.job_id).toBe(FAKE_JOB_ID)
     expect(parsedPending.role).toBe("analyst")
-    expect(parsedPending.attempt).toEqual({ index: 0, model: "opencode/claude-sonnet-5" })
+    expect(parsedPending.attempt).toEqual({ index: 0, model: "opencode/claude-sonnet-5-5" })
     expect(parsedPending.session_id).toBe(FAKE_SESSION_ID)
     expect(parsedPending.waited_ms).toBe(1_000)
     expect(parsedPending.next).toBe("consultation_dispatch_wait")

@@ -661,7 +661,7 @@ describe("writer fallback", () => {
       role: "writer",
       prompt: "write",
       agentName: "consultation-writer",
-      modelChain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"],
+      modelChain: ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"],
       parentID: FAKE_PARENT_ID,
       directory: FAKE_DIRECTORY,
       waitMs: 1_000,
@@ -670,8 +670,8 @@ describe("writer fallback", () => {
     expect(result).toBe("fallback succeeded")
     expect(promptAsyncCount(fake)).toBe(2)
     const asyncs = fake.calls.filter((c) => (c as { method: string }).method === "promptAsync")
-    expect((asyncs[0] as { input: { body: { model?: { modelID: string } } } }).input.body.model?.modelID).toBe("claude-sonnet-5")
-    expect((asyncs[1] as { input: { body: { model?: { modelID: string } } } }).input.body.model?.modelID).toBe("kimi-k3")
+    expect((asyncs[0] as { input: { body: { model?: { modelID: string } } } }).input.body.model?.modelID).toBe("claude-sonnet-5-5")
+    expect((asyncs[1] as { input: { body: { model?: { modelID: string } } } }).input.body.model?.modelID).toBe("glm-5.3")
     expect(abortCount(fake)).toBe(0)
   })
 
@@ -711,7 +711,7 @@ describe("writer fallback", () => {
       role: "writer",
       prompt: "write",
       agentName: "consultation-writer",
-      modelChain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"],
+      modelChain: ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"],
       parentID: FAKE_PARENT_ID,
       directory: FAKE_DIRECTORY,
       waitMs: 1_000,
@@ -737,7 +737,7 @@ describe("writer fallback", () => {
       role: "writer",
       prompt: "write",
       agentName: "consultation-writer",
-      modelChain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"],
+      modelChain: ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"],
       parentID: FAKE_PARENT_ID,
       directory: FAKE_DIRECTORY,
       waitMs: 50,
@@ -782,15 +782,15 @@ describe("writer fallback", () => {
       role: "writer",
       prompt: "write",
       agentName: "consultation-writer",
-      modelChain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"],
+      modelChain: ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"],
       parentID: FAKE_PARENT_ID,
       directory: FAKE_DIRECTORY,
       waitMs: 1_000,
     })
 
     expect(result.startsWith("Error:")).toBe(true)
-    expect(result).toContain("opencode/claude-sonnet-5")
-    expect(result).toContain("opencode-go/kimi-k3")
+    expect(result).toContain("opencode/claude-sonnet-5-5")
+    expect(result).toContain("opencode-go/glm-5.3")
     expect(result).toContain("degrade")
     expect(promptAsyncCount(fake)).toBe(2)
   })
@@ -1008,7 +1008,7 @@ describe("cancel intent blocks fallback", () => {
       directory: FAKE_DIRECTORY,
       role: "writer",
       agentName: "consultation-writer",
-      modelChain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"],
+      modelChain: ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"],
       prompt: "write",
       clock,
     })
@@ -1025,7 +1025,7 @@ describe("cancel intent blocks fallback", () => {
         kind: "attempt-reservation",
         job_id: jobID,
         attempt_index: 0,
-        model: "opencode/claude-sonnet-5",
+        model: "opencode/claude-sonnet-5-5",
         message_id: requestMessageID,
         reserved_at: clock.now(),
       },

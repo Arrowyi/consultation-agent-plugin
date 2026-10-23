@@ -4,7 +4,7 @@ import { createDispatchCancel, createSystemClock } from "./dispatch-cancel.ts"
 import { createKeyedMutex, parseOutcomeEnvelope, type DispatchSdk, type SdkAssistantMessage, type SdkResult } from "./dispatch-contract.ts"
 import { appendRecord, createAttemptSession, createJob, loadJob } from "./dispatch-journal.ts"
 import { createDispatchLifecycle } from "./dispatch-lifecycle.ts"
-import { createFakeClock, createFakeSdk, FAKE_DIRECTORY, FAKE_PARENT_ID, validRoleSpecs } from "./dispatch-test-fixtures.ts"
+import { createFakeClock, createFakeSdk, FAKE_DIRECTORY, FAKE_PARENT_ID, makeJobSpec, validRoleSpecs } from "./dispatch-test-fixtures.ts"
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => { throw new Error("deferred not initialized") }
@@ -66,6 +66,7 @@ function status(text: string) {
 
 const aborted = { name: "MessageAbortedError", data: { message: "aborted" } } as const
 const retryable = { name: "APIError", data: { message: "unavailable", isRetryable: true } } as const
+const writerChainSeam = makeJobSpec({ role: "writer", agent_name: "consultation-writer", model_chain: ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"] })
 
 test("fix-3 removes sleep abort listeners when the timer settles normally", async () => {
   // Given a reusable caller signal.
@@ -208,7 +209,7 @@ test("rejects missing/cross-parent/cross-workspace/corrupt ownership uniformly w
 
 test("writer intent prevents concurrent fallback after terminal retryable failure", async () => {
   // Given
-  const f = await fixture(validRoleSpecs[4]!.record)
+  const f = await fixture(writerChainSeam)
   f.active.seed(retryable)
   // When: cancel owns the lock before the wait attempts fallback.
   const [cancelled, waiting] = await Promise.all([f.cancel.cancel(f.input), f.lifecycle.wait({ ...f.input, waitMs: 0 })])
@@ -222,7 +223,7 @@ test("writer intent prevents concurrent fallback after terminal retryable failur
 
 test("targets only highest active attempt, never completed sibling or root", async () => {
   // Given
-  const f = await fixture(validRoleSpecs[4]!.record)
+  const f = await fixture(writerChainSeam)
   f.active.seed(retryable)
   const next = await f.addAttempt(1)
   f.setAbort(async () => { next.seed(aborted); return { data: true } })
@@ -250,7 +251,7 @@ test("retains pre-receipt intent and reconciles a child discovered by a later wa
 
 test("serializes cancel behind fallback submission already in progress", async () => {
   // Given
-  const f = await fixture(validRoleSpecs[4]!.record)
+  const f = await fixture(writerChainSeam)
   f.active.seed(retryable)
   const submitted = deferred<string>(), release = deferred<void>()
   const sdk: DispatchSdk = { session: { ...f.sdk.session, promptAsync: async (input) => {

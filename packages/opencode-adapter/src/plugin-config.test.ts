@@ -185,7 +185,7 @@ describe("simple role configuration", () => {
   it("keeps parsing an old config with no simple or build keys (compat guarantee)", () => {
     // given — the pre-extension shape of a full config
     const cfg = config({
-      agent_model: "opencode-go/deepseek-v4-pro",
+      agent_model: "opencode-go/glm-5.3",
       explorer_agent: "consultation-explorer",
       analyst_agent: "consultation-analyst",
       critic_agent: "consultation-critic",

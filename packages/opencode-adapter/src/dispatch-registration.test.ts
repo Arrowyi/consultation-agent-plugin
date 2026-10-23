@@ -165,9 +165,9 @@ describe("unified dispatch registration", () => {
   for (const scenario of [
     { role: "explorer", agent: "consultation-explorer", model: "opencode-go/deepseek-v4.1-flash" },
     { role: "analyst", agent: "consultation-analyst", model: "opencode-go/qwen3.8-max" },
-    { role: "critic", agent: "consultation-critic", model: "opencode-go/glm-5.3" },
-    { role: "verifier", agent: "consultation-verifier", model: "opencode-go/glm-5.3" },
-    { role: "writer", agent: "consultation-writer", model: "opencode/claude-sonnet-5" },
+    { role: "critic", agent: "consultation-critic", model: "opencode/gemini-3.8-flash" },
+    { role: "verifier", agent: "consultation-verifier", model: "opencode/gemini-3.8-flash" },
+    { role: "writer", agent: "consultation-writer", model: "opencode/claude-sonnet-5-5" },
     { role: "simple", agent: "simple", model: "opencode-go/deepseek-v4.1-flash" },
   ] as const) {
     for (const custom of [false, true]) {

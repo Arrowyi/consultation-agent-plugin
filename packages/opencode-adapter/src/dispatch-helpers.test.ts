@@ -78,14 +78,14 @@ describe("observationToOutcome failure hint", () => {
 
 describe("buildChainFailureMessage hint", () => {
   it("carries the hint for provider errors", () => {
-    const message = buildChainFailureMessage("writer", ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"], "APIError: 402")
+    const message = buildChainFailureMessage("writer", ["opencode/claude-sonnet-5-5", "opencode-go/glm-5.3"], "APIError: 402")
     expect(message).toContain("failed on every model in the chain")
     expect(message).toContain('set "writer_model"')
     expect(message).toContain("degrade by answering inline")
   })
 
   it("stays unchanged for non-provider errors", () => {
-    const message = buildChainFailureMessage("writer", ["opencode/claude-sonnet-5"], "unrecognized provider error")
+    const message = buildChainFailureMessage("writer", ["opencode/claude-sonnet-5-5"], "unrecognized provider error")
     expect(message).not.toContain("Hint:")
   })
 })
