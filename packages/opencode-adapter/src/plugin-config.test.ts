@@ -73,6 +73,23 @@ describe("ConsultationPluginConfigSchema", () => {
   })
 })
 
+describe("model defaults sync (decision 20)", () => {
+  it("resolves the synced defaults per role", () => {
+    // given // when // then
+    expect(resolveRoleModel(config(), "consultant")).toBe("opencode-go/glm-5.3")
+    expect(resolveRoleModel(config(), "critic")).toBe("opencode/gemini-3.8-flash")
+    expect(resolveRoleModel(config(), "verifier")).toBe("opencode/gemini-3.8-flash")
+    expect(resolveRoleModel(config(), "writer")).toBe("opencode/claude-sonnet-5-5")
+  })
+
+  it("collapses every role to a single-model chain", () => {
+    // given // when // then
+    expect(resolveRoleModelChain(config(), "writer")).toEqual(["opencode/claude-sonnet-5-5"])
+    expect(resolveRoleModelChain(config(), "critic")).toEqual(["opencode/gemini-3.8-flash"])
+    expect(resolveRoleModelChain(config(), "explorer")).toEqual(["opencode-go/deepseek-v4.1-flash"])
+  })
+})
+
 describe("writer role configuration", () => {
   it("defaults the packaged writer role", () => {
     // given // when
@@ -81,8 +98,8 @@ describe("writer role configuration", () => {
     // then
     expect(cfg.writer_agent).toBe("consultation-writer")
     expect(cfg.writer_enabled).toBe(true)
-    expect(resolveRoleModel(cfg, "writer")).toBe("opencode/claude-sonnet-5")
-    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5", "opencode-go/kimi-k3"])
+    expect(resolveRoleModel(cfg, "writer")).toBe("opencode/claude-sonnet-5-5")
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5-5"])
     expect(cfg.writer_delegate_agent).toBeUndefined()
     expect(cfg.writer_delegate_model).toBeUndefined()
     expect(resolveTierRoleCaps(cfg).standard.writer).toBe(1)
@@ -95,20 +112,12 @@ describe("writer role configuration", () => {
 
     // when // then
     expect(resolveRoleModel(cfg, "writer")).toBe("anthropic/claude-opus-4-6")
-    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["anthropic/claude-opus-4-6", "opencode-go/kimi-k3"])
-  })
-
-  it("honors a configured fallback chain", () => {
-    // given
-    const cfg = config({ writer_fallback_models: ["a/b", "c/d"] })
-
-    // when // then
-    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["opencode/claude-sonnet-5", "a/b", "c/d"])
+    expect(resolveRoleModelChain(cfg, "writer")).toEqual(["anthropic/claude-opus-4-6"])
   })
 
   it("keeps non-writer roles on a single-model chain", () => {
     // given // when // then
-    expect(resolveRoleModelChain(config(), "critic")).toEqual(["opencode-go/glm-5.3"])
+    expect(resolveRoleModelChain(config(), "critic")).toEqual(["opencode/gemini-3.8-flash"])
     expect(resolveRoleModelChain(config(), "explorer")).toEqual(["opencode-go/deepseek-v4.1-flash"])
   })
 
@@ -217,20 +226,39 @@ describe("build-lite and build role configuration", () => {
   })
 })
 
-describe("model-adaptation prompt maps", () => {
-  it("parses per-agent model-prompt records keyed by exact model id", () => {
+describe("model-prompt config surface (v2)", () => {
+  it("parses the global model-keyed prompt map", () => {
     // given
-    const cfg = config({
-      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "clamp formatting" },
-      build_lite_model_prompts: { "opencode-go/glm-5.3-flash": "" },
-      agent_model_prompts: { "my-provider/model": "block" },
-    })
+    const cfg = config({ model_prompts: { "opencode-go/glm-5.3": "x" } })
 
     // when // then
-    expect(cfg.simple_model_prompts?.["opencode-go/deepseek-v4.1-flash"]).toBe("clamp formatting")
-    expect(cfg.build_lite_model_prompts?.["opencode-go/glm-5.3-flash"]).toBe("")
-    expect(cfg.agent_model_prompts?.["my-provider/model"]).toBe("block")
-    expect(cfg.explorer_model_prompts).toBeUndefined()
+    expect(cfg.model_prompts?.["opencode-go/glm-5.3"]).toBe("x")
+  })
+
+  it("accepts an explicit empty string as a disable marker", () => {
+    // given
+    const cfg = config({ model_prompts: { "opencode-go/deepseek-v4.1-flash": "" } })
+
+    // when // then
+    expect(cfg.model_prompts?.["opencode-go/deepseek-v4.1-flash"]).toBe("")
+  })
+
+  it("strips the removed per-agent prompt maps and writer_fallback_models instead of throwing", () => {
+    // given — legacy keys are unknown to the schema; parse strips them
+    const cfg = config({
+      simple_model_prompts: { a: "b" },
+      writer_fallback_models: ["opencode-go/kimi-k3"],
+    } as any) as Record<string, unknown>
+
+    // when // then
+    expect(cfg.simple_model_prompts).toBeUndefined()
+    expect(cfg.writer_fallback_models).toBeUndefined()
+  })
+
+  it("still parses a config with no new keys (compat)", () => {
+    // given // when // then
+    expect(config()).toBeDefined()
+    expect(resolveRoleModelChain(config(), "explorer")).toEqual(["opencode-go/deepseek-v4.1-flash"])
   })
 })
 
