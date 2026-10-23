@@ -192,6 +192,67 @@ describe("createConsultationConfigHook", () => {
     }
   })
 
+  it("registers the build-lite lane by default and omits it when build_lite_enabled=false", async () => {
+    // given — default registration
+    const tmpHome = makeTempHome()
+    process.env.HOME = tmpHome
+    delete process.env.CONSULTATION_CONFIG
+    delete process.env.XDG_CONFIG_HOME
+    delete process.env.XDG_DATA_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      const lite = config.agent?.["build-lite"] as {
+        mode: string
+        model: string
+        steps: number
+        permission: Record<string, unknown>
+      }
+      expect(lite.mode).toBe("subagent")
+      expect(lite.model).toBe("opencode-go/glm-5.3-flash")
+      expect(lite.steps).toBe(50)
+      expect(lite.permission.task).toBe("deny")
+    } finally {
+      delete process.env.XDG_DATA_HOME
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it("omits the build-lite agent when build_lite_enabled=false", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-buildliteoff-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, '{\n  "build_lite_enabled": false\n}')
+    process.env.HOME = tmpHome
+    process.env.CONSULTATION_CONFIG = configPath
+    delete process.env.XDG_CONFIG_HOME
+    delete process.env.XDG_DATA_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      expect(config.agent?.["build-lite"]).toBeUndefined()
+      const consultant = config.agent?.["consultant"] as { prompt: string }
+      expect(consultant.prompt).toContain("build-lite DISABLED by configuration")
+    } finally {
+      delete process.env.XDG_DATA_HOME
+      rmSync(tmpHome, { recursive: true, force: true })
+      rmSync(tmpConfigDir, { recursive: true, force: true })
+    }
+  })
+
   it("omits the bundled writer subagent when a delegate agent is configured", async () => {
     // given
     const tmpHome = makeTempHome()

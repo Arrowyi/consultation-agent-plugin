@@ -6,6 +6,7 @@ import {
   registerExplorer,
   registerAnalyst,
   registerSimple,
+  registerBuildLite,
   registerVerifier,
   registerWriter,
 } from "./agent-registration.ts"
@@ -35,6 +36,10 @@ export function createConsultationConfigHook(
 
     if (pluginConfig.simple_enabled) {
       await registerSimple(config, pluginConfig, namespace)
+    }
+
+    if (pluginConfig.build_lite_enabled) {
+      await registerBuildLite(config, pluginConfig)
     }
 
     await registerExplorer(config, pluginConfig)

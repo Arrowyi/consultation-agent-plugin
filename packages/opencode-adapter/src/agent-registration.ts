@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs"
+import { mkdirSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -53,6 +53,18 @@ const WRITER_DESCRIPTION =
 
 const SIMPLE_DESCRIPTION =
   "Economical daily-consultation agent (DeepSeek V4.1-Flash by default) for lightweight Q&A, fact and concept lookups, and simple how-to finding. Full read access and web search; escalates complex, high-risk, or evidence-heavy questions to the consultant. Also dispatchable by the consultant for bounded simple-consultation and search subtasks."
+
+const BUILD_LITE_DESCRIPTION =
+  "Cheap mechanical coding executor (GLM-5.3-Flash by default) for fully specified, decision-free, mechanically repeatable coding tasks: batch renames/moves, copy-adapt from existing in-repo patterns, formatting and lint fixes, boilerplate from explicit templates, simple tests following existing patterns, spec-complete CRUD glue. Stops and reports up on anything ambiguous, judgment-heavy, debugging, protocol-precision, cross-module, or security-sensitive — never attempts them."
+
+interface BuildLiteAgentEntry {
+  mode: "subagent"
+  description: string
+  prompt: string
+  model: string
+  steps: number
+  permission: Record<string, unknown>
+}
 
 export const SIMPLE_BASH_READONLY_RULES: Record<string, "allow"> = {
   ls: "allow",
@@ -146,6 +158,13 @@ export function buildSimpleRuntimeBindings(
 
   const explorerLine = `- Explorer: \`${pluginConfig.explorer_agent}\` (\`${resolveRoleModel(pluginConfig, "explorer")}\`) — dispatch via \`consultation_dispatch\` (role="explorer", prompt) for multi-source graded retrieval`
 
+  const buildLiteLine = pluginConfig.build_lite_enabled
+    ? `- Mechanical coding lane: \`${pluginConfig.build_lite_agent}\` (\`${resolveRoleModel(pluginConfig, "build-lite")}\`) for fully specified mechanical coding and file tasks`
+    : "- Mechanical coding lane: build-lite DISABLED by configuration"
+  const buildLine = pluginConfig.build_enabled
+    ? `- Strong coding lane: role \`build\` routes to agent \`${pluginConfig.build_agent}\` (\`${pluginConfig.build_model ?? "host default model"}\`) for judgment-heavy coding`
+    : "- Strong coding lane: build DISABLED by configuration"
+
   const dispatchLine =
     "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
 
@@ -153,7 +172,7 @@ export function buildSimpleRuntimeBindings(
 
   const namespaceLine = `- Memory namespace: \`${namespace}\``
 
-  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${modelLine}\n${explorerLine}\n${dispatchLine}\n${workspaceLine}\n${namespaceLine}`
+  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${modelLine}\n${explorerLine}\n${buildLiteLine}\n${buildLine}\n${dispatchLine}\n${workspaceLine}\n${namespaceLine}`
 }
 
 /**
@@ -192,6 +211,52 @@ export async function registerSimple(
 
   if (!config.agent) config.agent = {}
   config.agent[pluginConfig.simple_agent] = entry
+}
+
+/**
+ * build-lite's permissions: workspace edits allowed without asking (the edit
+ * resource is location-relative for workspace paths, so "*" matches them and
+ * the later "/*" rule only matches external absolute paths), external edits
+ * ask, read-only bash allowed, everything else asks, and further subagent
+ * dispatch is denied (leaf node).
+ */
+export function buildBuildLitePermission(): Record<string, unknown> {
+  return {
+    edit: { "*": "allow", "/*": "ask" },
+    bash: { "*": "ask", ...SIMPLE_BASH_READONLY_RULES },
+    webfetch: "allow",
+    websearch: "allow",
+    task: "deny",
+  }
+}
+
+/**
+ * Register the `build-lite` mechanical coding lane: mode "subagent", a static
+ * prompt (leaf node — never dispatches, so no runtime bindings block), a
+ * step cap of 50 with report-up, and the workspace-allow permission set.
+ * A pre-existing user-defined entry under the same name is left untouched.
+ */
+export async function registerBuildLite(
+  config: MutableConfig,
+  pluginConfig: ConsultationPluginConfig,
+): Promise<void> {
+  if (config.agent?.[pluginConfig.build_lite_agent]) return
+
+  const body = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, "build-lite", resolveRoleModel(pluginConfig, "build-lite"))
+  const prompt = injectModelPrompt(body, modelBlock)
+
+  const entry: BuildLiteAgentEntry = {
+    mode: "subagent",
+    description: BUILD_LITE_DESCRIPTION,
+    prompt,
+    model: resolveRoleModel(pluginConfig, "build-lite"),
+    steps: 50,
+    permission: buildBuildLitePermission(),
+  }
+
+  if (!config.agent) config.agent = {}
+  config.agent[pluginConfig.build_lite_agent] = entry
 }
 
 /**
@@ -243,6 +308,13 @@ export function buildRuntimeBindings(
     ? `- Economical generalist: \`${pluginConfig.simple_agent}\` (\`${resolveRoleModel(pluginConfig, "simple")}\`) for bounded simple-consultation and search tasks`
     : "- Economical generalist: simple DISABLED by configuration"
 
+  const buildLiteLine = pluginConfig.build_lite_enabled
+    ? `- Mechanical coding lane: \`${pluginConfig.build_lite_agent}\` (\`${resolveRoleModel(pluginConfig, "build-lite")}\`) for fully specified mechanical coding and file tasks`
+    : "- Mechanical coding lane: build-lite DISABLED by configuration"
+  const buildLine = pluginConfig.build_enabled
+    ? `- Strong coding lane: role \`build\` routes to agent \`${pluginConfig.build_agent}\` (\`${pluginConfig.build_model ?? "host default model"}\`) for judgment-heavy coding`
+    : "- Strong coding lane: build DISABLED by configuration"
+
   const caps = resolveTeamCaps(pluginConfig)
   const tiers = resolveTierRoleCaps(pluginConfig)
   const costGuard = resolveCostGuardUsd(pluginConfig)
@@ -254,7 +326,7 @@ export function buildRuntimeBindings(
   const namespaceLine = `- Memory namespace: \`${namespace}\``
   const dispatchLine = "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
 
-  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${consultantModelLine}\n${teamLine}\n${simpleLine}\n${dispatchLine}\n${capsLine}\n${tierMatrixLine}\n${costLine}\n${namespaceLine}`
+  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${consultantModelLine}\n${teamLine}\n${simpleLine}\n${buildLiteLine}\n${buildLine}\n${dispatchLine}\n${capsLine}\n${tierMatrixLine}\n${costLine}\n${namespaceLine}`
 }
 
 /**

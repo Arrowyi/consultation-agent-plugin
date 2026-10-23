@@ -11,9 +11,11 @@ import {
   registerVerifier,
   registerWriter,
   registerSimple,
+  registerBuildLite,
   buildRuntimeBindings,
   buildSimpleRuntimeBindings,
   buildSimplePermission,
+  buildBuildLitePermission,
   resolveSimpleWorkspaceDir,
   injectRuntimeBindings,
   injectModelPrompt,
@@ -230,6 +232,26 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(disabledBlock).toContain("Economical generalist: simple DISABLED by configuration")
+
+    // given — coding lanes
+    const lanes = makeConfig()
+
+    // when
+    const lanesBlock = buildRuntimeBindings(lanes, "oc-ns")
+
+    // then
+    expect(lanesBlock).toContain("Mechanical coding lane: `build-lite` (`opencode-go/glm-5.3-flash`)")
+    expect(lanesBlock).toContain("Strong coding lane: role `build` routes to agent `build` (`host default model`)")
+
+    // given
+    const lanesOff = makeConfig({ build_lite_enabled: false, build_enabled: false })
+
+    // when
+    const lanesOffBlock = buildRuntimeBindings(lanesOff, "oc-ns")
+
+    // then
+    expect(lanesOffBlock).toContain("Mechanical coding lane: build-lite DISABLED by configuration")
+    expect(lanesOffBlock).toContain("Strong coding lane: build DISABLED by configuration")
   })
 })
 
@@ -712,6 +734,8 @@ describe("buildSimpleRuntimeBindings", () => {
     expect(block).toContain("consultation_dispatch_wait")
     expect(block).toContain(`Your writable workspace: \`${workspace}\``)
     expect(block).toContain("oc-ns")
+    expect(block).toContain("Mechanical coding lane: `build-lite` (`opencode-go/glm-5.3-flash`)")
+    expect(block).toContain("Strong coding lane: role `build` routes to agent `build`")
   })
 
   it("says Memory DISABLED when memory_enabled is false", () => {
@@ -885,6 +909,115 @@ describe("registerSimple", () => {
     } finally {
       cleanup()
     }
+  })
+})
+
+describe("buildBuildLitePermission", () => {
+  it("allows workspace edits, asks for external, denies further dispatch", () => {
+    // given // when
+    const permission = buildBuildLitePermission()
+
+    // then
+    const edit = permission.edit as Record<string, string>
+    expect(edit["*"]).toBe("allow")
+    expect(edit["/*"]).toBe("ask")
+    expect(edit).toEqual({ "*": "allow", "/*": "ask" })
+    const bash = permission.bash as Record<string, string>
+    expect(bash["*"]).toBe("ask")
+    expect(bash["cat *"]).toBe("allow")
+    expect(permission.webfetch).toBe("allow")
+    expect(permission.websearch).toBe("allow")
+    expect(permission.task).toBe("deny")
+  })
+})
+
+describe("registerBuildLite", () => {
+  it("registers a leaf subagent with steps 50, the role body, and the default GLM driving block", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as {
+      mode: string
+      description: string
+      prompt: string
+      model: string
+      steps: number
+      permission: Record<string, unknown>
+    }
+    expect(lite.mode).toBe("subagent")
+    expect(lite.model).toBe("opencode-go/glm-5.3-flash")
+    expect(lite.steps).toBe(50)
+    expect(lite.description).toContain("mechanical coding")
+    expect(lite.prompt).toContain("# Build-Lite")
+    expect(lite.prompt).toContain("Report-Up discipline")
+    expect(lite.prompt).toContain("## Driving GLM-5.3-Flash")
+    expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
+    expect(lite.permission.task).toBe("deny")
+  })
+
+  it("keeps the asset byte-identical when the model is swapped and no user block exists", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ build_lite_model: "my-provider/other-model" })
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { prompt: string }
+    const source = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
+    expect(lite.prompt).toBe(source)
+  })
+
+  it("injects the user model block over the shipped default", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      build_lite_model_prompts: { "opencode-go/glm-5.3-flash": "user glm block" },
+    })
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { prompt: string }
+    expect(lite.prompt).toContain("user glm block")
+    expect(lite.prompt).not.toContain("Driving GLM-5.3-Flash")
+    expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
+  })
+
+  it("overrides the model from build_lite_model", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ build_lite_model: "test/glm-flash" })
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { model: string }
+    expect(lite.model).toBe("test/glm-flash")
+  })
+
+  it("uses the configured build_lite_agent name and never clobbers", async () => {
+    // given
+    const userPrompt = "user-defined build-lite prompt"
+    const config: { agent?: Record<string, unknown> } = {
+      agent: { "build-lite": { mode: "subagent", prompt: userPrompt } },
+    }
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { prompt: string }
+    expect(lite.prompt).toBe(userPrompt)
   })
 })
 
