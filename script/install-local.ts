@@ -25,11 +25,15 @@ export const REQUIRED_INSTALLED_FILES = [
   "dist/index.js",
   "dist/memory-mcp-server.js",
   "assets/agents/analyst.md",
+  "assets/agents/build-lite.md",
   "assets/agents/consultant.md",
   "assets/agents/consultation-critic.md",
   "assets/agents/consultation-verifier.md",
   "assets/agents/explorer.md",
+  "assets/agents/simple.md",
   "assets/agents/writer.md",
+  "assets/model-prompts/build-lite.md",
+  "assets/model-prompts/simple.md",
   "assets/skills/consultation/SKILL.md",
 ]
 

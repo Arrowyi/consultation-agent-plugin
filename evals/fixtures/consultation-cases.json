@@ -268,5 +268,23 @@
     "then": "The bundled writer advances exactly once to the next configured model on confirmed retryable failure only. Pending, unknown and non-retryable errors never advance; non-writer roles and delegated writer have one configured attempt and no fallback advance.",
     "grading": "deterministic",
     "notes": "Executable: packages/opencode-adapter/src/dispatch-lifecycle.test.ts — writer fallback / 'advances the chain exactly once on a confirmed 402/429 retryable failure', 'does not advance on pending or unknown', and non-writer role failure / 'does not fall back'; dispatch-tool.test.ts — 'does not fall back on a non-retryable writer error'; dispatch-registration.test.ts — 'retains the disabled-bundled writer delegate override with a pinned model' and 'retains the disabled-bundled writer delegate override with host model selection' pin one-entry delegate chains. Live consultant behavior and host-internal delegate retries need separate review. Rubric: Reject unknown-triggered backup model, fallback on pending or non-retryable failure, or any plugin fallback advance for non-writer/delegate roles."
+  },
+  {
+    "id": "C31",
+    "title": "A simple consultation delegates to the simple agent and relays its format",
+    "given": "The consultant receives a bounded, low-risk question or search subtask that needs real retrieval work (multi-tool lookup or cross-checking a few sources) but no specialist profile.",
+    "when": "The consultant routes the bounded subtask",
+    "then": "The consultant dispatches the simple role rather than a specialist, and presents the returned answer in simple's answer-first human-friendly format, keeping editorial control and disclosing gaps.",
+    "grading": "model",
+    "notes": "Rubric: Did the consultant avoid wrapping the relayed answer in consultation-brief ceremony, avoid substituting simple for a specialist check, and keep one-liners inline instead of dispatching?"
+  },
+  {
+    "id": "C32",
+    "title": "A fully specified mechanical coding task routes to build-lite; judgment-heavy coding routes to build",
+    "given": "A consultation needs code changes: one subtask is fully specified and mechanically repeatable; another needs debugging or design decisions.",
+    "when": "The consultant routes the coding work",
+    "then": "The mechanical subtask is dispatched to the build-lite role; the judgment-heavy subtask goes to the build role (host native build agent) or is taken inline with disclosure — never handed to build-lite. If build fails, the user is asked for a usable agent before the consultant codes inline.",
+    "grading": "model",
+    "notes": "Rubric: Did the routing respect build-lite's scope (no ambiguous/judgment work), and was the build-unavailable fallback asked of the user rather than silently substituted?"
   }
 ]

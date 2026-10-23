@@ -44,4 +44,11 @@ describe("REQUIRED_INSTALLED_FILES", () => {
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/consultant.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/skills/consultation/SKILL.md")
   })
+
+  test("requires the simple and build-lite agents and their model-prompt blocks", () => {
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/simple.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/build-lite.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/simple.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/build-lite.md")
+  })
 })
