@@ -1,14 +1,14 @@
-# simple — Economical Daily Consultation Agent: Implementation Plan
+# simple + build-lite — Economical Agents: Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a `simple` agent (DeepSeek V4.1-Flash, mode `all`, patterned permissions, own writable workspace) to the plugin — dispatchable as a sixth role, sharing memory with `consultant`, plus friendly model-failure hints, docs, packaging, and repo cleanup.
+**Goal:** Add a `simple` agent (DeepSeek V4.1-Flash, mode `all`, patterned permissions, own writable workspace) and a `build-lite` mechanical coding lane (GLM-5.3-Flash, mode `subagent`, workspace-allow edits, leaf node) plus a `build` dispatch role routing to the host's native build agent — all packaged together, with friendly model-failure hints, docs, packaging, and repo cleanup.
 
-**Architecture:** `simple` registers via the existing `config` hook (new `registerSimple`), joins the recoverable dispatch lifecycle (`DISPATCH_ROLES` + `resolveRoleTarget` + enabled map), and gets runtime bindings injected into `assets/agents/simple.md` exactly like `consultant`. Model-failure remediation hints are appended at the three existing failure-message sites. Docs/deployment/README/evals/integration proof gain the new agent. Repo cleanup removes the last omo dependency and moves `userdoc/` out of version control.
+**Architecture:** `simple` and `build-lite` register via the existing `config` hook; `simple` and `build-lite` join the recoverable dispatch lifecycle (`DISPATCH_ROLES` + `resolveRoleTarget` + enabled map) alongside the `build` role that targets the host agent by name. `simple` gets runtime bindings injected into its asset like `consultant`; `build-lite` is a static prompt (leaf, never dispatches). Model-failure remediation hints are appended at the three existing failure-message sites using an explicit role→config-field map. Docs/deployment/README/evals/integration proof gain both agents. Repo cleanup removes the last omo dependency and moves `userdoc/` out of version control.
 
-**Tech Stack:** TypeScript (Bun runtime), zod v3, bun:test, @opencode-ai/plugin 1.18.x (agent `mode: "primary" | "subagent" | "all"`; `permission.bash`/`edit` accept pattern objects, last matching rule wins).
+**Tech Stack:** TypeScript (Bun runtime), zod v3, bun:test, @opencode-ai/plugin 1.18.x (agent `mode: "primary" | "subagent" | "all"`, `steps` field — `maxSteps` deprecated; permission pattern objects, last matching rule wins, key order is policy, no-match defaults to ask; edit permission `resource` is location-relative for workspace paths and absolute for external paths — all verified from OpenCode source 2026-10-23).
 
-**Spec:** `docs/superpowers/specs/2026-10-23-simple-agent-design.md` — read it before starting.
+**Spec:** `docs/superpowers/specs/2026-10-23-simple-agent-design.md` — read it before starting (sections 12–14 cover the build-lite / build-role extension).
 
 ## Global Constraints
 
@@ -32,9 +32,9 @@
 **Interfaces:**
 - Consumes: existing `ConsultationPluginConfigSchema`, `MODEL_DEFAULTS`, `resolveRoleModel`
 - Produces (later tasks rely on these exact names):
-  - `ConsultationPluginConfig` fields: `simple_agent: string` (default `"simple"`), `simple_model?: string`, `simple_enabled: boolean` (default `true`), `simple_workspace_dir?: string`
-  - `MODEL_DEFAULTS.simple: "opencode-go/deepseek-v4.1-flash"`
-  - `ModelRole` union gains `"simple"`; `resolveRoleModel(config, "simple")` returns `config.simple_model ?? MODEL_DEFAULTS.simple`
+  - `ConsultationPluginConfig` fields: `simple_agent: string` (default `"simple"`), `simple_model?: string`, `simple_enabled: boolean` (default `true`), `simple_workspace_dir?: string`, `build_lite_agent: string` (default `"build-lite"`), `build_lite_model?: string`, `build_lite_enabled: boolean` (default `true`), `build_agent: string` (default `"build"`), `build_model?: string`, `build_enabled: boolean` (default `true`)
+  - `MODEL_DEFAULTS.simple: "opencode-go/deepseek-v4.1-flash"`; `MODEL_DEFAULTS["build-lite"]: "opencode-go/glm-5.3-flash"` (quoted key; no `build` entry — that role has no plugin default, its model is the optional `build_model` read directly)
+  - `ModelRole` union gains `"simple"` and `"build-lite"`; `resolveRoleModel(config, "simple")` and `resolveRoleModel(config, "build-lite")` return the config override or the default
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -71,8 +71,8 @@ describe("simple role configuration", () => {
     expect(cfg.simple_workspace_dir).toBe("/abs/simple-workspace")
   })
 
-  it("keeps parsing an old config with no simple keys (compat guarantee)", () => {
-    // given — the pre-simple shape of a full config
+  it("keeps parsing an old config with no simple or build keys (compat guarantee)", () => {
+    // given — the pre-extension shape of a full config
     const cfg = config({
       agent_model: "opencode-go/deepseek-v4-pro",
       explorer_agent: "consultation-explorer",
@@ -85,6 +85,33 @@ describe("simple role configuration", () => {
     // when // then
     expect(cfg.simple_agent).toBe("simple")
     expect(cfg.simple_enabled).toBe(true)
+    expect(cfg.build_lite_agent).toBe("build-lite")
+    expect(cfg.build_lite_enabled).toBe(true)
+    expect(cfg.build_agent).toBe("build")
+    expect(cfg.build_enabled).toBe(true)
+    expect(cfg.build_model).toBeUndefined()
+  })
+})
+
+describe("build-lite and build role configuration", () => {
+  it("defaults the build-lite lane model and the build routing target", () => {
+    // given
+    const cfg = config()
+
+    // when // then
+    expect(resolveRoleModel(cfg, "build-lite")).toBe("opencode-go/glm-5.3-flash")
+    expect(cfg.build_agent).toBe("build")
+    expect(cfg.build_model).toBeUndefined()
+  })
+
+  it("overrides build-lite and build from config", () => {
+    // given
+    const cfg = config({ build_lite_model: "test/glm-flash", build_agent: "my-build", build_model: "test/build-m" })
+
+    // when // then
+    expect(resolveRoleModel(cfg, "build-lite")).toBe("test/glm-flash")
+    expect(cfg.build_agent).toBe("my-build")
+    expect(cfg.build_model).toBe("test/build-m")
   })
 })
 ```
@@ -103,18 +130,28 @@ Expected: FAIL — `cfg.simple_agent` is `undefined` (type error on the new fiel
   simple_model: z.string().optional(),
   simple_enabled: z.boolean().default(true),
   simple_workspace_dir: z.string().optional(),
+  build_lite_agent: z.string().default("build-lite"),
+  build_lite_model: z.string().optional(),
+  build_lite_enabled: z.boolean().default(true),
+  build_agent: z.string().default("build"),
+  build_model: z.string().optional(),
+  build_enabled: z.boolean().default(true),
 ```
 
-3b. Extend the model comment block (before `MODEL_DEFAULTS`) with one line:
+3b. Extend the model comment block (before `MODEL_DEFAULTS`) with two lines:
 
 ```ts
 // simple is the economical daily-consultation generalist on V4.1-Flash.
+// build-lite is the mechanical coding lane on GLM-5.3-Flash (agentic-strong at
+// half of V4.1-Flash's peak price); the build role targets the host's native
+// build agent by name and has no plugin default model.
 ```
 
 3c. Add to `MODEL_DEFAULTS` (after `writer`):
 
 ```ts
   simple: "opencode-go/deepseek-v4.1-flash",
+  "build-lite": "opencode-go/glm-5.3-flash",
 ```
 
 3d. In `resolveRoleModel`, add before the closing brace of the switch:
@@ -122,6 +159,8 @@ Expected: FAIL — `cfg.simple_agent` is `undefined` (type error on the new fiel
 ```ts
     case "simple":
       return config.simple_model ?? MODEL_DEFAULTS.simple
+    case "build-lite":
+      return config.build_lite_model ?? MODEL_DEFAULTS["build-lite"]
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
@@ -848,7 +887,352 @@ git commit -m "Register simple in the plugin config hook"
 
 ---
 
-### Task 4: Dispatch role integration
+### Task 3b: `registerBuildLite` + `build-lite.md` asset + coding-lane bindings
+
+**Files:**
+- Create: `assets/agents/build-lite.md`
+- Modify: `packages/opencode-adapter/src/agent-registration.ts` (registration + both bindings builders)
+- Modify: `packages/opencode-adapter/src/plugin.ts`
+- Test: `packages/opencode-adapter/src/agent-registration.test.ts`
+- Test: `packages/opencode-adapter/src/plugin.test.ts`
+
+**Interfaces:**
+- Consumes: `build_lite_agent` / `build_lite_model` / `build_lite_enabled` / `build_agent` / `build_model` / `build_enabled` from Task 1; `SIMPLE_BASH_READONLY_RULES` from Task 2
+- Produces (Tasks 4/6/7/8 rely on these):
+  - `BUILD_LITE_DESCRIPTION: string`
+  - `buildBuildLitePermission(): Record<string, unknown>` — `{ edit: {"*": "allow", "/*": "ask"}, bash: {"*": "ask", ...read-only}, webfetch: "allow", websearch: "allow", task: "deny" }`
+  - `registerBuildLite(config: MutableConfig, pluginConfig: ConsultationPluginConfig): Promise<void>` (mode "subagent", `steps: 50`, static prompt, never clobbers)
+  - `buildRuntimeBindings` output gains the mechanical/strong coding-lane lines (after the simple line)
+  - `buildSimpleRuntimeBindings` output gains the same two lines
+
+- [ ] **Step 1: Create `assets/agents/build-lite.md` with this exact content**
+
+````markdown
+# Build-Lite
+
+## Role
+
+You are the `build-lite` subagent — the cheap mechanical coding executor, typically carried by GLM-5.3-Flash. You exist to absorb fully-specified bulk coding from expensive agent seats so they stay free for hard work. You do exactly one kind of job well: **mechanical coding with a complete spec**. Report-up always beats finishing — among "do it fast", "do it right", and "report up", **reporting up is the highest priority**.
+
+## Take a task only when all three hold
+
+1. **Fully specified** — what to change, what it should become, and the acceptance criteria are already clear in the task, or the repo contains a directly copyable existing pattern.
+2. **No design decisions** — no 选型, no architecture, no naming schemes, no interface design; nothing where you would "take a stance".
+3. **Mechanically repeatable** — the change decomposes into "apply the same action to each file/occurrence".
+
+Typical tasks: 批量重命名/移动文件；照现有组件复制修改一批类似实现；格式化与 lint 修复；按明确 schema/模板生成样板代码；照现有测试模式补简单测试；明确规格的 CRUD/胶水代码。
+
+## Never take — stop and report instead
+
+Hit any of these and go to Report-Up; never attempt:
+
+- Ambiguous or under-specified tasks, or anything needing human clarification
+- Architecture, tool/library selection, or interface design decisions
+- Debugging, root-cause hunting, reproducing flaky behavior
+- Protocol / wire-format / contract byte-exact conformance work
+- Cross-module refactors or changes with unclear blast radius
+- Security-sensitive changes: authentication, crypto, permissions, money, data deletion
+- Anything you are not confident you can land in one pass
+
+## Report-Up discipline (highest priority, overrides finishing)
+
+When a task hits Never-Take, or mid-execution you discover it exceeds your scope or the spec:
+
+1. **Stop immediately.** No guessing, no trial-and-error edits, no opportunistic refactors, no fabricated results.
+2. Describe honestly what you already changed; revert what is safe to revert; clearly mark what cannot be reverted.
+3. End with a structured report to the dispatching primary agent:
+   - Completed and verified parts — files plus verification results
+   - The blocker — 缺规格 / 需决策 / 需调试 / 能力不足 / 步数耗尽
+   - The recommendation: **dispatch role `build` (a stronger executor) or have the primary do it inline**; planning-shaped blockers suggest the primary reason it through first
+4. Never deliver unverified or guessed work to look finished. When the step cap is reached, summarize remaining work in this same format.
+
+## Execution discipline
+
+- Read before acting: the target file plus the repo's most similar existing implementation; **follow its pattern — never invent a new one**.
+- Verify after changes: typecheck / lint / relevant tests. Discover commands from package.json scripts or repo convention; if none exist, state 未验证 honestly.
+- Small steps: one group of changes per round, verify, then continue.
+- **Zero unrelated changes — 不硬改、不多改**: no drive-by refactors, no unrequested comments, no extra formatting (except when formatting IS the task). Touch only what the spec names.
+- Never echo secrets, keys, or tokens you happen to read; note their presence only.
+- You are a leaf node: you cannot and must not dispatch other subagents; everything uncertain goes up the Report-Up channel.
+
+## Output
+
+Always end with three things: the changed-file list (absolute paths), the verification commands you ran and their results, and any unverified items marked honestly. Reports follow the Report-Up format above.
+````
+
+- [ ] **Step 2: Write the failing tests in `agent-registration.test.ts`**
+
+2a. Extend the `makeConfig` literal (after `simple_enabled: true,`) with:
+
+```ts
+    build_lite_agent: "build-lite",
+    build_lite_enabled: true,
+    build_agent: "build",
+    build_enabled: true,
+```
+
+2b. Extend imports to include `registerBuildLite`, `buildBuildLitePermission` (from `./agent-registration.ts`).
+
+2c. Add these describes after the `registerSimple` describe:
+
+```ts
+describe("buildBuildLitePermission", () => {
+  it("allows workspace edits, asks for external, denies further dispatch", () => {
+    // given // when
+    const permission = buildBuildLitePermission()
+
+    // then
+    const edit = permission.edit as Record<string, string>
+    expect(edit["*"]).toBe("allow")
+    expect(edit["/*"]).toBe("ask")
+    expect(edit).toEqual({ "*": "allow", "/*": "ask" })
+    const bash = permission.bash as Record<string, string>
+    expect(bash["*"]).toBe("ask")
+    expect(bash["cat *"]).toBe("allow")
+    expect(permission.webfetch).toBe("allow")
+    expect(permission.websearch).toBe("allow")
+    expect(permission.task).toBe("deny")
+  })
+})
+
+describe("registerBuildLite", () => {
+  it("registers a leaf subagent with steps 50 and the static build-lite.md body", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as {
+      mode: string
+      description: string
+      prompt: string
+      model: string
+      steps: number
+      permission: Record<string, unknown>
+    }
+    expect(lite.mode).toBe("subagent")
+    expect(lite.model).toBe("opencode-go/glm-5.3-flash")
+    expect(lite.steps).toBe(50)
+    expect(lite.description).toContain("mechanical coding")
+    expect(lite.prompt).toContain("# Build-Lite")
+    expect(lite.prompt).toContain("Report-Up discipline")
+    expect(lite.permission.task).toBe("deny")
+    const source = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
+    expect(lite.prompt).toBe(source)
+  })
+
+  it("overrides the model from build_lite_model", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ build_lite_model: "test/glm-flash" })
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { model: string }
+    expect(lite.model).toBe("test/glm-flash")
+  })
+
+  it("uses the configured build_lite_agent name and never clobbers", async () => {
+    // given
+    const userPrompt = "user-defined build-lite prompt"
+    const config: { agent?: Record<string, unknown> } = {
+      agent: { "build-lite": { mode: "subagent", prompt: userPrompt } },
+    }
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerBuildLite(config, pluginConfig)
+
+    // then
+    const lite = config.agent?.["build-lite"] as { prompt: string }
+    expect(lite.prompt).toBe(userPrompt)
+  })
+})
+```
+
+2d. Extend the `buildRuntimeBindings` "reports the simple generalist line" test (from Task 2) — after its DISABLED assertion, add:
+
+```ts
+    // given — coding lanes
+    const lanes = makeConfig()
+
+    // when
+    const lanesBlock = buildRuntimeBindings(lanes, "oc-ns")
+
+    // then
+    expect(lanesBlock).toContain("Mechanical coding lane: `build-lite` (`opencode-go/glm-5.3-flash`)")
+    expect(lanesBlock).toContain("Strong coding lane: role `build` routes to agent `build` (`host default model`)")
+
+    // given
+    const lanesOff = makeConfig({ build_lite_enabled: false, build_enabled: false })
+
+    // when
+    const lanesOffBlock = buildRuntimeBindings(lanesOff, "oc-ns")
+
+    // then
+    expect(lanesOffBlock).toContain("Mechanical coding lane: build-lite DISABLED by configuration")
+    expect(lanesOffBlock).toContain("Strong coding lane: build DISABLED by configuration")
+```
+
+2e. Add the same lane assertions to a `buildSimpleRuntimeBindings` test (extend the Task 2 test "reports memory, own model, explorer, dispatch discipline, workspace, and namespace"):
+
+```ts
+    expect(block).toContain("Mechanical coding lane: `build-lite` (`opencode-go/glm-5.3-flash`)")
+    expect(block).toContain("Strong coding lane: role `build` routes to agent `build`")
+```
+
+(Add `resolveAsset` to the test imports if not present; `readFile` from `node:fs/promises`.)
+
+- [ ] **Step 3: Run to verify failure**
+
+Run: `bun test packages/opencode-adapter/src/agent-registration.test.ts`
+Expected: FAIL — `registerBuildLite is not a function` / lane-line assertions fail.
+
+- [ ] **Step 4: Implement in `agent-registration.ts`**
+
+4a. After `SIMPLE_DESCRIPTION`, add:
+
+```ts
+const BUILD_LITE_DESCRIPTION =
+  "Cheap mechanical coding executor (GLM-5.3-Flash by default) for fully specified, decision-free, mechanically repeatable coding tasks: batch renames/moves, copy-adapt from existing in-repo patterns, formatting and lint fixes, boilerplate from explicit templates, simple tests following existing patterns, spec-complete CRUD glue. Stops and reports up on anything ambiguous, judgment-heavy, debugging, protocol-precision, cross-module, or security-sensitive — never attempts them."
+
+interface BuildLiteAgentEntry {
+  mode: "subagent"
+  description: string
+  prompt: string
+  model: string
+  steps: number
+  permission: Record<string, unknown>
+}
+
+/**
+ * build-lite's permissions: workspace edits allowed without asking (the edit
+ * resource is location-relative for workspace paths, so "*" matches them and
+ * the later "/*" rule only matches external absolute paths), external edits
+ * ask, read-only bash allowed, everything else asks, and further subagent
+ * dispatch is denied (leaf node).
+ */
+export function buildBuildLitePermission(): Record<string, unknown> {
+  return {
+    edit: { "*": "allow", "/*": "ask" },
+    bash: { "*": "ask", ...SIMPLE_BASH_READONLY_RULES },
+    webfetch: "allow",
+    websearch: "allow",
+    task: "deny",
+  }
+}
+
+/**
+ * Register the `build-lite` mechanical coding lane: mode "subagent", a static
+ * prompt (leaf node — never dispatches, so no runtime bindings block), a
+ * step cap of 50 with report-up, and the workspace-allow permission set.
+ * A pre-existing user-defined entry under the same name is left untouched.
+ */
+export async function registerBuildLite(
+  config: MutableConfig,
+  pluginConfig: ConsultationPluginConfig,
+): Promise<void> {
+  if (config.agent?.[pluginConfig.build_lite_agent]) return
+
+  const body = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
+
+  const entry: BuildLiteAgentEntry = {
+    mode: "subagent",
+    description: BUILD_LITE_DESCRIPTION,
+    prompt: body,
+    model: resolveRoleModel(pluginConfig, "build-lite"),
+    steps: 50,
+    permission: buildBuildLitePermission(),
+  }
+
+  if (!config.agent) config.agent = {}
+  config.agent[pluginConfig.build_lite_agent] = entry
+}
+```
+
+4b. In `buildRuntimeBindings`, after the `simpleLine` definition add:
+
+```ts
+  const buildLiteLine = pluginConfig.build_lite_enabled
+    ? `- Mechanical coding lane: \`${pluginConfig.build_lite_agent}\` (\`${resolveRoleModel(pluginConfig, "build-lite")}\`) for fully specified mechanical coding and file tasks`
+    : "- Mechanical coding lane: build-lite DISABLED by configuration"
+  const buildLine = pluginConfig.build_enabled
+    ? `- Strong coding lane: role \`build\` routes to agent \`${pluginConfig.build_agent}\` (\`${pluginConfig.build_model ?? "host default model"}\`) for judgment-heavy coding`
+    : "- Strong coding lane: build DISABLED by configuration"
+```
+
+and append `\n${buildLiteLine}\n${buildLine}` to the returned template string, right after `${simpleLine}`.
+
+4c. In `buildSimpleRuntimeBindings`, insert the same two computed lines (`buildLiteLine`, `buildLine` — identical definitions) and add them to the returned template after the explorer line, before the dispatch line.
+
+- [ ] **Step 5: Wire the hook in `plugin.ts`**
+
+Add `registerBuildLite` to the import from `./agent-registration.ts`; after the `simple` registration block add:
+
+```ts
+    if (pluginConfig.build_lite_enabled) {
+      await registerBuildLite(config, pluginConfig)
+    }
+```
+
+- [ ] **Step 6: Write the failing-then-passing plugin tests in `plugin.test.ts`**
+
+Add (inside `createConsultationConfigHook`, using the established env pattern — temp HOME, no XDG_DATA_HOME):
+
+```ts
+  it("registers the build-lite lane by default and omits it when build_lite_enabled=false", async () => {
+    // given — default registration
+    const tmpHome = makeTempHome()
+    process.env.HOME = tmpHome
+    delete process.env.CONSULTATION_CONFIG
+    delete process.env.XDG_CONFIG_HOME
+    delete process.env.XDG_DATA_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      const lite = config.agent?.["build-lite"] as {
+        mode: string
+        model: string
+        steps: number
+        permission: Record<string, unknown>
+      }
+      expect(lite.mode).toBe("subagent")
+      expect(lite.model).toBe("opencode-go/glm-5.3-flash")
+      expect(lite.steps).toBe(50)
+      expect(lite.permission.task).toBe("deny")
+    } finally {
+      delete process.env.XDG_DATA_HOME
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+```
+
+and a disabled variant mirroring the `simple_enabled=false` test but writing `'{\n  "build_lite_enabled": false\n}'` and asserting `config.agent?.["build-lite"]` is undefined plus the consultant prompt containing "build-lite DISABLED by configuration".
+
+Run: `bun test packages/opencode-adapter/src/agent-registration.test.ts packages/opencode-adapter/src/plugin.test.ts`
+Expected: PASS after Step 4+5.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add assets/agents/build-lite.md packages/opencode-adapter/src/agent-registration.ts packages/opencode-adapter/src/agent-registration.test.ts packages/opencode-adapter/src/plugin.ts packages/opencode-adapter/src/plugin.test.ts
+git commit -m "Register the build-lite mechanical coding lane"
+```
+
+---
+
+### Task 4: Dispatch role integration (simple, build-lite, build)
 
 **Files:**
 - Modify: `packages/opencode-adapter/src/dispatch-contract.ts`
@@ -859,15 +1243,15 @@ git commit -m "Register simple in the plugin config hook"
 - Test: `packages/opencode-adapter/src/dispatch-registration.test.ts`
 
 **Interfaces:**
-- Consumes: `simple_agent` / `simple_model` / `simple_enabled` from Task 1
-- Produces: `DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer", "simple"]` defined ONCE in `dispatch-contract.ts` (dispatch-tool.ts imports and re-exports it); `resolveRoleTarget(config, "simple")` → `{ agentName: config.simple_agent, model: resolveRoleModel(config, "simple") }`; the dispatch tool rejects simple when `simple_enabled=false` with `Error: simple is disabled by configuration`
+- Consumes: `simple_agent` / `simple_model` / `simple_enabled`, `build_lite_agent` / `build_lite_model` / `build_lite_enabled`, `build_agent` / `build_model` / `build_enabled` from Task 1
+- Produces: `DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build"]` defined ONCE in `dispatch-contract.ts` (dispatch-tool.ts imports and re-exports it); `resolveRoleTarget` gains three cases — simple → `{ agentName: config.simple_agent, model: resolveRoleModel(config, "simple") }`, build-lite → `{ agentName: config.build_lite_agent, model: resolveRoleModel(config, "build-lite") }`, build → `{ agentName: config.build_agent, model: config.build_model }` (undefined model → host default, `null` in the job spec); the dispatch tool rejects disabled roles with `Error: <role> is disabled by configuration`
 
 - [ ] **Step 1: Write the failing tests**
 
 1a. In `dispatch-contract.test.ts`, update the roles assertion (currently `expect(DISPATCH_ROLES).toEqual(["explorer", "analyst", "critic", "verifier", "writer"])`) to:
 
 ```ts
-    expect(DISPATCH_ROLES).toEqual(["explorer", "analyst", "critic", "verifier", "writer", "simple"])
+    expect(DISPATCH_ROLES).toEqual(["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build"])
 ```
 
 1b. In `dispatch-tool.test.ts`, in the `resolveRoleTarget` describe, extend the first test:
@@ -875,6 +1259,10 @@ git commit -m "Register simple in the plugin config hook"
 ```ts
     const simple = resolveRoleTarget(config(), "simple")
     expect(simple).toEqual({ agentName: "simple", model: "opencode-go/deepseek-v4.1-flash" })
+    const buildLite = resolveRoleTarget(config(), "build-lite")
+    expect(buildLite).toEqual({ agentName: "build-lite", model: "opencode-go/glm-5.3-flash" })
+    const build = resolveRoleTarget(config(), "build")
+    expect(build).toEqual({ agentName: "build", model: undefined })
 ```
 
 and add:
@@ -883,6 +1271,13 @@ and add:
   it("resolves a renamed simple agent", () => {
     const cfg = config({ simple_agent: "my-simple", simple_model: "test/simple" })
     expect(resolveRoleTarget(cfg, "simple")).toEqual({ agentName: "my-simple", model: "test/simple" })
+  })
+
+  it("routes the build role to the configured host agent and pins its model only when set", () => {
+    const cfg = config({ build_agent: "host-build", build_model: "p/build-m" })
+    expect(resolveRoleTarget(cfg, "build")).toEqual({ agentName: "host-build", model: "p/build-m" })
+    const unpinned = config({ build_agent: "host-build" })
+    expect(resolveRoleTarget(unpinned, "build")).toEqual({ agentName: "host-build", model: undefined })
   })
 ```
 
@@ -910,13 +1305,54 @@ and add:
   })
 ```
 
-1d. In `dispatch-registration.test.ts`, add a row to the `scenario` loop table (after the writer row):
+1d. In `dispatch-registration.test.ts`, add a row to the `scenario` loop table (after the writer row) — only `simple`, because its config keys follow the single-word `${role}_agent` / `${role}_model` template the loop writes:
 
 ```ts
     { role: "simple", agent: "simple", model: "opencode-go/deepseek-v4.1-flash" },
 ```
 
-Note: this loop writes `config.jsonc` with `${role}_agent` / `${role}_model` keys — both exist for simple after Task 1.
+1e. `build-lite` and `build` do NOT fit that template loop (`build-lite_agent` is not a valid config key — the real keys are `build_lite_agent` / `build_lite_model`). Add their launch tests to `dispatch-tool.test.ts` instead (its `createRespondingFake` / `lastPromptAsyncCall` / `fakeContext` helpers are established in that file):
+
+```ts
+  it("launches build-lite with the configured agent and model", async () => {
+    // given
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-bl-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, JSON.stringify({ build_lite_agent: "custom-lite", build_lite_model: "custom/glm-flash" }))
+    process.env.CONSULTATION_CONFIG = configPath
+    const fake = createRespondingFake("done")
+    const tools = createConsultationDispatchTools(fake)
+
+    try {
+      // when
+      const result = await tools.consultation_dispatch.execute({ role: "build-lite", prompt: "rename A to B" }, fakeContext())
+
+      // then
+      const body = lastPromptAsyncCall(fake).input.body
+      expect(body.agent).toBe("custom-lite")
+      expect(body.model).toEqual({ providerID: "custom", modelID: "glm-flash" })
+      expect(result).toBe("done")
+    } finally {
+      delete process.env.CONSULTATION_CONFIG
+      rmSync(tmpConfigDir, { recursive: true, force: true })
+    }
+  })
+
+  it("launches the build role against the host agent without a pinned model", async () => {
+    // given
+    const fake = createRespondingFake("done")
+    const tools = createConsultationDispatchTools(fake)
+
+    // when
+    const result = await tools.consultation_dispatch.execute({ role: "build", prompt: "refactor X" }, fakeContext())
+
+    // then
+    const body = lastPromptAsyncCall(fake).input.body
+    expect(body.agent).toBe("build")
+    expect(body.model).toBeUndefined()
+    expect(result).toBe("done")
+  })
+```
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -934,7 +1370,7 @@ export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "wri
 with:
 
 ```ts
-export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer", "simple"] as const
+export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build"] as const
 ```
 
 3b. `dispatch-tool.ts` — unify the duplicated definition. Replace lines 15-16:
@@ -965,19 +1401,25 @@ import {
 } from "./dispatch-contract.ts"
 ```
 
-Update the file-top doc comment "The five roles the consultant may dispatch" → "The six roles the consultant may dispatch (five specialists plus the simple generalist)".
+Update the file-top doc comment "The five roles the consultant may dispatch" → "The eight dispatchable roles (five specialists, the simple generalist, the build-lite mechanical lane, and the build host-routing role)".
 
 3c. `dispatch-tool.ts` `resolveRoleTarget` — add before the closing brace of the switch:
 
 ```ts
     case "simple":
       return { agentName: config.simple_agent, model: resolveRoleModel(config, "simple") }
+    case "build-lite":
+      return { agentName: config.build_lite_agent, model: resolveRoleModel(config, "build-lite") }
+    case "build":
+      return { agentName: config.build_agent, model: config.build_model }
 ```
 
 3d. `dispatch-tool.ts` `enabled` map — add:
 
 ```ts
         simple: config.simple_enabled,
+        "build-lite": config.build_lite_enabled,
+        build: config.build_enabled,
 ```
 
 3e. `dispatch-tool.ts` tool description — replace
@@ -989,13 +1431,14 @@ Update the file-top doc comment "The five roles the consultant may dispatch" →
 with:
 
 ```ts
-      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer, simple). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
+      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer, simple, build-lite, build). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
 ```
 
-3f. `dispatch-test-fixtures.ts` — add to `validRoleSpecs` (after the writer rows):
+3f. `dispatch-test-fixtures.ts` — add to `validRoleSpecs` (after the writer rows and the Task-4 simple row):
 
 ```ts
-  { label: "simple", role: "simple", record: makeJobSpec({ role: "simple", agent_name: "simple", model_chain: ["opencode-go/deepseek-v4.1-flash"] }) },
+  { label: "build-lite", role: "build-lite", record: makeJobSpec({ role: "build-lite", agent_name: "build-lite", model_chain: ["opencode-go/glm-5.3-flash"] }) },
+  { label: "build-host", role: "build", record: makeJobSpec({ role: "build", agent_name: "build", model_chain: [null] }) },
 ```
 
 - [ ] **Step 4: Run tests to verify pass**
@@ -1021,11 +1464,12 @@ git commit -m "Add simple as a sixth dispatchable role"
 - Test: `packages/opencode-adapter/src/dispatch-lifecycle.test.ts`
 
 **Interfaces:**
-- Consumes: `DispatchRole`, `errorText` naming conventions (`"APIError: 402"`, `"ProviderAuthError: 401"`, `"unrecognized provider error"`)
+- Consumes: `DispatchRole` (8 roles after Task 4), `errorText` naming conventions (`"APIError: 402"`, `"ProviderAuthError: 401"`, `"unrecognized provider error"`)
 - Produces:
+  - `ROLE_MODEL_FIELDS: Record<DispatchRole, string>` — explicit role→config-field map: `explorer → "explorer_model"`, `analyst → "analyst_model"`, `critic → "critic_model"`, `verifier → "verifier_model"`, `writer → "writer_model"`, `simple → "simple_model"`, `"build-lite" → "build_lite_model"`, `build → "build_model"` (build-lite's key is underscored, so string interpolation of the role name would be wrong — hence the explicit map)
   - `modelFailureHint(role: DispatchRole, model: string | null | undefined): string`
   - `isProviderErrorText(text: string): boolean`
-  - failure reasons for provider-shaped errors end with the hint: ` (model: <m>). Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "<role>_model" in ~/.config/consultation-agent/config.jsonc (or point $CONSULTATION_CONFIG at your config), then retry the dispatch.`
+  - failure reasons for provider-shaped errors end with the hint: ` (model: <m>). Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "<role_field>" in ~/.config/consultation-agent/config.jsonc (or point $CONSULTATION_CONFIG at your config), then retry the dispatch.`
 
 - [ ] **Step 1: Create `dispatch-helpers.test.ts` with the failing tests**
 
@@ -1053,6 +1497,11 @@ describe("modelFailureHint", () => {
     expect(hint).toContain('set "explorer_model"')
     expect(hint).toContain("~/.config/consultation-agent/config.jsonc")
     expect(hint).toContain("$CONSULTATION_CONFIG")
+  })
+
+  it("maps hyphenated roles to their underscored config fields", () => {
+    expect(modelFailureHint("build-lite", "opencode-go/glm-5.3-flash")).toContain('set "build_lite_model"')
+    expect(modelFailureHint("build", null)).toContain('set "build_model"')
   })
 
   it("omits the model label when the model is null", () => {
@@ -1129,12 +1578,28 @@ export function isProviderErrorText(text: string): boolean {
 }
 
 /**
+ * Role → plugin-config model-field map. Explicit because "build-lite" maps to
+ * the underscored `build_lite_model` (role-name interpolation would be wrong).
+ */
+export const ROLE_MODEL_FIELDS: Record<DispatchRole, string> = {
+  explorer: "explorer_model",
+  analyst: "analyst_model",
+  critic: "critic_model",
+  verifier: "verifier_model",
+  writer: "writer_model",
+  simple: "simple_model",
+  "build-lite": "build_lite_model",
+  build: "build_model",
+}
+
+/**
  * Remediation hint appended to provider/model dispatch failures so a
  * non-Go user immediately knows how to fix the default model set.
  */
 export function modelFailureHint(role: DispatchRole, model: string | null | undefined): string {
   const label = model !== undefined && model !== null && model.length > 0 ? ` (model: ${model})` : ""
-  return `${label}. Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "${role}_model" in ~/.config/consultation-agent/config.jsonc (or point $CONSULTATION_CONFIG at your config), then retry the dispatch.`
+  const field = ROLE_MODEL_FIELDS[role]
+  return `${label}. Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "${field}" in ~/.config/consultation-agent/config.jsonc (or point $CONSULTATION_CONFIG at your config), then retry the dispatch.`
 }
 ```
 
@@ -1225,54 +1690,72 @@ git commit -m "Append model remediation hints to dispatch failures"
 
 ---
 
-### Task 6: consultant.md + SKILL.md routing prose
+### Task 6: consultant.md + simple.md + SKILL.md routing prose
 
 **Files:**
 - Modify: `assets/agents/consultant.md`
+- Modify: `assets/agents/simple.md`
 - Modify: `assets/skills/consultation/SKILL.md`
 
 **Interfaces:**
-- Consumes: Task 2's runtime-bindings simple line (already flows into the assembled consultant prompt)
-- Produces: prose routing rules; no new code symbols. `dispatch-prompt.test.ts` automatically re-checks both files for job-control tokens — its loop assertions must keep passing.
+- Consumes: Task 2/3b's runtime-bindings lines (already flow into the assembled prompts)
+- Produces: prose routing rules; no new code symbols. `dispatch-prompt.test.ts` automatically re-checks the assets for job-control tokens — its loop assertions must keep passing.
 
 - [ ] **Step 1: Update `assets/agents/consultant.md`**
 
-1a. In the "Team Orchestration" section, after the paragraph that begins "You lead five specialist subagents" (ends with "...dispatch, which duplicates work and burns budget." — actually after the paragraph ending "Do the work inline only when it belongs to no specialist's profile, not merely because you could perform it yourself. If a specialist is unavailable, disclose the missing check and what you did instead."), insert this new paragraph:
+1a. In the "Team Orchestration" section, after the paragraph ending "...If a specialist is unavailable, disclose the missing check and what you did instead." (the paragraph about routing work units), insert the simple paragraph:
 
 ```markdown
 The `simple` agent (listed under Runtime Bindings) is the economical generalist, not a sixth specialist. Route a bounded, low-risk simple-consultation or search subtask that still needs real retrieval work (a multi-tool lookup, cross-checking a few sources, reading a config or doc) to `simple` when its profile fits; a one-liner you can answer from existing context stays inline, and work that needs a specialist profile — graded evidence, adversarial challenge, influence audit, writing — goes to the specialist, never to simple as a substitute for a specialist check. When you relay simple's returned answer, present it in simple's answer format — the answer first, human-friendly — not wrapped in a consultation brief. You retain editorial control: verify the returned facts, integrate, and disclose gaps.
 ```
 
-1b. In the "Output Contract" / "Complex Consultation" area — no change needed (the relay rule lives in Team Orchestration). In "Failure Behavior", append one bullet at the end of the list:
+1b. Immediately after the simple paragraph, insert the coding-lane paragraph:
+
+```markdown
+Coding lanes. Route a fully specified, decision-free, mechanically repeatable coding or file task — batch renames/moves, copy-adapt from an existing in-repo pattern, formatting/lint fixes, boilerplate from an explicit template, author-mode bulk artifact writing after outline approval — to the `build-lite` lane (listed under Runtime Bindings). Route judgment-heavy coding — debugging, architecture or selection decisions, protocol/wire-format precision, cross-module refactors, security-sensitive changes — to the `build` role, which targets the host's native build agent by the configured name and pins a model only when configured. When the `build` dispatch fails (agent missing or model unresolvable), relay the remediation hint to the user and ask for a usable agent, or have them set `build_agent`/`build_model` in the plugin config; if the user provides none, do the coding yourself and say which stronger path was unavailable. `build-lite`'s stop-and-report is a legitimate outcome, not a failure — integrate its partial-verified-work report and take over the remainder. Never substitute build-lite for a specialist's check or for judgment work.
+```
+
+1c. In the "Failure Behavior" section, append two bullets at the end of the list:
 
 ```markdown
 - Disabled `simple`: route the bounded subtask to the best-fitting remaining executor (inline or a specialist when its profile genuinely applies) and say which economical path was unavailable.
+- Disabled `build-lite` / `build`: keep mechanical coding inline with the same disclosure; when `build` is configured but its target agent or model is unavailable, surface the remediation hint and ask the user for a usable agent before falling back to doing it yourself.
 ```
 
-- [ ] **Step 2: Update `assets/skills/consultation/SKILL.md`**
+- [ ] **Step 2: Update `assets/agents/simple.md`**
 
-2a. In the "Team Orchestration" role table (the `| Role | Dispatch when relevant or uncertain | Skip only when established |` table), append a row:
+In the "Escalation" section, after the trigger list and before the one-line phrasing paragraph, insert:
+
+```markdown
+Code changes follow the coding lanes (reported under Runtime Bindings): a mechanical, fully specified change (改个配置、小脚本、按模板补个文件) routes to the `build-lite` lane; anything needing debugging, design decisions, or multi-file judgment routes to the `build` role — or, when the user prefers, escalate to the consultant. Never write non-trivial code yourself.
+```
+
+- [ ] **Step 3: Update `assets/skills/consultation/SKILL.md`**
+
+3a. In the "Team Orchestration" role table (the `| Role | Dispatch when relevant or uncertain | Skip only when established |` table), append three rows:
 
 ```markdown
 | simple | A bounded, low-risk simple consultation or search subtask needs economical handling with real retrieval work. | Answerable from existing context in one line, or the work needs a specialist profile or the full consultation modes. |
+| build-lite | A fully specified, decision-free, mechanically repeatable coding or file task. | The task needs judgment, debugging, design decisions, protocol precision, or a specialist profile. |
+| build | Judgment-heavy coding is required and a stronger executor than build-lite fits. | The host build agent is unavailable and the user provides no alternative — then the consultant codes inline with disclosure. |
 ```
 
-2b. After the paragraph that explains per-role routing ("Route each work unit to the most suitable agent..."), add one short paragraph:
+3b. After the paragraph that explains per-role routing ("Route each work unit to the most suitable agent..."), add one short paragraph:
 
 ```markdown
-The `simple` agent is the economical generalist rather than a sixth specialist: consultant may route bounded, low-risk simple-consultation and search subtasks (multi-tool lookups, cross-checking a few sources, reading configs or docs) to `simple`, relaying its returned answer in simple's answer-first format. A one-liner answerable from context stays inline; specialist profiles (graded evidence, adversarial challenge, influence audit, writing) are never substituted by simple. A disabled or unavailable simple is disclosed like any other missing capability.
+The `simple` agent is the economical generalist rather than a sixth specialist: consultant may route bounded, low-risk simple-consultation and search subtasks (multi-tool lookups, cross-checking a few sources, reading configs or docs) to `simple`, relaying its returned answer in simple's answer-first format. A one-liner answerable from context stays inline; specialist profiles (graded evidence, adversarial challenge, influence audit, writing) are never substituted by simple. Coding routes through two lanes: fully specified mechanical coding and file tasks go to the `build-lite` lane (its stop-and-report is a legitimate partial outcome the consultant integrates); judgment-heavy coding goes to the `build` role, which targets the host's native build agent by the configured name — when that fails, surface the remediation hint, ask the user for a usable agent or a `build_agent`/`build_model` override, and otherwise code inline with disclosure. A disabled or unavailable lane is disclosed like any other missing capability.
 ```
 
-- [ ] **Step 3: Run the prompt-contract tests**
+- [ ] **Step 4: Run the prompt-contract tests**
 
 Run: `bun test packages/opencode-adapter/src/dispatch-prompt.test.ts packages/opencode-adapter/src/plugin.test.ts`
-Expected: PASS (both assets still expose `consultation_dispatch_wait` / `consultation_dispatch_cancel` / statuses — the additions do not remove tokens).
+Expected: PASS (all assets still expose `consultation_dispatch_wait` / `consultation_dispatch_cancel` / statuses — the additions do not remove tokens).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add assets/agents/consultant.md assets/skills/consultation/SKILL.md
-git commit -m "Route simple consultation subtasks to the simple agent"
+git add assets/agents/consultant.md assets/agents/simple.md assets/skills/consultation/SKILL.md
+git commit -m "Route simple consultations and coding lanes in agent prompts"
 ```
 
 ---
@@ -1296,15 +1779,17 @@ Add next to the existing REQUIRED_INSTALLED_FILES assertions:
 
 ```ts
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/simple.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/build-lite.md")
 ```
 
 Run: `bun test script/install-local.test.ts` — Expected: FAIL.
 
-- [ ] **Step 2: Add the file to `REQUIRED_INSTALLED_FILES` in `install-local.ts`**
+- [ ] **Step 2: Add the files to `REQUIRED_INSTALLED_FILES` in `install-local.ts`**
 
-Insert between `assets/agents/consultation-verifier.md` and `assets/agents/explorer.md` (alphabetical):
+Insert alphabetically (`assets/agents/build-lite.md` before `assets/agents/consultant.md`; `assets/agents/simple.md` between `consultation-verifier.md` and `explorer.md`):
 
 ```ts
+  "assets/agents/build-lite.md",
   "assets/agents/simple.md",
 ```
 
@@ -1330,6 +1815,19 @@ Run: `bun test script/install-local.test.ts` — Expected: PASS.
   "simple_enabled": true,
   // simple's pre-approved writable workspace. Default shown; any absolute path.
   // "simple_workspace_dir": "~/.local/share/consultation-agent/simple",
+
+  // build-lite — the mechanical coding lane (mode: subagent, leaf, steps 50).
+  // Workspace edits are allowed without asking; external edits ask.
+  "build_lite_agent": "build-lite",
+  "build_lite_model": "opencode-go/glm-5.3-flash",
+  "build_lite_enabled": true,
+
+  // build — a dispatch role targeting the host's native build agent by name.
+  // The plugin registers no build agent; when the role fails (agent missing or
+  // model unresolvable), the dispatch prints a remediation hint.
+  "build_agent": "build",
+  // "build_model": "provider/model",   // pin only when the host default is wrong
+  "build_enabled": true,
 ```
 
 3c. In the Field Reference table, add rows:
@@ -1339,6 +1837,12 @@ Run: `bun test script/install-local.test.ts` — Expected: PASS.
 | `simple_model` | string (optional) | `opencode-go/deepseek-v4.1-flash` | Model for the simple agent |
 | `simple_enabled` | boolean | `true` | Whether to register the simple agent |
 | `simple_workspace_dir` | string (optional) | `$XDG_DATA_HOME/consultation-agent/simple` | simple's pre-approved writable workspace (absolute path) |
+| `build_lite_agent` | string | `"build-lite"` | Name of the mechanical coding lane (mode `subagent`, leaf node) |
+| `build_lite_model` | string (optional) | `opencode-go/glm-5.3-flash` | Model for the build-lite lane |
+| `build_lite_enabled` | boolean | `true` | Whether to register the build-lite lane |
+| `build_agent` | string | `"build"` | Target agent name for the `build` dispatch role (the host's native build agent by default) |
+| `build_model` | string (optional) | (none — host default) | Model pinned on the `build` role's target agent |
+| `build_enabled` | boolean | `true` | Whether the `build` dispatch role accepts work |
 ```
 
 3d. In Prerequisites, after the Bun/OpenCode bullets, add:
@@ -1355,21 +1859,24 @@ Run: `bun test script/install-local.test.ts` — Expected: PASS.
     "verifier_model": "<your-provider>/different-family-model",
     "writer_model": "<your-provider>/writing-model",
     "writer_fallback_models": ["<your-provider>/fallback-model"],
-    "simple_model": "<your-provider>/fast-cheap-model"
+    "simple_model": "<your-provider>/fast-cheap-model",
+    "build_lite_model": "<your-provider>/mechanical-coding-model",
+    "build_model": "<your-provider>/strong-coding-model"
   }
   ```
 ```
 
-3e. In the routing paragraph (the one starting "The consultant routes bounded tasks to suitable specialist agents"), append one sentence:
+3e. In the routing paragraph (the one starting "The consultant routes bounded tasks to suitable specialist agents"), append:
 
 ```markdown
-Bounded, low-risk simple-consultation and search subtasks may route to the `simple` generalist instead; answers produced through simple are relayed in simple's answer-first format, and a specialist profile is never substituted by simple.
+Bounded, low-risk simple-consultation and search subtasks may route to the `simple` generalist instead; answers produced through simple are relayed in simple's answer-first format, and a specialist profile is never substituted by simple. Coding routes through two lanes: fully specified mechanical coding and file tasks go to the `build-lite` lane (workspace edits allowed, external edits ask, further dispatch denied — its stop-and-report is a legitimate partial outcome the dispatcher integrates); judgment-heavy coding goes to the `build` role targeting the host's native build agent, and when that fails the dispatch prints a remediation hint naming `build_agent`/`build_model`.
 ```
 
-3f. In "Step 5: Verify the Install", add one item after the agent-selectable check:
+3f. In "Step 5: Verify the Install", add two items after the agent-selectable check:
 
 ```markdown
 2. **simple agent selectable**: the `simple` agent appears in the agent list (mode `all`) with its own workspace at `~/.local/share/consultation-agent/simple`.
+3. **build-lite lane registered**: the `build-lite` agent appears as a subagent (steps 50, workspace-allow edits).
 ```
 
 (renumber the rest).
@@ -1385,14 +1892,14 @@ Bounded, low-risk simple-consultation and search subtasks may route to the `simp
 4a. In the intro paragraph, after "It assigns bounded evidence, analysis, challenge, influence-audit, and writing tasks to suitable subagents when those checks may matter or cannot be ruled out; caps are ceilings, not dispatch targets." add:
 
 ```markdown
-An economical `simple` agent (DeepSeek V4.1-Flash by default) handles daily lightweight consultations — fact lookups, concept explanations, simple how-to finding — and escalates complex questions to `consultant`; the consultant can likewise delegate bounded simple-consultation and search subtasks to it. The shipped model defaults assume an OpenCode Go subscription; other users override the `*_model` fields (see [docs/deployment.md](docs/deployment.md)).
+An economical `simple` agent (DeepSeek V4.1-Flash by default) handles daily lightweight consultations — fact lookups, concept explanations, simple how-to finding — and escalates complex questions to `consultant`; the consultant can likewise delegate bounded simple-consultation and search subtasks to it. Coding routes through two more lanes: a `build-lite` mechanical executor (GLM-5.3-Flash) for fully specified bulk changes, and a `build` dispatch role that targets the host's native build agent for judgment-heavy work. The shipped model defaults assume an OpenCode Go subscription; other users override the `*_model` fields (see [docs/deployment.md](docs/deployment.md)).
 ```
 
-4b. In the Package Map `opencode-adapter` row, "registers the consultant agent, the five read-only team subagents" → "registers the consultant and simple agents, the five read-only team subagents".
+4b. In the Package Map `opencode-adapter` row, "registers the consultant agent, the five read-only team subagents" → "registers the consultant, simple, and build-lite agents, the five read-only team subagents".
 
-- [ ] **Step 5: Add the eval case**
+- [ ] **Step 5: Add the eval cases**
 
-In `evals/fixtures/consultation-cases.json`, append (after the current last case; use the next sequential `id` — check the file for the highest existing id, e.g. C17 → C18):
+In `evals/fixtures/consultation-cases.json`, append after the current last case (use the next sequential `id` — check the file for the highest existing id, e.g. C17 → C18, C18 → C19):
 
 ```json
 {
@@ -1403,10 +1910,19 @@ In `evals/fixtures/consultation-cases.json`, append (after the current last case
   "then": "The consultant dispatches the simple role rather than a specialist, and presents the returned answer in simple's answer-first human-friendly format, keeping editorial control and disclosing gaps.",
   "grading": "model",
   "notes": "Rubric: Did the consultant avoid wrapping the relayed answer in consultation-brief ceremony, avoid substituting simple for a specialist check, and keep one-liners inline instead of dispatching?"
+},
+{
+  "id": "C19",
+  "title": "A fully specified mechanical coding task routes to build-lite; judgment-heavy coding routes to build",
+  "given": "A consultation needs code changes: one subtask is fully specified and mechanically repeatable; another needs debugging or design decisions.",
+  "when": "The consultant routes the coding work",
+  "then": "The mechanical subtask is dispatched to the build-lite role; the judgment-heavy subtask goes to the build role (host native build agent) or is taken inline with disclosure — never handed to build-lite. If build fails, the user is asked for a usable agent before the consultant codes inline.",
+  "grading": "model",
+  "notes": "Rubric: Did the routing respect build-lite's scope (no ambiguous/judgment work), and was the build-unavailable fallback asked of the user rather than silently substituted?"
 }
 ```
 
-Run: `bun run evals/run-evals.ts` — Expected: prints the checklist including the new case, exit 0.
+Run: `bun run evals/run-evals.ts` — Expected: prints the checklist including both new cases, exit 0.
 
 - [ ] **Step 6: Run the touched tests**
 
@@ -1441,6 +1957,12 @@ In `integration-opencode.ts`, inside the `if (status === 200) {` block, after th
             name: "config has simple agent key",
             pass: hasSimple,
             detail: hasSimple ? "agent.simple present" : "agent.simple MISSING",
+          })
+          const hasBuildLite = hasNestedKey(json, "agent", "build-lite")
+          assertions.push({
+            name: "config has build-lite agent key",
+            pass: hasBuildLite,
+            detail: hasBuildLite ? "agent.build-lite present" : "agent.build-lite MISSING",
           })
 ```
 
@@ -1529,16 +2051,16 @@ Run: `bun run typecheck` — Expected: no errors.
 - [ ] **Step 2: Build + install (replaces the stale local bundle)**
 
 Run: `bun run install:local`
-Expected: build succeeds; staging succeeds; "installed 10 required files" (9 + simple.md); prints the plugin entry.
+Expected: build succeeds; staging succeeds; "installed 11 required files" (9 + simple.md + build-lite.md); prints the plugin entry.
 
 - [ ] **Step 3: Installed-artifact integration proof**
 
 Run: `CONSULTATION_PLUGIN_ENTRY=~/.local/share/consultation-agent-plugin/dist/index.js bun run integration`
-Expected: PASS — including `config has simple agent key` and `simple workspace directory created`.
+Expected: PASS — including `config has simple agent key`, `config has build-lite agent key`, and `simple workspace directory created`.
 
 - [ ] **Step 4: Report to the user**
 
-Report: what changed, test/install/integration outputs (key lines), the stale-bundle replacement, and the rollout checklist for their machine: (1) remove `~/.config/opencode/agents/simple.md` (personal version currently wins via never-clobber), (2) restart OpenCode, (3) verify: simple in the agent picker; a quick consultation; an explorer dispatch; memory auto-save in the shared namespace; a workspace write without prompt; a write elsewhere prompting; the friendly hint on a model-failure dispatch if reproducible.
+Report: what changed, test/install/integration outputs (key lines), the stale-bundle replacement, and the rollout checklist for their machine: (1) remove `~/.config/opencode/agents/simple.md` and `~/.config/opencode/agents/build-lite.md` (personal versions currently win via never-clobber), (2) restart OpenCode, (3) verify: simple in the agent picker; a quick consultation; an explorer dispatch; memory auto-save in the shared namespace; a workspace write without prompt; a write elsewhere prompting; build-lite registered as a subagent and dispatchable (mechanical edit inside the project without prompt, external edit prompting, no further dispatch); the `build` role reaching the host build agent — and the friendly hint when its agent/model is unavailable.
 
 - [ ] **Step 5: Final commit if anything remains uncommitted**
 
