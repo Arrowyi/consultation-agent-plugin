@@ -5,6 +5,7 @@ import {
   registerConsultationCritic,
   registerExplorer,
   registerAnalyst,
+  registerSimple,
   registerVerifier,
   registerWriter,
 } from "./agent-registration.ts"
@@ -31,6 +32,10 @@ export function createConsultationConfigHook(
     const namespace = computeNamespace(project.id, directory)
 
     await registerConsultantAgent(config, pluginConfig, namespace)
+
+    if (pluginConfig.simple_enabled) {
+      await registerSimple(config, pluginConfig, namespace)
+    }
 
     await registerExplorer(config, pluginConfig)
     await registerAnalyst(config, pluginConfig)

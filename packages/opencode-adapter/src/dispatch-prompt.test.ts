@@ -6,6 +6,7 @@ import {
   registerConsultantAgent,
   registerConsultationCritic,
   registerExplorer,
+  registerSimple,
   registerVerifier,
   registerWriter,
 } from "./agent-registration.ts"
@@ -102,6 +103,32 @@ describe("dispatch prompt routing contract", () => {
       expect(promptSchema.parse(config.agent?.[role.name]).prompt).toBe(source)
     })
   }
+
+  it("exposes nonterminal status identifiers when loading simple.md", async () => {
+    // given
+    const path = resolveAsset("agents/simple.md")
+    // when
+    const source = await readFile(path, "utf8")
+    // then
+    expect(source).toContain("`pending`")
+    expect(source).toContain("`unknown`")
+    expect(source).toContain("`consultation_dispatch_wait`")
+  })
+
+  it("injects runtime bindings when registering simple", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfigWithWorkspace = { ...pluginConfig, simple_workspace_dir: "/tmp/simple-ws-prompt" }
+    // when
+    await registerSimple(config, pluginConfigWithWorkspace, "oc-simple-prompt")
+    // then
+    const prompt = promptSchema.parse(config.agent?.["simple"]).prompt
+    expect(prompt).toContain("# Simple")
+    expect(prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+    expect(prompt).toContain("oc-simple-prompt")
+    expect(prompt).toContain("/tmp/simple-ws-prompt")
+    expect(prompt).not.toContain("<!-- RUNTIME-BINDINGS")
+  })
 
   it("preserves the host agent when registering an external writer delegate", async () => {
     // given

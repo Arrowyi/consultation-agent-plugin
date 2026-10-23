@@ -15,7 +15,7 @@ function makeTempHome(): string {
 
 describe("createConsultationConfigHook", () => {
   const savedEnv: Record<string, string | undefined> = {}
-  const envKeys = ["CONSULTATION_CONFIG", "XDG_CONFIG_HOME", "HOME", "OPENCODE_CONFIG_DIR"]
+  const envKeys = ["CONSULTATION_CONFIG", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "HOME", "OPENCODE_CONFIG_DIR"]
 
   beforeEach(() => {
     for (const key of envKeys) savedEnv[key] = process.env[key]
@@ -130,6 +130,65 @@ describe("createConsultationConfigHook", () => {
       expect(writer.permission).toEqual({ edit: "deny", bash: "deny" })
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it("registers the simple agent with mode all and patterned permission", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    process.env.HOME = tmpHome
+    delete process.env.CONSULTATION_CONFIG
+    delete process.env.XDG_CONFIG_HOME
+    delete process.env.XDG_DATA_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      const simple = config.agent?.["simple"] as {
+        mode: string
+        model: string
+        permission: Record<string, unknown>
+      }
+      expect(simple.mode).toBe("all")
+      expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
+      const edit = simple.permission.edit as Record<string, string>
+      expect(edit["*"]).toBe("ask")
+      expect(edit[`${join(tmpHome, ".local", "share", "consultation-agent", "simple")}/**`]).toBe("allow")
+    } finally {
+      delete process.env.XDG_DATA_HOME
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it("omits the simple agent when simple_enabled=false", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-simpleoff-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, '{\n  "simple_enabled": false\n}')
+    process.env.HOME = tmpHome
+    process.env.CONSULTATION_CONFIG = configPath
+    delete process.env.XDG_CONFIG_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      expect(config.agent?.["simple"]).toBeUndefined()
+      const consultant = config.agent?.["consultant"] as { prompt: string }
+      expect(consultant.prompt).toContain("simple DISABLED by configuration")
+    } finally {
+      rmSync(tmpHome, { recursive: true, force: true })
+      rmSync(tmpConfigDir, { recursive: true, force: true })
     }
   })
 
