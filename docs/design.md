@@ -1,7 +1,7 @@
 # simple — Economical Daily Consultation Agent (Design)
 
 - Date: 2026-10-23
-- Status: approved design (brainstorming round completed); pending spec review
+- Status: accepted — reference design for the shipped plugin (simple, build-lite, build role, model-prompt layering, failure hints). Supersedes the superpowers process artifacts it was written from.
 - Scope: add a `simple` agent to the plugin, packaged and distributed with it, installable into other OpenCode environments
 - Scope extension (same release, 2026-10-23): also add a `build-lite` mechanical coding lane and a `build` dispatch role routed to the host's native build agent — sections 12–14 cover the extension; where they touch earlier tasks, the implementation plan amends those tasks in place
 

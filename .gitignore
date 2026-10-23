@@ -19,3 +19,6 @@ tmp/
 
 # user-authored local documents (not part of the plugin product)
 userdoc/
+
+# superpowers process artifacts (specs/plans) — not part of the shipped product
+/docs/superpowers/
