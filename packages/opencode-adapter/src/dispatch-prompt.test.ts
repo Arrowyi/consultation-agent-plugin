@@ -32,6 +32,8 @@ const pluginConfig = {
   build_lite_enabled: true,
   build_agent: "build",
   build_enabled: true,
+  janus_agent: "janus",
+  janus_enabled: true,
 } satisfies ConsultationPluginConfig
 
 // Each read-only role runs a default model that resolves a shipped

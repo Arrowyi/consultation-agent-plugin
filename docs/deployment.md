@@ -157,6 +157,14 @@ A missing file is fine; all fields have defaults. Create the file to override de
   // "build_model": "provider/model",   // pin only when the host default is wrong
   "build_enabled": true,
 
+  // janus — the daily-driver primary (mode: all), the execution-side sibling
+  // of consultant. Discusses design/config/coding direction with the user
+  // before implementing; no memory attachment. Defaults to GLM-5.3, the same
+  // as consultant, so both share the shipped glm53.md driving block.
+  "janus_agent": "janus",
+  // "janus_model": "opencode-go/glm-5.3",
+  "janus_enabled": true,
+
   // Subagent names. Rename only if they clash with an existing agent.
   "explorer_agent": "consultation-explorer",
   "analyst_agent": "consultation-analyst",
@@ -238,6 +246,9 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `build_agent` | string | `"build"` | Target agent name for the `build` dispatch role (the host's native build agent by default) |
 | `build_model` | string (optional) | (none — host default) | Model pinned on the `build` role's target agent |
 | `build_enabled` | boolean | `true` | Whether the `build` dispatch role accepts work |
+| `janus_agent` | string | `"janus"` | Name of the daily-driver primary agent (mode `all`, no memory attachment) |
+| `janus_model` | string (optional) | `opencode-go/glm-5.3` | Model for the janus agent |
+| `janus_enabled` | boolean | `true` | Whether to register the janus agent |
 | `model_prompts` | object (optional) | (none) | Global model-keyed adaptation-prompt map; key = the provider-agnostic normalized model key (provider prefix dropped, lowercased, alphanumerics only), value = the block; an explicit "" disables the block for that model |
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
@@ -257,6 +268,8 @@ The `embedding` block is all-or-nothing: set all four sub-fields or omit the blo
 Every role has one configured attempt and every agent resolves to a single model, with no plugin fallback advance. A delegate without `writer_delegate_model` uses host model selection (`null` in the durable job spec); it keeps host permissions and host-internal retry behavior. Neither wait expiry nor unknown observation authorizes a backup model.
 
 The consultant routes bounded tasks to suitable specialist agents: `explorer` gathers missing evidence, `analyst` interprets material disputes, `critic` independently challenges consequential conclusions, `verifier` triages unclear influence or independence of user/third-party/promotional sources, and `writer` produces a blueprint before outline approval or usable section/chapter prose afterward. A potentially relevant check is delegated when its necessity cannot be ruled out; a role is skipped only with a task-specific reason. These roles are not a tier-dependent required roster. Plugin-owned subagents have `permission.edit = "deny"`; the bundled writer also has `permission.bash = "deny"`. An external `writer_delegate_agent` keeps its host-defined permissions and does not inherit these restrictions. Analyst follows evidence, critic follows a draft conclusion, writer's substantive prose follows approved scope and evidence, and the consultant verifies, integrates and writes final files. The default consultant, analyst and critic use different model families; verifier reuses critic's configured model, without a performance guarantee from that choice. Role caps are advisory ceilings rather than a runtime-enforced scheduler. Bounded, low-risk simple-consultation and search subtasks may route to the `simple` generalist instead; answers produced through simple are relayed in simple's answer-first format, and a specialist profile is never substituted by simple. Coding routes through two lanes: fully specified mechanical coding and file tasks go to the `build-lite` lane (workspace edits allowed, external edits ask, further dispatch denied — its stop-and-report is a legitimate partial outcome the dispatcher integrates); judgment-heavy coding goes to the `build` role targeting the host's native build agent, and when that fails the dispatch prints a remediation hint naming `build_agent`/`build_model`.
+
+The `janus` agent is the daily-driver primary and default entry point, the execution-side sibling of `consultant`. It finishes most work itself, discusses design/config/coding direction with the user and waits for agreement before implementing, and routes only on a confirmed weak spot or a task needing another profile: `consultant` for evidence-graded research or a decision, `explorer` for bulk retrieval, `build-lite` for mechanical coding, `build` for judgment-heavy coding, and `simple` for lightweight lookup — all through the same `consultation_dispatch` mechanism. `consultant` is therefore also a dispatch role (targeting the `consultant` agent by name), and its model follows `agent_model`.
 
 ### Model-adaptation prompts
 

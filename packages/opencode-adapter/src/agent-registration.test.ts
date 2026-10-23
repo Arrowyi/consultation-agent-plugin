@@ -12,8 +12,10 @@ import {
   registerWriter,
   registerSimple,
   registerBuildLite,
+  registerJanus,
   buildRuntimeBindings,
   buildSimpleRuntimeBindings,
+  buildJanusRuntimeBindings,
   buildSimplePermission,
   buildBuildLitePermission,
   resolveSimpleWorkspaceDir,
@@ -44,6 +46,8 @@ function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): Consulta
     build_lite_enabled: true,
     build_agent: "build",
     build_enabled: true,
+    janus_agent: "janus",
+    janus_enabled: true,
     ...overrides,
   }
 }
@@ -1062,6 +1066,114 @@ describe("registerBuildLite", () => {
   })
 })
 
+describe("buildJanusRuntimeBindings", () => {
+  it("reports own model, consultant/explorer/coding-lane/simple routes, and job-tool discipline, with no memory line", () => {
+    // given
+    const config = makeConfig()
+
+    // when
+    const block = buildJanusRuntimeBindings(config)
+
+    // then
+    expect(block).toContain("## Runtime Bindings (injected by opencode-adapter)")
+    expect(block).toContain("Janus model: `opencode-go/glm-5.3`")
+    expect(block).toContain("`consultant` (agent `consultant`, `opencode-go/glm-5.3`)")
+    expect(block).toContain("`explorer` (agent `consultation-explorer`")
+    expect(block).toContain("`build-lite` (agent `build-lite`, `opencode-go/glm-5.3-flash`)")
+    expect(block).toContain("`build` (agent `build`, `host default model`)")
+    expect(block).toContain("`simple` (agent `simple`, `opencode-go/deepseek-v4.1-flash`)")
+    expect(block).toContain("consultation_dispatch_wait")
+    expect(block).not.toContain("consultation-memory")
+    expect(block).not.toContain("Memory namespace")
+  })
+
+  it("reports DISABLED variants for the coding lanes and simple", () => {
+    // given
+    const config = makeConfig({ build_lite_enabled: false, build_enabled: false, simple_enabled: false })
+
+    // when
+    const block = buildJanusRuntimeBindings(config)
+
+    // then
+    expect(block).toContain("build-lite DISABLED by configuration")
+    expect(block).toContain("build DISABLED by configuration")
+    expect(block).toContain("simple DISABLED by configuration")
+  })
+})
+
+describe("registerJanus", () => {
+  it("registers mode all with the janus.md body, injected model block and bindings, no memory", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerJanus(config, pluginConfig)
+
+    // then
+    const janus = config.agent?.["janus"] as {
+      mode: string
+      description: string
+      prompt: string
+      model: string
+      permission: Record<string, unknown>
+    }
+    expect(janus.mode).toBe("all")
+    expect(janus.model).toBe("opencode-go/glm-5.3")
+    expect(janus.description).toContain("Daily-driver primary agent")
+    expect(janus.prompt).toContain("# Janus")
+    expect(janus.prompt).toContain("Before Implementing")
+    // The default model resolves its shipped slug block, replacing the placeholder.
+    expect(janus.prompt).toContain("## Driving GLM-5.3")
+    expect(janus.prompt).not.toContain("<!-- MODEL-PROMPT")
+    expect(janus.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+    expect(janus.prompt).not.toContain("<!-- RUNTIME-BINDINGS")
+    expect(janus.prompt).not.toContain("consultation-memory")
+  })
+
+  it("overrides the model from janus_model", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ janus_model: "test/janus-m" })
+
+    // when
+    await registerJanus(config, pluginConfig)
+
+    // then
+    const janus = config.agent?.["janus"] as { model: string }
+    expect(janus.model).toBe("test/janus-m")
+  })
+
+  it("uses the configured janus_agent name and never clobbers a pre-existing entry", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {
+      agent: { janus: { mode: "all", prompt: "user-defined janus prompt" } },
+    }
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerJanus(config, pluginConfig)
+
+    // then
+    const janus = config.agent?.["janus"] as { prompt: string }
+    expect(janus.prompt).toBe("user-defined janus prompt")
+  })
+
+  it("keeps the asset byte-identical when the model is swapped and no user block exists", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ janus_model: "my-provider/other-model" })
+
+    // when
+    await registerJanus(config, pluginConfig)
+
+    // then
+    const janus = config.agent?.["janus"] as { prompt: string }
+    expect(janus.prompt).toContain("<!-- MODEL-PROMPT")
+    expect(janus.prompt).not.toContain("Driving GLM-5.3")
+  })
+})
+
 describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
   it("every plugin-owned agent asset contains the placeholder", async () => {
     // given
@@ -1072,6 +1184,7 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
       "agents/consultation-critic.md",
       "agents/consultation-verifier.md",
       "agents/writer.md",
+      "agents/janus.md",
     ]
 
     // when // then

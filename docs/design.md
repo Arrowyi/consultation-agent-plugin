@@ -4,6 +4,7 @@
 - Status: accepted — reference design for the shipped plugin (simple, build-lite, build role, model-prompt library, failure hints). Supersedes the superpowers process artifacts it was written from.
 - Scope: add a `simple` agent to the plugin, packaged and distributed with it, installable into other OpenCode environments
 - Scope extension (same release, 2026-10-23): also add a `build-lite` mechanical coding lane and a `build` dispatch role routed to the host's native build agent — sections 12–14 cover the extension; where they touch earlier tasks, the implementation plan amends those tasks in place
+- Scope extension (2026-10-23): add a `janus` daily-driver primary agent and a `consultant` dispatch role — section 17 covers both.
 
 ## Positioning
 
@@ -345,6 +346,40 @@ The shipped `MODEL_DEFAULTS` are brought in line with the maintainer's verified 
 Rationale: restores the cross-family audit structure (challenger `gemini` ≠ consultant `glm` ≠ analyst `qwen`), removes the EOL-tracked consultant default, and matches the model-prompt library's block set (6 distinct default models — see §15). explorer/analyst/simple/build-lite defaults are unchanged. The rationale moves from the maintainer's local config comment into the `MODEL_DEFAULTS` source comment.
 
 Note on the Go-subscription framing: critic/verifier now run `opencode/gemini-3.8-flash` on Zen pay-per-use ($1.50/$7.50), not a Go pool — accepted because they are low-frequency read-only challenge roles (tier caps: fast 0 / standard 1 / deep 2), where judgment quality outranks pool accounting. All other defaults remain Go-pool models.
+
+## 17. janus daily-driver primary + consultant dispatch role (scope extension)
+
+Add `janus`, the daily-driver primary agent and default entry point, as the execution-side sibling of `consultant`. It is maintained in-repo and registered by the plugin like every other family member; it does not attach to memory.
+
+### Positioning
+
+janus finishes most work itself — multi-file refactors, long tool-loop sessions, whole-repo reading, build/test cycles — and is the opposite discipline to `consultant` (an orchestrator that grades evidence and challenges its own conclusions): janus plans, executes, verifies, and stops when the answer is trustworthy. It escalates only on a confirmed weak spot or a task that needs another profile. For design, config, and coding tasks it must discuss the direction with the user first — surface the modification direction, plan, or concrete files, and wait for agreement before implementing — and when coding it decides who executes: mechanical fully specified changes → `build-lite`, judgment-heavy → `build`, a small one-or-two-tool-call edit → itself. One dispatch mechanism for the whole family: janus dispatches `consultant`, `explorer`, `build-lite`, `build`, and `simple` via `consultation_dispatch`, so `consultant` becomes a ninth dispatch role targeting the `consultant` agent by name (model follows `agent_model`).
+
+### Config
+
+- `janus_agent` default `"janus"`; `janus_model` optional; `janus_enabled` default `true`.
+- `MODEL_DEFAULTS.janus = "opencode-go/glm-5.3"` — the same model as consultant, so both share the shipped `glm53.md` driving block and rotate together when the consultant model changes.
+
+### Model-prompt separation
+
+janus.md carries only role content; its GLM-5.3 traits were merged into `assets/model-prompts/glm53.md`. The merged block adds: overthinking (stop when the answer is trustworthy; doubt is not evidence), performative caution (don't revise a correct conclusion just to look careful), language/thread drift handling, novel-abstract-reasoning caution, and the slow-decode (~70 tok/s) economy note — all model-trait only, no role rules, so the block stays valid for any agent running GLM-5.3.
+
+### Registration
+
+`registerJanus` — mode `all` (user-selectable primary AND dispatchable), layered prompt (role asset + model-adaptation block + `buildJanusRuntimeBindings`), resolved janus model, empty permission object (host defaults apply; it is a full-tool daily driver). Its runtime bindings report only what it needs to orchestrate — its own model, the dispatchable family members and their models, and the dispatch job-tool discipline — with no memory MCP line and no namespace. Never clobbers a pre-existing user-defined entry under the same name.
+
+### Dispatch role
+
+`DISPATCH_ROLES` gains `consultant` (ninth). `resolveRoleTarget` maps it to `{ agentName: "consultant", model: resolveRoleModel(config, "consultant") }`; the enabled map marks it always-on; `ROLE_MODEL_FIELDS` maps it to `agent_model` for the failure hint.
+
+### Non-goals
+
+- No memory attachment for janus (no namespace, no auto-save, no MCP lines in its prompt).
+- No janus dispatch role from consultant — the reverse direction is not needed; janus ≈ the host's native build/general execution, which consultant already reaches through `build`.
+
+### Done when
+
+- janus registered (mode all, model glm-5.3, no memory), tests green, typecheck clean, install:local + installed-artifact integration pass with the janus key present.
 
 ## Non-goals
 

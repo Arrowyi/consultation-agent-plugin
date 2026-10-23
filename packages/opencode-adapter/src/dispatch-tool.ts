@@ -54,6 +54,8 @@ export function resolveRoleTarget(
       return { agentName: config.build_lite_agent, model: resolveRoleModel(config, "build-lite") }
     case "build":
       return { agentName: config.build_agent, model: config.build_model }
+    case "consultant":
+      return { agentName: "consultant", model: resolveRoleModel(config, "consultant") }
   }
 }
 
@@ -85,7 +87,7 @@ export function createConsultationDispatchTools(
 
   const dispatch = tool({
     description:
-      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer, simple, build-lite, build). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
+      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer, simple, build-lite, build, consultant). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
     args: {
       role: tool.schema.enum(DISPATCH_ROLES),
       prompt: tool.schema.string(),
@@ -101,6 +103,7 @@ export function createConsultationDispatchTools(
         simple: config.simple_enabled,
         "build-lite": config.build_lite_enabled,
         build: config.build_enabled,
+        consultant: true,
       }
       if (!enabled[args.role]) return `Error: ${args.role} is disabled by configuration`
 

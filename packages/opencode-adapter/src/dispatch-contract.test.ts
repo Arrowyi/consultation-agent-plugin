@@ -41,7 +41,7 @@ function assertError(result: { ok: true; value: unknown } | { ok: false; error: 
 
 describe("dispatch role constants", () => {
   it("exports roles, budget and default wait", () => {
-    expect(DISPATCH_ROLES).toEqual(["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build"])
+    expect(DISPATCH_ROLES).toEqual(["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build", "consultant"])
     expect(PRODUCTION_WAIT_BUDGET_MS).toBe(300_000)
     expect(DEFAULT_WAIT_MS).toBe(PRODUCTION_WAIT_BUDGET_MS)
   })

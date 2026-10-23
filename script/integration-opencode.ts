@@ -179,6 +179,12 @@ async function main(): Promise<void> {
             pass: hasBuildLite,
             detail: hasBuildLite ? "agent.build-lite present" : "agent.build-lite MISSING",
           })
+          const hasJanus = hasNestedKey(json, "agent", "janus")
+          assertions.push({
+            name: "config has janus agent key",
+            pass: hasJanus,
+            detail: hasJanus ? "agent.janus present" : "agent.janus MISSING",
+          })
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err)

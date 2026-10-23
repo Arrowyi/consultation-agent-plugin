@@ -28,6 +28,8 @@ function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): Consulta
     build_lite_enabled: true,
     build_agent: "build",
     build_enabled: true,
+    janus_agent: "janus",
+    janus_enabled: true,
     ...overrides,
   }
 }

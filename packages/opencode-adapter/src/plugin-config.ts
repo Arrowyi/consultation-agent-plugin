@@ -48,6 +48,9 @@ export const ConsultationPluginConfigSchema = z.object({
   build_agent: z.string().default("build"),
   build_model: z.string().optional(),
   build_enabled: z.boolean().default(true),
+  janus_agent: z.string().default("janus"),
+  janus_model: z.string().optional(),
+  janus_enabled: z.boolean().default(true),
   // Global model-adaptation prompt map, keyed by the provider-agnostic
   // normalized model key (see normalizeModelKey: provider prefix stripped,
   // lowercased, alphanumerics only). An explicit "" disables that model's
@@ -113,6 +116,7 @@ export const MODEL_DEFAULTS = {
   writer: "opencode/claude-sonnet-5-5",
   simple: "opencode-go/deepseek-v4.1-flash",
   "build-lite": "opencode-go/glm-5.3-flash",
+  janus: "opencode-go/glm-5.3",
 } as const
 
 export type ModelRole = keyof typeof MODEL_DEFAULTS
@@ -135,6 +139,8 @@ export function resolveRoleModel(config: ConsultationPluginConfig, role: ModelRo
       return config.simple_model ?? MODEL_DEFAULTS.simple
     case "build-lite":
       return config.build_lite_model ?? MODEL_DEFAULTS["build-lite"]
+    case "janus":
+      return config.janus_model ?? MODEL_DEFAULTS.janus
   }
 }
 

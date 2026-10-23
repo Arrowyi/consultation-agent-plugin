@@ -226,6 +226,37 @@ describe("build-lite and build role configuration", () => {
   })
 })
 
+describe("janus role configuration", () => {
+  it("defaults the janus role and resolves its model to glm-5.3", () => {
+    // given
+    const cfg = config()
+
+    // when // then
+    expect(cfg.janus_agent).toBe("janus")
+    expect(cfg.janus_enabled).toBe(true)
+    expect(cfg.janus_model).toBeUndefined()
+    expect(resolveRoleModel(cfg, "janus")).toBe("opencode-go/glm-5.3")
+    expect(resolveRoleModelChain(cfg, "janus")).toEqual(["opencode-go/glm-5.3"])
+  })
+
+  it("overrides the janus model when janus_model is set", () => {
+    // given
+    const cfg = config({ janus_model: "test/janus-model" })
+
+    // when // then
+    expect(resolveRoleModel(cfg, "janus")).toBe("test/janus-model")
+  })
+
+  it("keeps parsing an old config with no janus keys (compat guarantee)", () => {
+    // given
+    const cfg = config({ agent_model: "opencode-go/glm-5.3" })
+
+    // when // then
+    expect(cfg.janus_agent).toBe("janus")
+    expect(cfg.janus_enabled).toBe(true)
+  })
+})
+
 describe("model-prompt config surface (v2)", () => {
   it("parses the global model-keyed prompt map", () => {
     // given

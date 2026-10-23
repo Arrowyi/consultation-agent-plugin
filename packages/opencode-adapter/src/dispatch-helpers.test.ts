@@ -37,6 +37,7 @@ describe("modelFailureHint", () => {
   it("maps hyphenated roles to their underscored config fields", () => {
     expect(modelFailureHint("build-lite", "opencode-go/glm-5.3-flash")).toContain('set "build_lite_model"')
     expect(modelFailureHint("build", null)).toContain('set "build_model"')
+    expect(modelFailureHint("consultant", null)).toContain('set "agent_model"')
   })
 
   it("omits the model label when the model is null", () => {

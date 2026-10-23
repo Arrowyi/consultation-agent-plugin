@@ -253,6 +253,59 @@ describe("createConsultationConfigHook", () => {
     }
   })
 
+  it("registers the janus daily-driver agent with mode all and no memory", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    process.env.HOME = tmpHome
+    delete process.env.CONSULTATION_CONFIG
+    delete process.env.XDG_CONFIG_HOME
+    delete process.env.XDG_DATA_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      const janus = config.agent?.["janus"] as { mode: string; model: string; prompt: string }
+      expect(janus.mode).toBe("all")
+      expect(janus.model).toBe("opencode-go/glm-5.3")
+      expect(janus.prompt).toContain("# Janus")
+      expect(janus.prompt).not.toContain("consultation-memory")
+    } finally {
+      delete process.env.XDG_DATA_HOME
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it("omits the janus agent when janus_enabled=false", async () => {
+    // given
+    const tmpHome = makeTempHome()
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-janusoff-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, '{\n  "janus_enabled": false\n}')
+    process.env.HOME = tmpHome
+    process.env.CONSULTATION_CONFIG = configPath
+    delete process.env.XDG_CONFIG_HOME
+    process.env.OPENCODE_CONFIG_DIR = tmpHome
+    const config: Config = {}
+    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+
+    try {
+      // when
+      await hook(config)
+
+      // then
+      expect(config.agent?.["janus"]).toBeUndefined()
+      expect(config.agent?.["consultant"]).toBeDefined()
+    } finally {
+      rmSync(tmpHome, { recursive: true, force: true })
+      rmSync(tmpConfigDir, { recursive: true, force: true })
+    }
+  })
+
   it("omits the bundled writer subagent when a delegate agent is configured", async () => {
     // given
     const tmpHome = makeTempHome()

@@ -1,6 +1,6 @@
 # consultation-agent-plugin
 
-An evidence-driven consultation agent team for [OpenCode](https://opencode.ai) — a `consultant` that grades evidence and challenges its own conclusions before answering, an economical `simple` for daily questions, a mechanical `build-lite` coding lane, and a shared local memory that learns from every consultation.
+An evidence-driven consultation agent team for [OpenCode](https://opencode.ai) — a `consultant` that grades evidence and challenges its own conclusions before answering, a `janus` daily-driver primary that finishes most work itself and routes to the consultant for evidence-grade work, an economical `simple` for daily questions, a mechanical `build-lite` coding lane, and a shared local memory that learns from every consultation.
 
 ## What you get
 
@@ -15,6 +15,7 @@ An evidence-driven consultation agent team for [OpenCode](https://opencode.ai) �
 | `consultation-writer` | `opencode/claude-sonnet-5-5` | Read-only writing specialist for `author`-mode documents |
 | `build-lite` (subagent) | `opencode-go/glm-5.3-flash` | Mechanical coding lane: fully specified bulk edits, formatting/lint fixes, boilerplate from templates. Workspace edits allowed, everything else asks; stops and reports up on anything ambiguous |
 | `build` (dispatch role) | host's build agent | Routes judgment-heavy coding to your OpenCode's native build agent — if unavailable, you get a hint and the primary codes inline with disclosure |
+| `janus` (primary) | `opencode-go/glm-5.3` | Daily-driver primary and default entry point. Finishes most work itself (multi-file refactors, long tool-loops, build/test cycles), discusses design/config/coding direction with the user before implementing, and dispatches `consultant`/`explorer`/`build-lite`/`build`/`simple` via one dispatch mechanism |
 | `consultation-memory` (MCP) | — | Local SQLite memory shared across the agents: auto-saved consultation records, recall, edit, delete, outcome feedback |
 
 Every agent's model is configurable (`*_model` fields), and every prompt layers a role asset with an optional model-adaptation block keyed by the model (`model_prompts` map overrides the shipped `assets/model-prompts/` library, extendable by dropping a file) — swap a model, keep the role, and the driving notes follow the model. Blocks are matched **provider-agnostically**: a model id is normalized by dropping the provider prefix (everything before the last `/`), lowercasing, and keeping only letters and digits, so `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve to the same key `deepseekv4pro` (see [Model-adaptation prompts](docs/deployment.md#model-adaptation-prompts)).

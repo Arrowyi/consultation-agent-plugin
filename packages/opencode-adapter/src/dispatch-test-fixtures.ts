@@ -49,6 +49,7 @@ export const validRoleSpecs: Array<{ label: string; role: DispatchRole; record: 
   { label: "simple", role: "simple", record: makeJobSpec({ role: "simple", agent_name: "simple", model_chain: ["opencode-go/deepseek-v4.1-flash"] }) },
   { label: "build-lite", role: "build-lite", record: makeJobSpec({ role: "build-lite", agent_name: "build-lite", model_chain: ["opencode-go/glm-5.3-flash"] }) },
   { label: "build-host", role: "build", record: makeJobSpec({ role: "build", agent_name: "build", model_chain: [null] }) },
+  { label: "consultant", role: "consultant", record: makeJobSpec({ role: "consultant", agent_name: "consultant", model_chain: ["opencode-go/glm-5.3"] }) },
 ]
 
 export function makeAttemptReservation(overrides: Partial<AttemptReservation> = {}): AttemptReservation {

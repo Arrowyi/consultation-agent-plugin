@@ -55,6 +55,9 @@ const SIMPLE_DESCRIPTION =
 const BUILD_LITE_DESCRIPTION =
   "Cheap mechanical coding executor (GLM-5.3-Flash by default) for fully specified, decision-free, mechanically repeatable coding tasks: batch renames/moves, copy-adapt from existing in-repo patterns, formatting and lint fixes, boilerplate from explicit templates, simple tests following existing patterns, spec-complete CRUD glue. Stops and reports up on anything ambiguous, judgment-heavy, debugging, protocol-precision, cross-module, or security-sensitive — never attempts them."
 
+const JANUS_DESCRIPTION =
+  "Daily-driver primary agent (GLM-5.3 by default) and default entry point. Takes on and finishes most work itself — multi-file refactors, long tool-loops, whole-repo reading, build/test cycles — discussing design/config/coding direction with the user before implementing and escalating only on its confirmed weak spots. Dispatches consultant for evidence-graded research, and build-lite/build for mechanical vs judgment-heavy coding."
+
 interface BuildLiteAgentEntry {
   mode: "subagent"
   description: string
@@ -255,6 +258,68 @@ export async function registerBuildLite(
 
   if (!config.agent) config.agent = {}
   config.agent[pluginConfig.build_lite_agent] = entry
+}
+
+/**
+ * Build the runtime bindings block injected into the janus agent prompt.
+ *
+ * Janus is the daily-driver primary and does not attach to memory, so its
+ * block reports only what it needs to orchestrate: its own model, the
+ * dispatchable family members it routes to (consultant, explorer, the
+ * coding lanes, simple), and the dispatch job-tool discipline. No memory
+ * namespace, no workspace.
+ */
+export function buildJanusRuntimeBindings(pluginConfig: ConsultationPluginConfig): string {
+  const modelLine = `- Janus model: \`${resolveRoleModel(pluginConfig, "janus")}\``
+
+  const consultantLine = `- \`consultant\` (agent \`consultant\`, \`${resolveRoleModel(pluginConfig, "consultant")}\`) — evidence-graded research, decisions, durable documents; dispatch via \`consultation_dispatch\` (role="consultant")`
+
+  const explorerLine = `- \`explorer\` (agent \`${pluginConfig.explorer_agent}\`, \`${resolveRoleModel(pluginConfig, "explorer")}\`) — bulk parallel retrieval`
+
+  const buildLiteLine = pluginConfig.build_lite_enabled
+    ? `- \`build-lite\` (agent \`${pluginConfig.build_lite_agent}\`, \`${resolveRoleModel(pluginConfig, "build-lite")}\`) — fully specified mechanical coding`
+    : "- Mechanical coding lane: build-lite DISABLED by configuration"
+  const buildLine = pluginConfig.build_enabled
+    ? `- \`build\` (agent \`${pluginConfig.build_agent}\`, \`${pluginConfig.build_model ?? "host default model"}\`) — judgment-heavy coding`
+    : "- Strong coding lane: build DISABLED by configuration"
+  const simpleLine = pluginConfig.simple_enabled
+    ? `- \`simple\` (agent \`${pluginConfig.simple_agent}\`, \`${resolveRoleModel(pluginConfig, "simple")}\`) — lightweight Q&A and lookup`
+    : "- Economical generalist: simple DISABLED by configuration"
+
+  const dispatchLine = "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
+
+  return `## Runtime Bindings (injected by opencode-adapter)\n${modelLine}\n${consultantLine}\n${explorerLine}\n${buildLiteLine}\n${buildLine}\n${simpleLine}\n${dispatchLine}`
+}
+
+/**
+ * Register the `janus` daily-driver primary agent: mode "all" (user-selectable
+ * primary AND dispatchable), no memory attachment, a layered prompt (role
+ * asset + model-adaptation block + runtime bindings), and the resolved janus
+ * model. A pre-existing user-defined entry under the same name is left
+ * untouched.
+ */
+export async function registerJanus(
+  config: MutableConfig,
+  pluginConfig: ConsultationPluginConfig,
+): Promise<void> {
+  if (config.agent?.[pluginConfig.janus_agent]) return
+
+  const body = await readFile(resolveAsset("agents/janus.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "janus"))
+  const withModelPrompt = injectModelPrompt(body, modelBlock)
+  const runtimeBlock = buildJanusRuntimeBindings(pluginConfig)
+  const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
+
+  const entry: AllModeAgentEntry = {
+    mode: "all",
+    description: JANUS_DESCRIPTION,
+    prompt: assembledPrompt,
+    model: resolveRoleModel(pluginConfig, "janus"),
+    permission: {},
+  }
+
+  if (!config.agent) config.agent = {}
+  config.agent[pluginConfig.janus_agent] = entry
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   registerBuildLite,
   registerVerifier,
   registerWriter,
+  registerJanus,
 } from "./agent-registration.ts"
 import { createConsultationDispatchTools } from "./dispatch-tool.ts"
 import { registerMemoryMcp } from "./mcp-registration.ts"
@@ -40,6 +41,10 @@ export function createConsultationConfigHook(
 
     if (pluginConfig.build_lite_enabled) {
       await registerBuildLite(config, pluginConfig)
+    }
+
+    if (pluginConfig.janus_enabled) {
+      await registerJanus(config, pluginConfig)
     }
 
     await registerExplorer(config, pluginConfig)

@@ -101,6 +101,8 @@ describe("resolveRoleTarget", () => {
     expect(buildLite).toEqual({ agentName: "build-lite", model: "opencode-go/glm-5.3-flash" })
     const build = resolveRoleTarget(config(), "build")
     expect(build).toEqual({ agentName: "build", model: undefined })
+    const consultant = resolveRoleTarget(config(), "consultant")
+    expect(consultant).toEqual({ agentName: "consultant", model: "opencode-go/glm-5.3" })
   })
 
   it("resolves a renamed simple agent", () => {

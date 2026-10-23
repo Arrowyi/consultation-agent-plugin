@@ -74,6 +74,7 @@ export const ROLE_MODEL_FIELDS: Record<DispatchRole, string> = {
   simple: "simple_model",
   "build-lite": "build_lite_model",
   build: "build_model",
+  consultant: "agent_model",
 }
 
 /**

@@ -30,6 +30,7 @@ export const REQUIRED_INSTALLED_FILES = [
   "assets/agents/consultation-critic.md",
   "assets/agents/consultation-verifier.md",
   "assets/agents/explorer.md",
+  "assets/agents/janus.md",
   "assets/agents/simple.md",
   "assets/agents/writer.md",
   "assets/model-prompts/claudesonnet55.md",
