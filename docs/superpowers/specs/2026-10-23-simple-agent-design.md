@@ -22,6 +22,8 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 6 | No outcome-loop registration in simple v1 (keep light; revisit later) |
 | 7 | Unify the duplicated `DISPATCH_ROLES` definition (dispatch-tool.ts + dispatch-contract.ts) into one export from dispatch-contract.ts |
 | 8 | Name defaults to `simple` (configurable via `simple_agent`); `simple_enabled` defaults to `true` |
+| 9 | P1 resolved as (a): keep `opencode-go` defaults, document loudly with a non-Go config example, AND enrich plugin-owned model-failure messages with a friendly remediation hint (see §3.1) |
+| 10 | P2 resolved: delete the omo leftover script entirely; add explicit old-version compatibility guarantees (see §10); userdoc leaves version control via `.gitignore` (see §11) |
 
 ## 1. Config and model
 
@@ -92,6 +94,19 @@ No `maxSteps`/`tools`/`temperature` overrides — no capability ceilings.
 - Journal/spec compatibility: extending the zod enum is backward-compatible for existing records; old journals only contain old roles
 - Nested dispatch (consultant → simple → explorer) uses the existing lifecycle with each level's own sessionID as parent — no coordinator changes expected; integration proof re-verifies
 
+### 3.1 Friendly model-failure hints (P1 decision 9)
+
+When a dispatch attempt fails terminally with a model/provider error, the failure envelope gains a remediation hint so a non-Go user immediately knows what to do:
+
+```
+<role> dispatch failed: <original error> (model: <provider/model>)
+Hint: the default models assume an OpenCode Go subscription. If this provider is not
+configured on this machine, override it via "<role>_model" in
+~/.config/consultation-agent/config.jsonc (or $CONSULTATION_CONFIG), then retry.
+```
+
+Scope honesty: the dispatch path (consultation_dispatch / wait) is plugin-owned and gets the hint. When a user directly selects an agent in the TUI and its model cannot resolve, that error surface belongs to OpenCode itself and the plugin cannot intercept it — the loud prerequisite documentation in §7 covers that path. No startup provider auto-probe: `config.provider` presence is not a reliable signal (built-in registry providers), so probing would produce false warnings; failure-path enrichment + documentation is the chosen scope.
+
 ## 4. Prompt design (assets/agents/simple.md)
 
 English body, Chinese trigger examples. The prompt's own typography models the required output style (Anthropic guidance: prompt style shapes output style). Sections:
@@ -151,6 +166,7 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 
 - `assets/agents/simple.md` ships automatically (assets/ staged wholesale); add to `REQUIRED_INSTALLED_FILES` in script/install-local.ts
 - docs/deployment.md: config example + field reference rows (`simple_agent`, `simple_model`, `simple_enabled`, `simple_workspace_dir`), registration step list (registerSimple, mode all, permission summary incl. workspace + bash allowlist philosophy), verify-install steps (simple appears in agent picker; dispatch role works)
+- docs/deployment.md Prerequisites gains a loud model-prerequisites note (P1 decision 9): the shipped model defaults (`opencode-go/*`, `opencode/claude-sonnet-5`) assume an OpenCode Go subscription; non-Go users copy the commented non-Go config example into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider they have; dispatch failures print this remediation hint. README gains the same note in condensed form.
 - README.md: agent inventory — `simple` alongside the five read-only specialists with its positioning
 - Note in deployment.md: a user-defined agent file named `simple` under `~/.config/opencode/agents/` takes precedence (never-clobber); remove it to use the plugin's
 
@@ -164,28 +180,44 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 | plugin.ts | plugin.test.ts: simple registered with mode "all" + model + permission; `simple_enabled: false` skips registration; consultant runtime bindings line for simple |
 | install-local.ts | install-local.test.ts: REQUIRED_INSTALLED_FILES contains assets/agents/simple.md |
 | consultant.md / SKILL.md | plugin.test.ts assertions updated where they check consultant prompt content; evals checklist extended with a simple-routing case (print-only) |
+| dispatch-lifecycle.ts (failure hint) | dispatch-lifecycle.test.ts + dispatch-tool.test.ts: terminal model-failure envelope contains role, model, the remediation hint naming the `<role>_model` config field and config path |
+| plugin-config.ts (compat) | plugin-config.test.ts: a config WITHOUT any `simple_*` keys parses to all defaults (old config files keep working) |
 | integration scripts | script/integration-*.ts: any assertion enumerating registered agents or dispatch roles gains simple |
 
 Full gate: `bun test` + `bun run typecheck` + `bun run install:local` + `CONSULTATION_PLUGIN_ENTRY=... bun run integration` (proves the installed artifact registers simple, its permissions, and the dispatch role).
 
 ## 9. Rollout on this machine
 
-1. Implement, test, install:local
-2. Delete the personal `~/.config/opencode/agents/simple.md` (it takes precedence via never-clobber)
-3. Restart OpenCode; verify: `simple` in agent picker (mode all), quick consultation works, explorer dispatch works, memory auto-save lands in the shared namespace, workspace write works without prompt, write elsewhere prompts
+1. Implement, test, `bun run install:local` (this also replaces the locally stale bundle from `84b6567`)
+2. User removes the personal `~/.config/opencode/agents/simple.md` themselves (they confirmed they will; it takes precedence via never-clobber) — the plugin's `simple` then owns the name
+3. Restart OpenCode; verify: `simple` in agent picker (mode all), quick consultation works, explorer dispatch works, memory auto-save lands in the shared namespace, workspace write works without prompt, write elsewhere prompts, a model-failure dispatch (if reproducible) prints the friendly hint
 
-## Release-readiness audit (requested 2026-10-23: "no environment-specific dependencies, install-and-use")
+## Release-readiness audit (requested 2026-10-23: "no environment-specific dependencies, install-and-use") — all findings resolved
 
-Findings — architecture and packaging are portable; one product-level gap needs a decision:
+**P1 — default models assume an OpenCode Go subscription. RESOLVED as (a) + friendly hints**: keep defaults; deployment.md/README document the prerequisite loudly with a commented non-Go config example; plugin-owned dispatch model-failure envelopes carry the remediation hint (§3.1); OpenCode's own agent-selection error surface is documented as out of plugin reach. `MODEL_DEFAULTS` ships `opencode-go/*` IDs for consultant/explorer/analyst/critic/verifier (+ `opencode-go/kimi-k3` writer fallback) and `opencode/claude-sonnet-5` for writer. `simple` adds one more `opencode-go` default under the same policy.
 
-**P1 — default models assume an OpenCode Go subscription.** `MODEL_DEFAULTS` ships `opencode-go/*` IDs for consultant/explorer/analyst/critic/verifier (+ `opencode-go/kimi-k3` writer fallback) and `opencode/claude-sonnet-5` for writer. On a machine without those providers, agents register but fail at model resolution when selected (exact failure UX not verified; override exists via every `*_model` config field). `simple` adds one more `opencode-go` default under the same policy. Options: (a) keep + document loudly (deployment.md prerequisite section + a commented non-Go config example); (b) provider-detect at registration and fall back to host default (adds complexity, changes the tuned cross-model story); (c) leave as-is. **Needs user decision — recommend (a) as the v1 fix, folded into this work's docs updates.**
-
-**P2 — real but low impact:**
-- `script/integration-runtime-evidence.ts` writes evidence to `.omo/evidence/consultation-dispatch-lifecycle` — a leftover path from the uninstalled omo tool; dev-script only (not shipped), but rename to a neutral path on sight during implementation.
-- The locally installed bundle is stale: build-meta shows `84b6567` (2026-10-06), HEAD is `a3e7dd1` — the running OpenCode misses two shipped fixes. Reinstall after this feature lands.
-- Repo housekeeping: two finished-work spec/plan docs from 2026-09-29 sit untracked; two `userdoc/` deletions are uncommitted; several untracked `userdoc/` dirs exist. Unrelated to the plugin artifact; commit or clean at the user's discretion.
+**P2 — RESOLVED:**
+- `script/integration-runtime-evidence.ts` (`.omo/evidence/` leftover) — delete the script entirely (§11); it is the only omo dependency and is referenced by nothing.
+- Locally installed bundle stale (`84b6567` vs HEAD) — re-run `install:local` in this feature's rollout; §10 adds explicit old-version compatibility guarantees.
+- Repo housekeeping — §11: userdoc out of version control via `.gitignore` (+ commit pending deletions, untrack remaining file); commit the two untracked 2026-09-29 spec/plan docs.
 
 **P3 — checked, no issues:** no `/Users/bdgong` hardcodes; no janus/omo references in shipped assets (grep hits were "promotional" false positives); `script/build.ts` marks nothing external; memory MCP entry resolves bundled-sibling-first; skill/command installers resolve OPENCODE_CONFIG_DIR/XDG/HOME; agent registration never clobbers user entries (collision-safe, including a target user's own `simple`); memory store uses XDG paths with env overrides; deployment.md documents prerequisites (Bun ≥ 1.1 on PATH — hard requirement for the memory MCP spawn; `memory_enabled: false` is the no-bun escape hatch) and uninstall steps.
+
+## 10. Compatibility guarantees for non-upgraders (P2 decision 10)
+
+A user who keeps an older installed bundle or an older config must keep working:
+
+1. Old `config.jsonc` (no `simple_*` keys) parses — every new key has a default; zod schema is additive only.
+2. Old durable journal/job records remain readable — `DISPATCH_ROLES` extension is additive to the zod enum; records written by older bundles contain only old roles.
+3. An older installed bundle simply keeps running — nothing in this change forces an upgrade; the new bundle activates only when the user re-runs `bun run install:local`.
+4. The skill installer never overwrites a `<!-- user-modified -->` skill file; content-identical files are left alone.
+5. This machine's rollout re-runs `install:local` (the currently installed bundle is stale at `84b6567`); that is a local action, not a compat requirement on others.
+
+## 11. Repo cleanup (P2 decision 10)
+
+- Delete `script/integration-runtime-evidence.ts` (the only omo dependency left; an unreferenced one-off that wrote to `.omo/evidence/`; `.omo/` was already gitignored; historical prose mentions of OMO in committed specs/plans are history, not dependencies, and stay).
+- userdoc leaves version control: commit the two pending userdoc deletions, `git rm --cached` the remaining tracked userdoc file, add `userdoc/` to `.gitignore`.
+- Commit the two untracked finished-work docs `docs/superpowers/plans/2026-09-29-consultant-task-routing.md` and `docs/superpowers/specs/2026-09-29-consultant-task-routing-design.md` (repo convention commits specs/plans).
 
 ## Non-goals
 
@@ -193,11 +225,13 @@ Findings — architecture and packaging are portable; one product-level gap need
 - No tier/caps integration for simple
 - No new memory schema or namespace per-agent split
 - No changes to the five specialists' profiles or permissions
-- No host-provider detection logic (pending P1 decision, option (a) assumes "document, don't detect")
+- No host-provider detection or startup probing (P1 resolved as document + failure-path hints; §3.1 explains why probing was rejected)
 
 ## Done when
 
 - All tests and typecheck pass; install:local succeeds; the installed-artifact integration proof passes with simple registered (mode all, model, permission patterns), the `simple` dispatch role functional, and the workspace dir created
 - consultant.md + SKILL.md route to simple and relay in its format
-- Docs (deployment.md, README.md) updated including the P1 decision's outcome
-- On this machine: personal simple.md removed, plugin simple verified end-to-end (quick consultation, explorer dispatch, memory auto-save, workspace write, write-elsewhere prompt)
+- Model-failure dispatch envelopes carry the friendly remediation hint (§3.1), tested
+- Docs updated: deployment.md (fields, prerequisite note + non-Go example, registration/verify steps), README.md (agent inventory + condensed model note)
+- Repo cleanup done (§11): omo script deleted, userdoc ignored and untracked, 2026-09-29 docs committed
+- On this machine: stale bundle replaced, personal simple.md removed by the user, plugin simple verified end-to-end (quick consultation, explorer dispatch, memory auto-save, workspace write, write-elsewhere prompt)
