@@ -168,6 +168,7 @@ describe("unified dispatch registration", () => {
     { role: "critic", agent: "consultation-critic", model: "opencode-go/glm-5.3" },
     { role: "verifier", agent: "consultation-verifier", model: "opencode-go/glm-5.3" },
     { role: "writer", agent: "consultation-writer", model: "opencode/claude-sonnet-5" },
+    { role: "simple", agent: "simple", model: "opencode-go/deepseek-v4.1-flash" },
   ] as const) {
     for (const custom of [false, true]) {
       it(`routes ${scenario.role} through the shared factory with ${custom ? "custom" : "default"} configuration`, async () => {

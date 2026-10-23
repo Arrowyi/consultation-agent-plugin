@@ -1,6 +1,14 @@
 import { tool, type ToolContext, type ToolDefinition, type PluginInput } from "@opencode-ai/plugin"
 import { loadPluginConfig, resolveRoleModel, resolveRoleModelChain, type ConsultationPluginConfig } from "./plugin-config.ts"
-import { createKeyedMutex, parseWaitArgs, type Clock, type DispatchSdk, type KeyedMutex } from "./dispatch-contract.ts"
+import {
+  DISPATCH_ROLES,
+  createKeyedMutex,
+  parseWaitArgs,
+  type Clock,
+  type DispatchRole,
+  type DispatchSdk,
+  type KeyedMutex,
+} from "./dispatch-contract.ts"
 import { createDispatchLifecycle, createSystemClock, type DispatchLifecycle } from "./dispatch-lifecycle.ts"
 import { createDispatchCancel } from "./dispatch-cancel.ts"
 import { splitModel, errorText, isRetryableModelError } from "./dispatch-helpers.ts"
@@ -8,12 +16,14 @@ import { splitModel, errorText, isRetryableModelError } from "./dispatch-helpers
 export { splitModel, errorText, isRetryableModelError }
 
 /**
- * The five roles the consultant may dispatch. Each maps to one of our own
- * subagents; this tool never touches any other agent, the built-in `task`
- * tool, or any other plugin's dispatch mechanism.
+ * The eight dispatchable roles (five specialists, the simple generalist, the
+ * build-lite mechanical lane, and the build host-routing role). Each maps to
+ * one of our own subagents or the host's configured agent; this tool never
+ * touches any other agent, the built-in `task` tool, or any other plugin's
+ * dispatch mechanism.
  */
-export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer"] as const
-export type DispatchRole = (typeof DISPATCH_ROLES)[number]
+export { DISPATCH_ROLES }
+export type { DispatchRole }
 
 export interface RoleTarget {
   agentName: string
@@ -38,6 +48,12 @@ export function resolveRoleTarget(
         return { agentName: config.writer_delegate_agent, model: config.writer_delegate_model }
       }
       return { agentName: config.writer_agent, model: resolveRoleModel(config, "writer") }
+    case "simple":
+      return { agentName: config.simple_agent, model: resolveRoleModel(config, "simple") }
+    case "build-lite":
+      return { agentName: config.build_lite_agent, model: resolveRoleModel(config, "build-lite") }
+    case "build":
+      return { agentName: config.build_agent, model: config.build_model }
   }
 }
 
@@ -50,10 +66,10 @@ export interface DispatchToolDeps {
 /**
  * Build the three consultation job tools with one shared coordinator set.
  *
- * It dispatches ONLY to the five consultation subagents (`explorer`,
- * `analyst`, `critic`, `verifier`, `writer`) using the recoverable lifecycle
- * coordinator. It is additive: it neither shadows nor interferes with the
- * built-in `task` tool or any other plugin's tools.
+ * It dispatches ONLY to the consultation team roles (`explorer`, `analyst`,
+ * `critic`, `verifier`, `writer`, `simple`, `build-lite`, `build`) using the
+ * recoverable lifecycle coordinator. It is additive: it neither shadows nor
+ * interferes with the built-in `task` tool or any other plugin's tools.
  */
 export function createConsultationDispatchTools(
   client: PluginInput["client"],
@@ -69,7 +85,7 @@ export function createConsultationDispatchTools(
 
   const dispatch = tool({
     description:
-      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
+      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer, simple, build-lite, build). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
     args: {
       role: tool.schema.enum(DISPATCH_ROLES),
       prompt: tool.schema.string(),
@@ -82,12 +98,15 @@ export function createConsultationDispatchTools(
         critic: config.critic_enabled,
         verifier: config.verifier_enabled,
         writer: config.writer_enabled || config.writer_delegate_agent !== undefined,
+        simple: config.simple_enabled,
+        "build-lite": config.build_lite_enabled,
+        build: config.build_enabled,
       }
       if (!enabled[args.role]) return `Error: ${args.role} is disabled by configuration`
 
       const { agentName, model } = resolveRoleTarget(config, args.role)
       const modelChain: Array<string | null> =
-        args.role === "writer" && config.writer_delegate_agent !== undefined
+        args.role === "build" || (args.role === "writer" && config.writer_delegate_agent !== undefined)
           ? [model ?? null]
           : resolveRoleModelChain(config, args.role).map((m) => m ?? null)
 

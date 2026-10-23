@@ -6,6 +6,7 @@ import type { PluginInput, ToolContext } from "@opencode-ai/plugin"
 
 import {
   createConsultationDispatchTool,
+  createConsultationDispatchTools,
   resolveRoleTarget,
   splitModel,
 } from "./dispatch-tool.ts"
@@ -94,6 +95,24 @@ describe("resolveRoleTarget", () => {
     expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode-go/glm-5.3" })
     expect(verifier).toEqual({ agentName: "consultation-verifier", model: "opencode-go/glm-5.3" })
     expect(writer).toEqual({ agentName: "consultation-writer", model: "opencode/claude-sonnet-5" })
+    const simple = resolveRoleTarget(config(), "simple")
+    expect(simple).toEqual({ agentName: "simple", model: "opencode-go/deepseek-v4.1-flash" })
+    const buildLite = resolveRoleTarget(config(), "build-lite")
+    expect(buildLite).toEqual({ agentName: "build-lite", model: "opencode-go/glm-5.3-flash" })
+    const build = resolveRoleTarget(config(), "build")
+    expect(build).toEqual({ agentName: "build", model: undefined })
+  })
+
+  it("resolves a renamed simple agent", () => {
+    const cfg = config({ simple_agent: "my-simple", simple_model: "test/simple" })
+    expect(resolveRoleTarget(cfg, "simple")).toEqual({ agentName: "my-simple", model: "test/simple" })
+  })
+
+  it("routes the build role to the configured host agent and pins its model only when set", () => {
+    const cfg = config({ build_agent: "host-build", build_model: "p/build-m" })
+    expect(resolveRoleTarget(cfg, "build")).toEqual({ agentName: "host-build", model: "p/build-m" })
+    const unpinned = config({ build_agent: "host-build" })
+    expect(resolveRoleTarget(unpinned, "build")).toEqual({ agentName: "host-build", model: undefined })
   })
 
   it("routes the writer to a delegate agent without pinning a model by default", () => {
@@ -327,6 +346,65 @@ describe("createConsultationDispatchTool", () => {
     const prompt = lastPromptAsyncCall(fake)
     expect(prompt.input.body.agent).toBe("host-writer")
     expect(prompt.input.body.model).toBeUndefined()
+  })
+
+  it("rejects the simple role when simple_enabled=false", async () => {
+    // given
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-simpleoff-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, '{\n  "simple_enabled": false\n}')
+    process.env.CONSULTATION_CONFIG = configPath
+    const tools = createConsultationDispatchTools(createFakeSdk() as unknown as PluginInput["client"])
+
+    try {
+      // when
+      const result = await tools.consultation_dispatch.execute({ role: "simple", prompt: "quick lookup" }, fakeContext())
+
+      // then
+      expect(result).toBe("Error: simple is disabled by configuration")
+    } finally {
+      delete process.env.CONSULTATION_CONFIG
+      rmSync(tmpConfigDir, { recursive: true, force: true })
+    }
+  })
+
+  it("launches build-lite with the configured agent and model", async () => {
+    // given
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-bl-"))
+    const configPath = join(tmpConfigDir, "config.jsonc")
+    writeFileSync(configPath, JSON.stringify({ build_lite_agent: "custom-lite", build_lite_model: "custom/glm-flash" }))
+    process.env.CONSULTATION_CONFIG = configPath
+    const fake = createRespondingFake("done")
+    const tools = createConsultationDispatchTools(fake as unknown as PluginInput["client"])
+
+    try {
+      // when
+      const result = await tools.consultation_dispatch.execute({ role: "build-lite", prompt: "rename A to B" }, fakeContext())
+
+      // then
+      const body = lastPromptAsyncCall(fake).input.body
+      expect(body.agent).toBe("custom-lite")
+      expect(body.model).toEqual({ providerID: "custom", modelID: "glm-flash" })
+      expect(result).toBe("done")
+    } finally {
+      delete process.env.CONSULTATION_CONFIG
+      rmSync(tmpConfigDir, { recursive: true, force: true })
+    }
+  })
+
+  it("launches the build role against the host agent without a pinned model", async () => {
+    // given
+    const fake = createRespondingFake("done")
+    const tools = createConsultationDispatchTools(fake as unknown as PluginInput["client"])
+
+    // when
+    const result = await tools.consultation_dispatch.execute({ role: "build", prompt: "refactor X" }, fakeContext())
+
+    // then
+    const body = lastPromptAsyncCall(fake).input.body
+    expect(body.agent).toBe("build")
+    expect(body.model).toBeUndefined()
+    expect(result).toBe("done")
   })
 
   it("uses the production 300000 ms wait budget at the tool boundary", async () => {

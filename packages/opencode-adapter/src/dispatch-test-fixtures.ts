@@ -46,6 +46,9 @@ export const validRoleSpecs: Array<{ label: string; role: DispatchRole; record: 
   { label: "writer-bundled", role: "writer", record: makeJobSpec({ role: "writer", agent_name: "consultation-writer", model_chain: ["opencode/claude-sonnet-5", "opencode-go/kimi-k3"] }) },
   { label: "writer-delegate-model", role: "writer", record: makeJobSpec({ role: "writer", agent_name: "host-writer", model_chain: ["custom/model"] }) },
   { label: "writer-delegate-null", role: "writer", record: makeJobSpec({ role: "writer", agent_name: "host-writer", model_chain: [null] }) },
+  { label: "simple", role: "simple", record: makeJobSpec({ role: "simple", agent_name: "simple", model_chain: ["opencode-go/deepseek-v4.1-flash"] }) },
+  { label: "build-lite", role: "build-lite", record: makeJobSpec({ role: "build-lite", agent_name: "build-lite", model_chain: ["opencode-go/glm-5.3-flash"] }) },
+  { label: "build-host", role: "build", record: makeJobSpec({ role: "build", agent_name: "build", model_chain: [null] }) },
 ]
 
 export function makeAttemptReservation(overrides: Partial<AttemptReservation> = {}): AttemptReservation {

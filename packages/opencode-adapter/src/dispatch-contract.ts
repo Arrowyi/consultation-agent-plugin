@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer"] as const
+export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build"] as const
 export type DispatchRole = (typeof DISPATCH_ROLES)[number]
 
 export const PRODUCTION_WAIT_BUDGET_MS = 300_000
