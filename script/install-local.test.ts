@@ -50,6 +50,7 @@ describe("REQUIRED_INSTALLED_FILES", () => {
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/build-lite.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/claudesonnet55.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/gemini38flash.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/deepseekflash.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/deepseekv41flash.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/glm53flash.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/glm53.md")

@@ -10,5 +10,3 @@ Strongest open-weights hard-agentic model (Terminal-Bench 4.0 41.8%, AA Coding I
 - Baseline discipline — see the whole diff before editing; change only lines the task names.
 - Novel abstract reasoning is an unconfirmed weak spot — write the approach out and check it against a worked example before implementing.
 - Slow (~70 tok/s, TTFT ~3.5s) — plan before executing, don't re-derive mid-task; delegate cheap bulk work to a cheaper subagent.
-
-(End of file - 8 lines)

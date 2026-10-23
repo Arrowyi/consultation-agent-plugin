@@ -32,7 +32,7 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
 | 15 | Every agent's model is user-configurable (pre-existing: all `*_model` fields override `MODEL_DEFAULTS`) — confirmed, no new work |
 | 16 | Prompts are layered: `role asset + model-adaptation block + runtime bindings`. v2: the model block is keyed by model, decoupled from the agent, and matched provider-agnostically — resolved from the user's global `model_prompts` map keyed by the normalized model key (`normalizeModelKey`: provider prefix dropped, lowercased, alphanumerics only; `""` disables), else the shipped `assets/model-prompts/<key>.md` block (model-keyed, no default-model gate), else empty. `build` role and delegated writers are excluded (host-owned prompts). Supersedes the v1 per-agent `*_model_prompts` maps (§15) |
-| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<key>.md` (key = normalized model name), six shipped blocks (one per shipped default model), content strictly model-trait (never role references), extensible by dropping a single file |
+| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<key>.md` (key = normalized model name), six default-model blocks plus a `deepseekflash.md` direct-provider alias, content strictly model-trait (never role references), extensible by dropping a single file |
 | 18 | Fallback chains removed: `writer_fallback_models` and its default are deleted, every agent resolves to a single model; the generic `model_chain` walking seam is kept so re-adding automatic allowance-exhaustion fallback later stays a localized change |
 | 19 | Writer default model changed `opencode/claude-sonnet-5` → `opencode/claude-sonnet-5-5` (live-endpoint verified 2026-10-23; claude-sonnet-5's reputation collapsed) |
 | 20 | `MODEL_DEFAULTS` synced to the maintainer's verified set (§16): consultant → `opencode-go/glm-5.3`, critic/verifier → `opencode/gemini-3.8-flash` (restores the cross-family audit structure: challenger ≠ consultant ≠ analyst), writer → `opencode/claude-sonnet-5-5`; fallback removed |
@@ -299,9 +299,10 @@ Layered prompt assembly for every plugin-owned agent: `role asset + model-adapta
 
 ### Library (shipped defaults)
 
-- `assets/model-prompts/<key>.md`, one file per model, where `key = normalizeModelKey(model id)`: drop the provider prefix (everything up to and including the last `/`), lowercase, keep only letters and digits (strip `-`, `.`, etc.). So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both normalize to `deepseekv4pro`. Six blocks ship, one per shipped default model:
+- `assets/model-prompts/<key>.md`, one file per model, where `key = normalizeModelKey(model id)`: drop the provider prefix (everything up to and including the last `/`), lowercase, keep only letters and digits (strip `-`, `.`, etc.). So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both normalize to `deepseekv4pro`. Six default-model blocks ship, plus one direct-provider alias:
   - `glm53.md` — consultant
   - `deepseekv41flash.md` — simple + explorer
+  - `deepseekflash.md` — direct-provider alias for `deepseek/deepseek-flash` (same V4.1-Flash model; its id normalizes differently, so it needs its own key)
   - `qwen38max.md` — analyst
   - `gemini38flash.md` — critic + verifier
   - `glm53flash.md` — build-lite

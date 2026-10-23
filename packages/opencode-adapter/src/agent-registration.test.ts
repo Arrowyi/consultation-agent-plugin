@@ -387,6 +387,28 @@ describe("resolveModelPrompt", () => {
     // when // then
     expect(await resolveModelPrompt(config, "opencode-go/deepseek-v4.1-flash")).toBe("")
   })
+
+  it("loads the shipped block for the direct-provider DeepSeek Flash id", async () => {
+    // given — deepseek/deepseek-flash normalizes to deepseekflash, not deepseekv41flash
+    const config = makeConfig()
+
+    // when
+    const block = await resolveModelPrompt(config, "deepseek/deepseek-flash")
+
+    // then
+    expect(block.startsWith("## Driving DeepSeek V4.1-Flash")).toBe(true)
+  })
+
+  it("keeps the direct-provider DeepSeek Flash block in sync with the V4.1-Flash block", async () => {
+    // given — the two ids name the same model; the alias file must not drift
+    const [alias, canonical] = await Promise.all([
+      readFile(resolveAsset("model-prompts/deepseekflash.md"), "utf8"),
+      readFile(resolveAsset("model-prompts/deepseekv41flash.md"), "utf8"),
+    ])
+
+    // when // then
+    expect(alias).toBe(canonical)
+  })
 })
 
 describe("registerConsultantAgent", () => {

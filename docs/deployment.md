@@ -298,10 +298,12 @@ So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve to
 2. else the shipped library block `assets/model-prompts/<key>.md`;
 3. else empty — the role asset runs standalone.
 
-Six blocks ship, one per shipped default model, each file named by its
-normalized key: `glm53.md` (consultant), `deepseekv41flash.md` (simple,
+Seven blocks ship, each file named by its normalized key: six for the shipped
+default models — `glm53.md` (consultant), `deepseekv41flash.md` (simple,
 explorer), `qwen38max.md` (analyst), `gemini38flash.md` (critic, verifier),
-`glm53flash.md` (build-lite), and `claudesonnet55.md` (writer).
+`glm53flash.md` (build-lite), and `claudesonnet55.md` (writer) — plus
+`deepseekflash.md` for the direct-provider id `deepseek/deepseek-flash` (the
+same V4.1-Flash model, but a different normalized key).
 
 To add a block for a model that has none: name the file after the model's
 normalized key — the same rule above applied to the model id — drop it at
