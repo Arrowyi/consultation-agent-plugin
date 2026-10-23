@@ -262,12 +262,12 @@
   },
   {
     "id": "C30",
-    "title": "Only confirmed retryable bundled-writer failure advances fallback",
-    "given": "The bundled writer has primary plus fallback_models; its primary produces a confirmed terminal retryable model error. Contrast pending, unknown, non-retryable failure, non-writer roles and delegated writer configurations.",
-    "when": "The lifecycle selects whether to advance the configured model chain",
-    "then": "The bundled writer advances exactly once to the next configured model on confirmed retryable failure only. Pending, unknown and non-retryable errors never advance; non-writer roles and delegated writer have one configured attempt and no fallback advance.",
+    "title": "No role advances a fallback chain: every role is single-attempt",
+    "given": "Fallback chains were removed; every dispatch role resolves to a single model. The build role targets the host build agent by name (optionally pinning a model), and a delegated writer targets the host agent — both single-attempt.",
+    "when": "A dispatch attempt fails terminally with a retryable provider error (e.g. 402)",
+    "then": "The failure surfaces as a terminal failure carrying the remediation hint (naming the role's _model config field and the config path) — no backup model is attempted, for any role including the writer.",
     "grading": "deterministic",
-    "notes": "Executable: packages/opencode-adapter/src/dispatch-lifecycle.test.ts — writer fallback / 'advances the chain exactly once on a confirmed 402/429 retryable failure', 'does not advance on pending or unknown', and non-writer role failure / 'does not fall back'; dispatch-tool.test.ts — 'does not fall back on a non-retryable writer error'; dispatch-registration.test.ts — 'retains the disabled-bundled writer delegate override with a pinned model' and 'retains the disabled-bundled writer delegate override with host model selection' pin one-entry delegate chains. Live consultant behavior and host-internal delegate retries need separate review. Rubric: Reject unknown-triggered backup model, fallback on pending or non-retryable failure, or any plugin fallback advance for non-writer/delegate roles."
+    "notes": "Executable: packages/opencode-adapter/src/dispatch-lifecycle.test.ts — single-attempt retryable failure returns a failure envelope with the hint, no advance; dispatch-helpers.test.ts — modelFailureHint + isProviderErrorText; dispatch-tool.test.ts — the single-attempt quota test asserting promptAsyncCount === 1. Rubric: Reject any fallback/backup-model advance for any role, or a retryable failure silently retrying the same model beyond the single attempt."
   },
   {
     "id": "C31",

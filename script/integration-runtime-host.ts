@@ -11,7 +11,7 @@ export async function createRuntimeHost(providerURL: string) {
   const configHome = join(sandbox, "config")
   for (const name of ["home", "data", "state", "cache", "proj", "config/opencode", "config/consultation-agent"]) mkdirSync(join(sandbox, name), { recursive: true })
   const entry = await resolvePluginEntry()
-  const modelNames = ["consultant", "explorer", "analyst", "critic", "verifier", "writer", "backup", "delegate"]
+  const modelNames = ["consultant", "explorer", "analyst", "critic", "verifier", "writer", "delegate"]
   const config = {
     $schema: "https://opencode.ai/config.json", plugin: [toFileUrl(entry.entry)],
     enabled_providers: ["fixture"], model: "fixture/consultant", small_model: "fixture/consultant",
