@@ -1,7 +1,7 @@
 import { DISPATCH_ROLES, PRODUCTION_WAIT_BUDGET_MS, createKeyedMutex, serializeOutcome, type Clock, type DispatchOutcome, type DispatchRole, type DispatchSdk, type JobSpec, type KeyedMutex } from "./dispatch-contract.ts"
 import { createJob, loadJob } from "./dispatch-journal.ts"
 import { STARTUP_GRACE_MS } from "./dispatch-observer.ts"
-import { buildChainFailureMessage, errorText, formatModel, makeEnvelope, observationToOutcome } from "./dispatch-helpers.ts"
+import { buildChainFailureMessage, errorText, formatModel, isProviderErrorText, makeEnvelope, modelFailureHint, observationToOutcome } from "./dispatch-helpers.ts"
 import { abortAndReconcile, createSystemClock, findActiveAttempt } from "./dispatch-cancel.ts"
 import { launchAttempt, observeAttempt, LaunchError, type AttemptSubmission } from "./dispatch-attempt.ts"
 export { createSystemClock } from "./dispatch-cancel.ts"
@@ -67,7 +67,10 @@ export function createDispatchLifecycle(input: CreateDispatchLifecycleInput): Di
         case "failed": {
           lastError = observation.error
           tried.push(formatModel(attempt.model, spec.agent_name))
-          if (!observation.retryable || blockFallback) return { kind: "failure", reason: `${spec.role} dispatch failed: ${lastError}` }
+          if (!observation.retryable || blockFallback) {
+            const hint = isProviderErrorText(lastError) ? modelFailureHint(spec.role, spec.model_chain[index] ?? null) : ""
+            return { kind: "failure", reason: `${spec.role} dispatch failed: ${lastError}${hint}` }
+          }
           break
         }
         default: {
@@ -100,7 +103,8 @@ export function createDispatchLifecycle(input: CreateDispatchLifecycleInput): Di
       }
       const identity = error instanceof LaunchError && error.jobID !== undefined ? ` (job_id=${error.jobID})` : ""
       const message = error instanceof LaunchError ? error.message : errorText(error)
-      return serializeOutcome({ kind: "failure", reason: `${request.role} dispatch failed: ${message}${identity}` })
+      const hint = error instanceof LaunchError ? "" : isProviderErrorText(message) ? modelFailureHint(request.role, modelChain[0] ?? null) : ""
+      return serializeOutcome({ kind: "failure", reason: `${request.role} dispatch failed: ${message}${identity}${hint}` })
     })
   }
 

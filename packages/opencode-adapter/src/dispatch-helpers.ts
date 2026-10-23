@@ -39,12 +39,49 @@ export function formatModel(model: string | null | undefined, agentName: string)
   return model ?? `host model of ${agentName}`
 }
 
+const PROVIDER_ERROR_PREFIX = /^(APIError|ProviderAuthError|UnknownError|MessageOutputLengthError)/
+
+/**
+ * True when a failure text was produced by a recognized provider/model error
+ * (per `errorText`), not the unrecognized fallback. Only these carry the
+ * model-configuration remediation hint.
+ */
+export function isProviderErrorText(text: string): boolean {
+  return PROVIDER_ERROR_PREFIX.test(text)
+}
+
+/**
+ * Role → plugin-config model-field map. Explicit because "build-lite" maps to
+ * the underscored `build_lite_model` (role-name interpolation would be wrong).
+ */
+export const ROLE_MODEL_FIELDS: Record<DispatchRole, string> = {
+  explorer: "explorer_model",
+  analyst: "analyst_model",
+  critic: "critic_model",
+  verifier: "verifier_model",
+  writer: "writer_model",
+  simple: "simple_model",
+  "build-lite": "build_lite_model",
+  build: "build_model",
+}
+
+/**
+ * Remediation hint appended to provider/model dispatch failures so a
+ * non-Go user immediately knows how to fix the default model set.
+ */
+export function modelFailureHint(role: DispatchRole, model: string | null | undefined): string {
+  const label = model !== undefined && model !== null && model.length > 0 ? ` (model: ${model})` : ""
+  const field = ROLE_MODEL_FIELDS[role]
+  return `${label}. Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "${field}" in ~/.config/consultation-agent/config.jsonc (or point $CONSULTATION_CONFIG at your config), then retry the dispatch.`
+}
+
 export function buildChainFailureMessage(
   role: DispatchRole,
   tried: ReadonlyArray<string>,
   lastError: string,
 ): string {
-  return `Error: ${role} dispatch failed on every model in the chain (${tried.join(" -> ")}): ${lastError}; degrade by answering inline and say so.`
+  const hint = isProviderErrorText(lastError) ? modelFailureHint(role, tried.at(-1)) : ""
+  return `Error: ${role} dispatch failed on every model in the chain (${tried.join(" -> ")}): ${lastError}${hint}; degrade by answering inline and say so.`
 }
 
 export function makeEnvelope(
@@ -99,7 +136,12 @@ export function observationToOutcome(
         },
       }
     case "failed":
-      return { kind: "failure", reason: `${role} dispatch failed: ${observation.error}` }
+      return {
+        kind: "failure",
+        reason: `${role} dispatch failed: ${observation.error}${
+          isProviderErrorText(observation.error) ? modelFailureHint(role, attempt.model) : ""
+        }`,
+      }
     case "pending":
       return makeEnvelope(
         "pending",
