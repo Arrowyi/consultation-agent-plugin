@@ -31,3 +31,5 @@ plus a separate list of unsupported or unverified claims for the consultant
 to check. Do not assert that examples compiled or ran without supplied output.
 You supply text; the consultant verifies, revises, integrates, and writes the
 final file or inline document.
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->

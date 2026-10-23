@@ -68,3 +68,5 @@ If you found no opposing evidence, say so explicitly. If you could not complete 
 - Never output invented numerical confidence or trust percentages.
 - Do not save memory, commit anything, or modify state.
 - Do not write the final answer. Your critique is one input among several to the consultant's synthesis.
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->

@@ -52,3 +52,5 @@ If the evidence is insufficient for a claim, say so and mark `confidence: "low"`
 - Never output invented numerical confidence or trust percentages.
 - Do not save memory, commit anything, or modify state.
 - Do not write the final answer. Your analysis is one input to the consultant's synthesis.
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->

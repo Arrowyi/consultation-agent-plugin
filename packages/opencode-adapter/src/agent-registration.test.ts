@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import { readFile } from "node:fs/promises"
 import {
   registerConsultantAgent,
   registerConsultationCritic,
@@ -8,7 +9,10 @@ import {
   registerWriter,
   buildRuntimeBindings,
   injectRuntimeBindings,
+  injectModelPrompt,
+  resolveModelPrompt,
 } from "./agent-registration.ts"
+import { resolveAsset } from "./asset-paths.ts"
 import type { ConsultationPluginConfig } from "./plugin-config.ts"
 
 function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): ConsultationPluginConfig {
@@ -230,6 +234,68 @@ describe("injectRuntimeBindings", () => {
     expect(result).toContain("Some content without placeholder.")
     expect(result).toContain("## Runtime Bindings (injected)")
     expect(result.endsWith("## Runtime Bindings (injected)\n- stuff")).toBe(true)
+  })
+})
+
+describe("injectModelPrompt", () => {
+  it("replaces the MODEL-PROMPT placeholder when a block resolves", () => {
+    // given
+    const body = "# Agent\n\n## Role\n\nstuff\n\n<!-- MODEL-PROMPT: injected by the adapter. -->\n"
+    // when
+    const result = injectModelPrompt(body, "clamp formatting")
+    // then
+    expect(result).not.toContain("<!-- MODEL-PROMPT")
+    expect(result).toContain("clamp formatting")
+    expect(result).toContain("# Agent")
+  })
+
+  it("returns the body byte-identical when the block is empty", () => {
+    // given
+    const body = "# Agent\n\n<!-- MODEL-PROMPT: injected by the adapter. -->\n"
+    // when
+    const result = injectModelPrompt(body, "")
+    // then
+    expect(result).toBe(body)
+  })
+
+  it("appends a Driving This Model section when no placeholder exists", () => {
+    // given
+    const body = "# Agent\n\n## Role\n\nstuff"
+    // when
+    const result = injectModelPrompt(body, "drive carefully")
+    // then
+    expect(result).toContain("# Agent")
+    expect(result).toContain("## Driving This Model")
+    expect(result).toContain("drive carefully")
+  })
+})
+
+describe("resolveModelPrompt", () => {
+  it("returns the user map entry for the exact resolved model, including an explicit empty string", async () => {
+    // given
+    const config = makeConfig({
+      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "user block", "other/model": "" },
+    })
+
+    // when // then
+    expect(await resolveModelPrompt(config, "simple", "opencode-go/deepseek-v4.1-flash")).toBe("user block")
+    expect(await resolveModelPrompt(config, "simple", "other/model")).toBe("")
+  })
+
+  it("returns empty for a non-default model with no user entry (never default-model advice on a swapped model)", async () => {
+    // given
+    const config = makeConfig()
+
+    // when // then
+    expect(await resolveModelPrompt(config, "explorer", "some/other-model")).toBe("")
+  })
+
+  it("returns empty for the default model when no shipped block file exists", async () => {
+    // given — critic's default model has no shipped block in this repo
+    const config = makeConfig()
+
+    // when // then
+    expect(await resolveModelPrompt(config, "critic", "opencode-go/glm-5.3")).toBe("")
   })
 })
 
@@ -535,5 +601,74 @@ describe("registerWriter", () => {
 
     // then
     expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5, fallback: opencode-go/kimi-k3)")
+  })
+})
+
+describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
+  it("every plugin-owned agent asset contains the placeholder", async () => {
+    // given
+    const assets = [
+      "agents/consultant.md",
+      "agents/explorer.md",
+      "agents/analyst.md",
+      "agents/consultation-critic.md",
+      "agents/consultation-verifier.md",
+      "agents/writer.md",
+    ]
+
+    // when // then
+    for (const asset of assets) {
+      const source = await readFile(resolveAsset(asset), "utf8")
+      expect(source).toContain("<!-- MODEL-PROMPT")
+    }
+  })
+
+  it("assembles consultant byte-stably when no model block resolves (placeholder stays inert)", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerConsultantAgent(config, pluginConfig, "oc-ns")
+
+    // then
+    const consultant = config.agent?.["consultant"] as { prompt: string }
+    expect(consultant.prompt).toContain("<!-- MODEL-PROMPT")
+    expect(consultant.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+  })
+
+  it("injects a user model block into the consultant and still injects runtime bindings", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      agent_model: "my-provider/consultant-m",
+      agent_model_prompts: { "my-provider/consultant-m": "drive the consultant carefully" },
+    })
+
+    // when
+    await registerConsultantAgent(config, pluginConfig, "oc-ns")
+
+    // then
+    const consultant = config.agent?.["consultant"] as { prompt: string }
+    expect(consultant.prompt).not.toContain("<!-- MODEL-PROMPT")
+    expect(consultant.prompt).toContain("drive the consultant carefully")
+    expect(consultant.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+  })
+
+  it("injects a user model block into a read-only specialist", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      critic_model: "my/critic-m",
+      critic_model_prompts: { "my/critic-m": "challenge aggressively" },
+    })
+
+    // when
+    await registerConsultationCritic(config, pluginConfig)
+
+    // then
+    const critic = config.agent?.["consultation-critic"] as { prompt: string }
+    expect(critic.prompt).toContain("challenge aggressively")
+    expect(critic.prompt).not.toContain("<!-- MODEL-PROMPT")
   })
 })

@@ -55,3 +55,5 @@ If you could not find anything for a claim, return it with an empty `sources` li
 - Never output invented numerical confidence or trust percentages.
 - Do not save memory, commit anything, or modify state.
 - Do not write the final answer. Your report is one input to the analyst and consultant.
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->

@@ -61,3 +61,5 @@ limitsEncountered: [string]       // detection that needs data science you canno
 - Never output invented numerical confidence or trust percentages.
 - Do not save memory, commit anything, or modify state.
 - Do not write the final answer. Your audit is one input among several to the consultant's synthesis.
+
+<!-- MODEL-PROMPT: optional per-model adaptation block injected by the opencode adapter; inert unless a block resolves. -->

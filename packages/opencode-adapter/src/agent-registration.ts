@@ -1,12 +1,14 @@
 import { readFile } from "node:fs/promises"
 import { resolveAsset } from "./asset-paths.ts"
 import {
+  MODEL_DEFAULTS,
   resolveCostGuardUsd,
   resolveRoleModel,
   resolveRoleModelChain,
   resolveTeamCaps,
   resolveTierRoleCaps,
   type ConsultationPluginConfig,
+  type ModelRole,
 } from "./plugin-config.ts"
 
 interface MutableConfig {
@@ -28,6 +30,8 @@ interface SubagentEntry {
 }
 
 const RUNTIME_BINDINGS_PLACEHOLDER = /<!--\s*RUNTIME-BINDINGS[\s\S]*?-->/
+
+const MODEL_PROMPT_PLACEHOLDER = /<!--\s*MODEL-PROMPT[\s\S]*?-->/
 
 const EXPLORER_DESCRIPTION =
   "Search and information-gathering specialist. Gathers graded sources for specific claims and returns a structured report. Dispatched by the consultant and may fan out to multiple instances."
@@ -118,6 +122,68 @@ export function injectRuntimeBindings(body: string, runtimeBlock: string): strin
 }
 
 /**
+ * Per-agent model-adaptation prompt maps from the plugin config.
+ */
+function modelPromptsFor(
+  pluginConfig: ConsultationPluginConfig,
+  role: ModelRole,
+): Record<string, string> | undefined {
+  switch (role) {
+    case "consultant":
+      return pluginConfig.agent_model_prompts
+    case "explorer":
+      return pluginConfig.explorer_model_prompts
+    case "analyst":
+      return pluginConfig.analyst_model_prompts
+    case "critic":
+      return pluginConfig.critic_model_prompts
+    case "verifier":
+      return pluginConfig.verifier_model_prompts
+    case "writer":
+      return pluginConfig.writer_model_prompts
+    case "simple":
+      return pluginConfig.simple_model_prompts
+    case "build-lite":
+      return pluginConfig.build_lite_model_prompts
+  }
+}
+
+/**
+ * Resolve the model-adaptation block for a plugin-owned agent. The user map
+ * wins (exact resolved-model id keys; an explicit "" disables). The shipped
+ * default `assets/model-prompts/<role>.md` applies only when the resolved
+ * model IS the agent's default model — default-model advice is never
+ * injected into a swapped model. Otherwise empty.
+ */
+export async function resolveModelPrompt(
+  pluginConfig: ConsultationPluginConfig,
+  role: ModelRole,
+  resolvedModel: string,
+): Promise<string> {
+  const override = modelPromptsFor(pluginConfig, role)?.[resolvedModel]
+  if (override !== undefined) return override
+  if (resolvedModel !== MODEL_DEFAULTS[role]) return ""
+  try {
+    return await readFile(resolveAsset(`model-prompts/${role}.md`), "utf8")
+  } catch {
+    return ""
+  }
+}
+
+/**
+ * Inject the model-adaptation block into an agent asset body. An empty block
+ * returns the body unchanged (the placeholder comment stays inert), so
+ * no-block assembly is byte-identical to the raw asset.
+ */
+export function injectModelPrompt(body: string, block: string): string {
+  if (block.length === 0) return body
+  if (MODEL_PROMPT_PLACEHOLDER.test(body)) {
+    return body.replace(MODEL_PROMPT_PLACEHOLDER, block)
+  }
+  return `${body}\n\n## Driving This Model\n\n${block}`
+}
+
+/**
  * Register the `consultant` primary agent into the OpenCode config.
  *
  * Reads `assets/agents/consultant.md`, injects the runtime bindings block,
@@ -135,8 +201,10 @@ export async function registerConsultantAgent(
   const consultantPath = resolveAsset("agents/consultant.md")
   const consultantBody = await readFile(consultantPath, "utf8")
 
+  const modelBlock = await resolveModelPrompt(pluginConfig, "consultant", resolveRoleModel(pluginConfig, "consultant"))
+  const withModelPrompt = injectModelPrompt(consultantBody, modelBlock)
   const runtimeBlock = buildRuntimeBindings(pluginConfig, namespace)
-  const assembledPrompt = injectRuntimeBindings(consultantBody, runtimeBlock)
+  const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
 
   const entry: ConsultantAgentEntry = {
     mode: "primary",
@@ -156,11 +224,20 @@ export async function registerConsultantAgent(
  */
 async function registerReadOnlySubagent(
   config: MutableConfig,
-  options: { name: string; description: string; assetFile: string; model: string; denyBash?: boolean },
+  options: {
+    name: string
+    description: string
+    assetFile: string
+    model: string
+    denyBash?: boolean
+    pluginConfig: ConsultationPluginConfig
+    role: ModelRole
+  },
 ): Promise<void> {
   if (config.agent?.[options.name]) return
 
-  const body = await readFile(resolveAsset(options.assetFile), "utf8")
+  const modelBlock = await resolveModelPrompt(options.pluginConfig, options.role, options.model)
+  const body = injectModelPrompt(await readFile(resolveAsset(options.assetFile), "utf8"), modelBlock)
 
   const entry: SubagentEntry = {
     mode: "subagent",
@@ -183,6 +260,8 @@ export async function registerExplorer(
     description: EXPLORER_DESCRIPTION,
     assetFile: "agents/explorer.md",
     model: resolveRoleModel(pluginConfig, "explorer"),
+    pluginConfig,
+    role: "explorer",
   })
 }
 
@@ -195,6 +274,8 @@ export async function registerAnalyst(
     description: ANALYST_DESCRIPTION,
     assetFile: "agents/analyst.md",
     model: resolveRoleModel(pluginConfig, "analyst"),
+    pluginConfig,
+    role: "analyst",
   })
 }
 
@@ -207,6 +288,8 @@ export async function registerConsultationCritic(
     description: CRITIC_DESCRIPTION,
     assetFile: "agents/consultation-critic.md",
     model: resolveRoleModel(pluginConfig, "critic"),
+    pluginConfig,
+    role: "critic",
   })
 }
 
@@ -219,6 +302,8 @@ export async function registerVerifier(
     description: VERIFIER_DESCRIPTION,
     assetFile: "agents/consultation-verifier.md",
     model: resolveRoleModel(pluginConfig, "verifier"),
+    pluginConfig,
+    role: "verifier",
   })
 }
 
@@ -233,5 +318,7 @@ export async function registerWriter(
     assetFile: "agents/writer.md",
     model: resolveRoleModel(pluginConfig, "writer"),
     denyBash: true,
+    pluginConfig,
+    role: "writer",
   })
 }
