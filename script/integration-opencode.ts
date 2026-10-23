@@ -167,6 +167,18 @@ async function main(): Promise<void> {
             pass: hasWriter,
             detail: hasWriter ? "agent.consultation-writer present" : "agent.consultation-writer MISSING",
           })
+          const hasSimple = hasNestedKey(json, "agent", "simple")
+          assertions.push({
+            name: "config has simple agent key",
+            pass: hasSimple,
+            detail: hasSimple ? "agent.simple present" : "agent.simple MISSING",
+          })
+          const hasBuildLite = hasNestedKey(json, "agent", "build-lite")
+          assertions.push({
+            name: "config has build-lite agent key",
+            pass: hasBuildLite,
+            detail: hasBuildLite ? "agent.build-lite present" : "agent.build-lite MISSING",
+          })
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err)
@@ -193,6 +205,13 @@ async function main(): Promise<void> {
           assertions.push({ name: `installed skill names ${name}`, pass: skillText.includes(name), detail: "installed tool-routing token" })
         }
       }
+      const simpleWorkspace = join(sandboxData, "consultation-agent", "simple")
+      const simpleWorkspaceExists = existsSync(simpleWorkspace)
+      assertions.push({
+        name: "simple workspace directory created",
+        pass: simpleWorkspaceExists,
+        detail: simpleWorkspaceExists ? simpleWorkspace : `NOT FOUND: ${simpleWorkspace}`,
+      })
       assertions.push(...await proveDispatchPrimitives(async (path, body) => {
         const response = await fetch(`${baseUrl}${path}?directory=${encodeURIComponent(sandboxProj)}`, {
           method: body === undefined ? "GET" : "POST",
