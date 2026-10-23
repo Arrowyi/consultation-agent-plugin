@@ -39,6 +39,26 @@ export const ConsultationPluginConfigSchema = z.object({
   writer_delegate_agent: z.string().optional(),
   writer_delegate_model: z.string().optional(),
   writer_fallback_models: z.array(z.string()).optional(),
+  simple_agent: z.string().default("simple"),
+  simple_model: z.string().optional(),
+  simple_enabled: z.boolean().default(true),
+  simple_workspace_dir: z.string().optional(),
+  build_lite_agent: z.string().default("build-lite"),
+  build_lite_model: z.string().optional(),
+  build_lite_enabled: z.boolean().default(true),
+  build_agent: z.string().default("build"),
+  build_model: z.string().optional(),
+  build_enabled: z.boolean().default(true),
+  // Per-agent model-adaptation prompt maps, keyed by the exact resolved model
+  // id ("provider/model"). An explicit "" disables that model's block.
+  agent_model_prompts: z.record(z.string()).optional(),
+  explorer_model_prompts: z.record(z.string()).optional(),
+  analyst_model_prompts: z.record(z.string()).optional(),
+  critic_model_prompts: z.record(z.string()).optional(),
+  verifier_model_prompts: z.record(z.string()).optional(),
+  writer_model_prompts: z.record(z.string()).optional(),
+  simple_model_prompts: z.record(z.string()).optional(),
+  build_lite_model_prompts: z.record(z.string()).optional(),
   team_caps: z
     .object({
       round_cap: z.number().int().positive(),
@@ -76,6 +96,10 @@ export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSc
 // share glm-5.3 (upgraded from glm-5.2). verifier reuses the critic's model so
 // it stays ≠ analyst for cross-model audit. writer is a top-tier writing model
 // with a Go-allowance fallback.
+// simple is the economical daily-consultation generalist on V4.1-Flash.
+// build-lite is the mechanical coding lane on GLM-5.3-Flash (agentic-strong at
+// half of V4.1-Flash's peak price); the build role targets the host's native
+// build agent by name and has no plugin default model.
 export const MODEL_DEFAULTS = {
   consultant: "opencode-go/deepseek-v4-pro",
   explorer: "opencode-go/deepseek-v4.1-flash",
@@ -83,6 +107,8 @@ export const MODEL_DEFAULTS = {
   critic: "opencode-go/glm-5.3",
   verifier: "opencode-go/glm-5.3",
   writer: "opencode/claude-sonnet-5",
+  simple: "opencode-go/deepseek-v4.1-flash",
+  "build-lite": "opencode-go/glm-5.3-flash",
 } as const
 
 export const WRITER_FALLBACK_MODELS_DEFAULT = ["opencode-go/kimi-k3"] as const
@@ -103,6 +129,10 @@ export function resolveRoleModel(config: ConsultationPluginConfig, role: ModelRo
       return config.verifier_model ?? MODEL_DEFAULTS.verifier
     case "writer":
       return config.writer_model ?? MODEL_DEFAULTS.writer
+    case "simple":
+      return config.simple_model ?? MODEL_DEFAULTS.simple
+    case "build-lite":
+      return config.build_lite_model ?? MODEL_DEFAULTS["build-lite"]
   }
 }
 

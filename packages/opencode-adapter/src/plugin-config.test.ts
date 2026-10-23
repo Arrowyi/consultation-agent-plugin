@@ -138,6 +138,97 @@ describe("writer role configuration", () => {
   })
 })
 
+describe("simple role configuration", () => {
+  it("defaults the simple role and resolves its model", () => {
+    // given
+    const cfg = config()
+
+    // when // then
+    expect(cfg.simple_agent).toBe("simple")
+    expect(cfg.simple_enabled).toBe(true)
+    expect(cfg.simple_model).toBeUndefined()
+    expect(cfg.simple_workspace_dir).toBeUndefined()
+    expect(resolveRoleModel(cfg, "simple")).toBe("opencode-go/deepseek-v4.1-flash")
+    expect(resolveRoleModelChain(cfg, "simple")).toEqual(["opencode-go/deepseek-v4.1-flash"])
+  })
+
+  it("overrides the simple model when simple_model is set", () => {
+    // given
+    const cfg = config({ simple_model: "test/simple-model" })
+
+    // when // then
+    expect(resolveRoleModel(cfg, "simple")).toBe("test/simple-model")
+  })
+
+  it("accepts a relocated workspace dir", () => {
+    // given
+    const cfg = config({ simple_workspace_dir: "/abs/simple-workspace" })
+
+    // when // then
+    expect(cfg.simple_workspace_dir).toBe("/abs/simple-workspace")
+  })
+
+  it("keeps parsing an old config with no simple or build keys (compat guarantee)", () => {
+    // given — the pre-extension shape of a full config
+    const cfg = config({
+      agent_model: "opencode-go/deepseek-v4-pro",
+      explorer_agent: "consultation-explorer",
+      analyst_agent: "consultation-analyst",
+      critic_agent: "consultation-critic",
+      verifier_agent: "consultation-verifier",
+      writer_agent: "consultation-writer",
+    })
+
+    // when // then
+    expect(cfg.simple_agent).toBe("simple")
+    expect(cfg.simple_enabled).toBe(true)
+    expect(cfg.build_lite_agent).toBe("build-lite")
+    expect(cfg.build_lite_enabled).toBe(true)
+    expect(cfg.build_agent).toBe("build")
+    expect(cfg.build_enabled).toBe(true)
+    expect(cfg.build_model).toBeUndefined()
+  })
+})
+
+describe("build-lite and build role configuration", () => {
+  it("defaults the build-lite lane model and the build routing target", () => {
+    // given
+    const cfg = config()
+
+    // when // then
+    expect(resolveRoleModel(cfg, "build-lite")).toBe("opencode-go/glm-5.3-flash")
+    expect(cfg.build_agent).toBe("build")
+    expect(cfg.build_model).toBeUndefined()
+  })
+
+  it("overrides build-lite and build from config", () => {
+    // given
+    const cfg = config({ build_lite_model: "test/glm-flash", build_agent: "my-build", build_model: "test/build-m" })
+
+    // when // then
+    expect(resolveRoleModel(cfg, "build-lite")).toBe("test/glm-flash")
+    expect(cfg.build_agent).toBe("my-build")
+    expect(cfg.build_model).toBe("test/build-m")
+  })
+})
+
+describe("model-adaptation prompt maps", () => {
+  it("parses per-agent model-prompt records keyed by exact model id", () => {
+    // given
+    const cfg = config({
+      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "clamp formatting" },
+      build_lite_model_prompts: { "opencode-go/glm-5.3-flash": "" },
+      agent_model_prompts: { "my-provider/model": "block" },
+    })
+
+    // when // then
+    expect(cfg.simple_model_prompts?.["opencode-go/deepseek-v4.1-flash"]).toBe("clamp formatting")
+    expect(cfg.build_lite_model_prompts?.["opencode-go/glm-5.3-flash"]).toBe("")
+    expect(cfg.agent_model_prompts?.["my-provider/model"]).toBe("block")
+    expect(cfg.explorer_model_prompts).toBeUndefined()
+  })
+})
+
 describe("stripJsonc", () => {
   it("strips line and block comments so JSON.parse succeeds", () => {
     // given

@@ -24,6 +24,12 @@ function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): Consulta
     verifier_enabled: true,
     writer_agent: "consultation-writer",
     writer_enabled: true,
+    simple_agent: "simple",
+    simple_enabled: true,
+    build_lite_agent: "build-lite",
+    build_lite_enabled: true,
+    build_agent: "build",
+    build_enabled: true,
     ...overrides,
   }
 }
