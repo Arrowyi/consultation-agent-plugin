@@ -45,10 +45,16 @@ describe("REQUIRED_INSTALLED_FILES", () => {
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/skills/consultation/SKILL.md")
   })
 
-  test("requires the simple and build-lite agents and their model-prompt blocks", () => {
+  test("requires the simple and build-lite agents and the shipped model-prompt library", () => {
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/simple.md")
     expect(REQUIRED_INSTALLED_FILES).toContain("assets/agents/build-lite.md")
-    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/simple.md")
-    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/build-lite.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/opencode-claude-sonnet-5-5.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/opencode-gemini-3.8-flash.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/opencode-go-deepseek-v4.1-flash.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/opencode-go-glm-5.3-flash.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/opencode-go-glm-5.3.md")
+    expect(REQUIRED_INSTALLED_FILES).toContain("assets/model-prompts/opencode-go-qwen3.8-max.md")
+    expect(REQUIRED_INSTALLED_FILES).not.toContain("assets/model-prompts/simple.md")
+    expect(REQUIRED_INSTALLED_FILES).not.toContain("assets/model-prompts/build-lite.md")
   })
 })

@@ -346,12 +346,30 @@ describe("resolveModelPrompt", () => {
   })
 
   it("returns empty for a model with no user entry and no shipped slug file", async () => {
-    // given — no shipped model-prompts library yet (Task 4 creates the slug files)
+    // given
     const config = makeConfig()
 
     // when // then
     expect(await resolveModelPrompt(config, "no-such/model")).toBe("")
-    expect(await resolveModelPrompt(config, "opencode-go/glm-5.3")).toBe("")
+  })
+
+  it("loads the shipped slug file for a default model with no user entry", async () => {
+    // given
+    const config = makeConfig()
+
+    // when
+    const block = await resolveModelPrompt(config, "opencode-go/glm-5.3")
+
+    // then
+    expect(block.startsWith("## Driving GLM-5.3")).toBe(true)
+  })
+
+  it("returns empty when the user disables a model that has a shipped slug file", async () => {
+    // given — an explicit "" wins over the shipped block
+    const config = makeConfig({ model_prompts: { "opencode-go/deepseek-v4.1-flash": "" } })
+
+    // when // then
+    expect(await resolveModelPrompt(config, "opencode-go/deepseek-v4.1-flash")).toBe("")
   })
 })
 
@@ -791,9 +809,10 @@ describe("registerSimple", () => {
       expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
       expect(simple.description).toContain("Economical daily-consultation agent")
       expect(simple.prompt).toContain("# Simple")
-      // No shipped slug file for deepseek-v4.1-flash yet (Task 4) — the
-      // placeholder stays inert until the model-prompt library lands.
-      expect(simple.prompt).toContain("<!-- MODEL-PROMPT")
+      // The default model resolves its shipped slug block, which replaces
+      // the placeholder.
+      expect(simple.prompt).toContain("## Driving DeepSeek V4.1-Flash")
+      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
       expect(simple.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
       expect(simple.prompt).toContain("oc-testns")
       expect(simple.prompt).toContain(workspace)
@@ -828,7 +847,7 @@ describe("registerSimple", () => {
     }
   })
 
-  it("injects the user model block over the shipped default", async () => {
+  it("injects the user model block over the shipped block", async () => {
     // given
     const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
     const config: { agent?: Record<string, unknown> } = {}
@@ -963,9 +982,10 @@ describe("registerBuildLite", () => {
     expect(lite.description).toContain("mechanical coding")
     expect(lite.prompt).toContain("# Build-Lite")
     expect(lite.prompt).toContain("Report-Up discipline")
-    // No shipped slug file for glm-5.3-flash yet (Task 4) — the placeholder
-    // stays inert until the model-prompt library lands.
-    expect(lite.prompt).toContain("<!-- MODEL-PROMPT")
+    // The default model resolves its shipped slug block, which replaces the
+    // placeholder.
+    expect(lite.prompt).toContain("## Driving GLM-5.3-Flash")
+    expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
     expect(lite.permission.task).toBe("deny")
   })
 
@@ -983,7 +1003,7 @@ describe("registerBuildLite", () => {
     expect(lite.prompt).toBe(source)
   })
 
-  it("injects the user model block over the shipped default", async () => {
+  it("injects the user model block over the shipped block", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
@@ -1050,9 +1070,9 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
   })
 
   it("assembles consultant byte-stably when no model block resolves (placeholder stays inert)", async () => {
-    // given
+    // given — a model with neither a user entry nor a shipped slug file
     const config: { agent?: Record<string, unknown> } = {}
-    const pluginConfig = makeConfig()
+    const pluginConfig = makeConfig({ agent_model: "my-provider/no-block-model" })
 
     // when
     await registerConsultantAgent(config, pluginConfig, "oc-ns")

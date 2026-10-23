@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test"
 import { readFile } from "node:fs/promises"
 import { z } from "zod"
 import {
+  injectModelPrompt,
   registerAnalyst,
   registerConsultantAgent,
   registerConsultationCritic,
@@ -33,12 +34,39 @@ const pluginConfig = {
   build_enabled: true,
 } satisfies ConsultationPluginConfig
 
+// Each read-only role runs a default model that resolves a shipped
+// model-prompt block (slug = model id with "/" → "-").
 const roles = [
-  { asset: "explorer.md", name: "consultation-explorer", register: registerExplorer },
-  { asset: "analyst.md", name: "consultation-analyst", register: registerAnalyst },
-  { asset: "consultation-critic.md", name: "consultation-critic", register: registerConsultationCritic },
-  { asset: "consultation-verifier.md", name: "consultation-verifier", register: registerVerifier },
-  { asset: "writer.md", name: "consultation-writer", register: registerWriter },
+  {
+    asset: "explorer.md",
+    name: "consultation-explorer",
+    block: "opencode-go-deepseek-v4.1-flash.md",
+    register: registerExplorer,
+  },
+  {
+    asset: "analyst.md",
+    name: "consultation-analyst",
+    block: "opencode-go-qwen3.8-max.md",
+    register: registerAnalyst,
+  },
+  {
+    asset: "consultation-critic.md",
+    name: "consultation-critic",
+    block: "opencode-gemini-3.8-flash.md",
+    register: registerConsultationCritic,
+  },
+  {
+    asset: "consultation-verifier.md",
+    name: "consultation-verifier",
+    block: "opencode-gemini-3.8-flash.md",
+    register: registerVerifier,
+  },
+  {
+    asset: "writer.md",
+    name: "consultation-writer",
+    block: "opencode-claude-sonnet-5-5.md",
+    register: registerWriter,
+  },
 ] as const
 
 const controls = ["consultation_dispatch_wait", "consultation_dispatch_cancel"] as const
@@ -93,14 +121,15 @@ describe("dispatch prompt routing contract", () => {
       expect(source).toContain("`unknown`")
     })
 
-    it(`passes the complete asset through when registering ${role.name}`, async () => {
+    it(`passes the complete asset through with its shipped model block when registering ${role.name}`, async () => {
       // given
       const config: { agent?: Record<string, unknown> } = {}
       const source = await readFile(resolveAsset(`agents/${role.asset}`), "utf8")
+      const block = await readFile(resolveAsset(`model-prompts/${role.block}`), "utf8")
       // when
       await role.register(config, pluginConfig)
       // then
-      expect(promptSchema.parse(config.agent?.[role.name]).prompt).toBe(source)
+      expect(promptSchema.parse(config.agent?.[role.name]).prompt).toBe(injectModelPrompt(source, block))
     })
   }
 
