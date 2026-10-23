@@ -13,3 +13,6 @@ tmp/
 
 # isolated git worktrees
 .worktrees/
+
+# superpowers SDD plan workspaces (scratch, not part of the plugin product)
+.superpowers/
