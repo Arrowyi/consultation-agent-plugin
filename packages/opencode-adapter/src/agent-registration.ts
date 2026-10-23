@@ -342,28 +342,39 @@ export function injectRuntimeBindings(body: string, runtimeBlock: string): strin
 }
 
 /**
- * Convert a model id ("provider/model") into the file-slug form used by the
- * shipped model-prompt library (`assets/model-prompts/<slug>.md`).
+ * Normalize a model id ("provider/model") into a provider-agnostic match key.
+ *
+ * The key strips the provider prefix (everything up to and including the last
+ * "/"), lowercases the remainder, and keeps only ASCII letters and digits —
+ * so `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve
+ * to `deepseekv4pro`, and the same model-prompt block drives either provider.
+ * The shipped library files (`assets/model-prompts/<key>.md`) and the
+ * `model_prompts` config keys use this exact normalized form.
  */
-export function modelSlug(modelId: string): string {
-  return modelId.replaceAll("/", "-")
+export function normalizeModelKey(modelId: string): string {
+  return modelId
+    .slice(modelId.lastIndexOf("/") + 1)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
 }
 
 /**
  * Resolve the model-adaptation block for a model, keyed by the model itself
- * and decoupled from the agent: the user's global `model_prompts` map wins
- * (exact resolved-model id keys; an explicit "" disables that model's
- * block), else the shipped `assets/model-prompts/<slug>.md` block if a file
- * for the model exists, else empty.
+ * and decoupled from both the agent and the provider: the user's global
+ * `model_prompts` map wins (keyed by the normalized model key; an explicit ""
+ * disables that model's block), else the shipped
+ * `assets/model-prompts/<key>.md` block if a file for the model exists, else
+ * empty.
  */
 export async function resolveModelPrompt(
   pluginConfig: ConsultationPluginConfig,
   resolvedModel: string,
 ): Promise<string> {
-  const override = pluginConfig.model_prompts?.[resolvedModel]
+  const key = normalizeModelKey(resolvedModel)
+  const override = pluginConfig.model_prompts?.[key]
   if (override !== undefined) return override
   try {
-    return await readFile(resolveAsset(`model-prompts/${modelSlug(resolvedModel)}.md`), "utf8")
+    return await readFile(resolveAsset(`model-prompts/${key}.md`), "utf8")
   } catch {
     return ""
   }

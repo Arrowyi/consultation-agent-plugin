@@ -20,7 +20,7 @@ import {
   injectRuntimeBindings,
   injectModelPrompt,
   resolveModelPrompt,
-  modelSlug,
+  normalizeModelKey,
 } from "./agent-registration.ts"
 import { resolveAsset } from "./asset-paths.ts"
 import type { ConsultationPluginConfig } from "./plugin-config.ts"
@@ -320,32 +320,44 @@ describe("injectModelPrompt", () => {
   })
 })
 
-describe("modelSlug", () => {
-  it("converts a model id into its file slug", () => {
+describe("normalizeModelKey", () => {
+  it("strips the provider, lowercases, and keeps only alphanumerics", () => {
     // given // when // then
-    expect(modelSlug("opencode-go/deepseek-v4.1-flash")).toBe("opencode-go-deepseek-v4.1-flash")
-    expect(modelSlug("opencode/claude-sonnet-5-5")).toBe("opencode-claude-sonnet-5-5")
+    expect(normalizeModelKey("opencode-go/deepseek-v4.1-flash")).toBe("deepseekv41flash")
+    expect(normalizeModelKey("deepseek/deepseek-v4-pro")).toBe("deepseekv4pro")
+    expect(normalizeModelKey("opencode-go/deepseek-v4-pro")).toBe("deepseekv4pro")
+    expect(normalizeModelKey("opencode/claude-sonnet-5-5")).toBe("claudesonnet55")
+    expect(normalizeModelKey("DeepSeek-V4-Pro")).toBe("deepseekv4pro")
   })
 })
 
 describe("resolveModelPrompt", () => {
-  it("returns the user global map entry for the exact resolved model", async () => {
+  it("returns the user global map entry for the normalized model key", async () => {
     // given
-    const config = makeConfig({ model_prompts: { "opencode-go/glm-5.3": "user block" } })
+    const config = makeConfig({ model_prompts: { glm53: "user block" } })
 
     // when // then
     expect(await resolveModelPrompt(config, "opencode-go/glm-5.3")).toBe("user block")
   })
 
+  it("matches the same block across providers", async () => {
+    // given
+    const config = makeConfig({ model_prompts: { deepseekv4pro: "shared deepseek block" } })
+
+    // when // then
+    expect(await resolveModelPrompt(config, "deepseek/deepseek-v4-pro")).toBe("shared deepseek block")
+    expect(await resolveModelPrompt(config, "opencode-go/deepseek-v4-pro")).toBe("shared deepseek block")
+  })
+
   it("returns empty when the user entry is an explicit disable", async () => {
     // given
-    const config = makeConfig({ model_prompts: { "opencode-go/glm-5.3": "" } })
+    const config = makeConfig({ model_prompts: { glm53: "" } })
 
     // when // then
     expect(await resolveModelPrompt(config, "opencode-go/glm-5.3")).toBe("")
   })
 
-  it("returns empty for a model with no user entry and no shipped slug file", async () => {
+  it("returns empty for a model with no user entry and no shipped block file", async () => {
     // given
     const config = makeConfig()
 
@@ -353,7 +365,7 @@ describe("resolveModelPrompt", () => {
     expect(await resolveModelPrompt(config, "no-such/model")).toBe("")
   })
 
-  it("loads the shipped slug file for a default model with no user entry", async () => {
+  it("loads the shipped block file for a default model with no user entry", async () => {
     // given
     const config = makeConfig()
 
@@ -364,9 +376,9 @@ describe("resolveModelPrompt", () => {
     expect(block.startsWith("## Driving GLM-5.3")).toBe(true)
   })
 
-  it("returns empty when the user disables a model that has a shipped slug file", async () => {
+  it("returns empty when the user disables a model that has a shipped block file", async () => {
     // given — an explicit "" wins over the shipped block
-    const config = makeConfig({ model_prompts: { "opencode-go/deepseek-v4.1-flash": "" } })
+    const config = makeConfig({ model_prompts: { deepseekv41flash: "" } })
 
     // when // then
     expect(await resolveModelPrompt(config, "opencode-go/deepseek-v4.1-flash")).toBe("")
@@ -853,7 +865,7 @@ describe("registerSimple", () => {
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
       simple_workspace_dir: join(workspaceParent, "simple"),
-      model_prompts: { "opencode-go/deepseek-v4.1-flash": "user flash block" },
+      model_prompts: { deepseekv41flash: "user flash block" },
     })
 
     try {
@@ -1007,7 +1019,7 @@ describe("registerBuildLite", () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
-      model_prompts: { "opencode-go/glm-5.3-flash": "user glm block" },
+      model_prompts: { glm53flash: "user glm block" },
     })
 
     // when
@@ -1088,7 +1100,7 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
       agent_model: "my-provider/consultant-m",
-      model_prompts: { "my-provider/consultant-m": "drive the consultant carefully" },
+      model_prompts: { consultantm: "drive the consultant carefully" },
     })
 
     // when
@@ -1106,7 +1118,7 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
       critic_model: "my/critic-m",
-      model_prompts: { "my/critic-m": "challenge aggressively" },
+      model_prompts: { criticm: "challenge aggressively" },
     })
 
     // when

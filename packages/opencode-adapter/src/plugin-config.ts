@@ -48,9 +48,11 @@ export const ConsultationPluginConfigSchema = z.object({
   build_agent: z.string().default("build"),
   build_model: z.string().optional(),
   build_enabled: z.boolean().default(true),
-  // Global model-adaptation prompt map, keyed by exact model id
-  // ("provider/model"). An explicit "" disables that model's block; the
-  // plugin otherwise falls back to its shipped assets/model-prompts library.
+  // Global model-adaptation prompt map, keyed by the provider-agnostic
+  // normalized model key (see normalizeModelKey: provider prefix stripped,
+  // lowercased, alphanumerics only). An explicit "" disables that model's
+  // block; the plugin otherwise falls back to its shipped
+  // assets/model-prompts library.
   model_prompts: z.record(z.string()).optional(),
   team_caps: z
     .object({

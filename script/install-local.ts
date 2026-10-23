@@ -32,12 +32,12 @@ export const REQUIRED_INSTALLED_FILES = [
   "assets/agents/explorer.md",
   "assets/agents/simple.md",
   "assets/agents/writer.md",
-  "assets/model-prompts/opencode-claude-sonnet-5-5.md",
-  "assets/model-prompts/opencode-gemini-3.8-flash.md",
-  "assets/model-prompts/opencode-go-deepseek-v4.1-flash.md",
-  "assets/model-prompts/opencode-go-glm-5.3-flash.md",
-  "assets/model-prompts/opencode-go-glm-5.3.md",
-  "assets/model-prompts/opencode-go-qwen3.8-max.md",
+  "assets/model-prompts/claudesonnet55.md",
+  "assets/model-prompts/gemini38flash.md",
+  "assets/model-prompts/deepseekv41flash.md",
+  "assets/model-prompts/glm53flash.md",
+  "assets/model-prompts/glm53.md",
+  "assets/model-prompts/qwen38max.md",
   "assets/skills/consultation/SKILL.md",
 ]
 

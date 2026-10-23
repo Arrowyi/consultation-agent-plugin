@@ -30,8 +30,8 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 13 | build-lite is a lane, not an entry point: mode `subagent`, `steps: 50`, `task: deny` (leaf node — never dispatches further, always reports up), no memory protocol, no runtime bindings (static prompt) |
 | 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
 | 15 | Every agent's model is user-configurable (pre-existing: all `*_model` fields override `MODEL_DEFAULTS`) — confirmed, no new work |
-| 16 | Prompts are layered: `role asset + model-adaptation block + runtime bindings`. v2: the model block is keyed by model and decoupled from the agent — resolved from the user's global `model_prompts[model id]` map (exact ids, `""` disables), else the shipped `assets/model-prompts/<slug>.md` block (model-keyed, no default-model gate), else empty. `build` role and delegated writers are excluded (host-owned prompts). Supersedes the v1 per-agent `*_model_prompts` maps (§15) |
-| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<slug>.md`, six shipped blocks (one per shipped default model), content strictly model-trait (never role references), extensible by dropping a single file |
+| 16 | Prompts are layered: `role asset + model-adaptation block + runtime bindings`. v2: the model block is keyed by model, decoupled from the agent, and matched provider-agnostically — resolved from the user's global `model_prompts` map keyed by the normalized model key (`normalizeModelKey`: provider prefix dropped, lowercased, alphanumerics only; `""` disables), else the shipped `assets/model-prompts/<key>.md` block (model-keyed, no default-model gate), else empty. `build` role and delegated writers are excluded (host-owned prompts). Supersedes the v1 per-agent `*_model_prompts` maps (§15) |
+| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<key>.md` (key = normalized model name), six shipped blocks (one per shipped default model), content strictly model-trait (never role references), extensible by dropping a single file |
 | 18 | Fallback chains removed: `writer_fallback_models` and its default are deleted, every agent resolves to a single model; the generic `model_chain` walking seam is kept so re-adding automatic allowance-exhaustion fallback later stays a localized change |
 | 19 | Writer default model changed `opencode/claude-sonnet-5` → `opencode/claude-sonnet-5-5` (live-endpoint verified 2026-10-23; claude-sonnet-5's reputation collapsed) |
 | 20 | `MODEL_DEFAULTS` synced to the maintainer's verified set (§16): consultant → `opencode-go/glm-5.3`, critic/verifier → `opencode/gemini-3.8-flash` (restores the cross-family audit structure: challenger ≠ consultant ≠ analyst), writer → `opencode/claude-sonnet-5-5`; fallback removed |
@@ -294,28 +294,28 @@ Failure flow (user requirement): when the `build` dispatch fails (agent missing 
 
 ## 15. Model-prompt library (v2 — supersedes the v1 per-agent design)
 
-Layered prompt assembly for every plugin-owned agent: `role asset + model-adaptation block + runtime bindings`. The model block is **keyed by model, decoupled from the agent** — this is what makes subscription-allowance rotation safe: swap an agent's model in config and its driving notes follow automatically; a model with no block simply gets none.
+Layered prompt assembly for every plugin-owned agent: `role asset + model-adaptation block + runtime bindings`. The model block is **keyed by model, decoupled from the agent and the provider** — this is what makes subscription-allowance rotation safe: swap an agent's model in config (even to a different provider serving the same model) and its driving notes follow automatically; a model with no block simply gets none.
 
 ### Library (shipped defaults)
 
-- `assets/model-prompts/<model-slug>.md`, one file per model, `slug = model id with "/" → "-"`. Six blocks ship, one per shipped default model:
-  - `opencode-go-glm-5.3.md` — consultant
-  - `opencode-go-deepseek-v4.1-flash.md` — simple + explorer
-  - `opencode-go-qwen3.8-max.md` — analyst
-  - `opencode-gemini-3.8-flash.md` — critic + verifier
-  - `opencode-go-glm-5.3-flash.md` — build-lite
-  - `opencode-claude-sonnet-5-5.md` — writer (default changed from `claude-sonnet-5`)
-- Adding a block later = dropping one `.md` file; `assets/` stages wholesale at install and the resolver discovers files by slug, so no code or install-list logic changes — only a one-line `REQUIRED_INSTALLED_FILES` entry per new file. This is the "easy to extend" property.
+- `assets/model-prompts/<key>.md`, one file per model, where `key = normalizeModelKey(model id)`: drop the provider prefix (everything up to and including the last `/`), lowercase, keep only letters and digits (strip `-`, `.`, etc.). So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both normalize to `deepseekv4pro`. Six blocks ship, one per shipped default model:
+  - `glm53.md` — consultant
+  - `deepseekv41flash.md` — simple + explorer
+  - `qwen38max.md` — analyst
+  - `gemini38flash.md` — critic + verifier
+  - `glm53flash.md` — build-lite
+  - `claudesonnet55.md` — writer (default changed from `claude-sonnet-5`)
+- Adding a block later = dropping one `.md` file named by the model's normalized key; `assets/` stages wholesale at install and the resolver discovers blocks by key, so no code or install-list logic changes — only a one-line `REQUIRED_INSTALLED_FILES` entry per new file. This is the "easy to extend" property.
 
 ### Resolution
 
-`resolveModelPrompt(config, resolvedModel)` — the `role` parameter is gone (the block no longer depends on the agent):
+`resolveModelPrompt(config, resolvedModel)` — the `role` parameter is gone (the block no longer depends on the agent), and the `resolvedModel` id is normalized to a single provider-agnostic key first:
 
-1. `config.model_prompts[resolvedModel]` — the user's global model-keyed override map (exact model-id keys; an explicit `""` disables the block for that model)
-2. else `assets/model-prompts/<slug>.md` if present
+1. `config.model_prompts[normalizeModelKey(resolvedModel)]` — the user's global model-keyed override map (normalized keys; an explicit `""` disables the block for that model across every provider)
+2. else `assets/model-prompts/<key>.md` if present
 3. else empty (injected as nothing — the placeholder comment stays inert; the role asset runs standalone)
 
-No "only on the default model" gate. Block content must be **model-trait only** — the model's known habits (formatting tendency, verbosity, speed, protocol precision, long-session drift, agentic strengths) — never a role rule ("answer first", "report up", etc.), because one block drives any agent running that model (e.g. `deepseek-v4.1-flash` drives both simple and explorer). The two role-specific phrases that leaked into the v1 blocks are removed in the rewrite.
+No "only on the default model" gate. Block content must be **model-trait only** — the model's known habits (formatting tendency, verbosity, speed, protocol precision, long-session drift, agentic strengths) — never a role rule ("answer first", "report up", etc.), because one block drives any agent running that model (e.g. `deepseek-v4.1-flash` drives both simple and explorer). The two role-specific phrases that leaked into the v1 blocks are removed in the rewrite. Note normalization is lossy: two distinct model ids that differ only in stripped punctuation (e.g. `deepseek-v4.1-flash` vs `deepseek-v4-1-flash`) would collide on one key — none of the shipped models do.
 
 ### Config surface
 

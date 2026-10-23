@@ -35,36 +35,36 @@ const pluginConfig = {
 } satisfies ConsultationPluginConfig
 
 // Each read-only role runs a default model that resolves a shipped
-// model-prompt block (slug = model id with "/" → "-").
+// model-prompt block, keyed by the normalized model key (provider-agnostic).
 const roles = [
   {
     asset: "explorer.md",
     name: "consultation-explorer",
-    block: "opencode-go-deepseek-v4.1-flash.md",
+    block: "deepseekv41flash.md",
     register: registerExplorer,
   },
   {
     asset: "analyst.md",
     name: "consultation-analyst",
-    block: "opencode-go-qwen3.8-max.md",
+    block: "qwen38max.md",
     register: registerAnalyst,
   },
   {
     asset: "consultation-critic.md",
     name: "consultation-critic",
-    block: "opencode-gemini-3.8-flash.md",
+    block: "gemini38flash.md",
     register: registerConsultationCritic,
   },
   {
     asset: "consultation-verifier.md",
     name: "consultation-verifier",
-    block: "opencode-gemini-3.8-flash.md",
+    block: "gemini38flash.md",
     register: registerVerifier,
   },
   {
     asset: "writer.md",
     name: "consultation-writer",
-    block: "opencode-claude-sonnet-5-5.md",
+    block: "claudesonnet55.md",
     register: registerWriter,
   },
 ] as const

@@ -17,7 +17,7 @@ An evidence-driven consultation agent team for [OpenCode](https://opencode.ai) �
 | `build` (dispatch role) | host's build agent | Routes judgment-heavy coding to your OpenCode's native build agent — if unavailable, you get a hint and the primary codes inline with disclosure |
 | `consultation-memory` (MCP) | — | Local SQLite memory shared across the agents: auto-saved consultation records, recall, edit, delete, outcome feedback |
 
-Every agent's model is configurable (`*_model` fields), and every prompt layers a role asset with an optional model-adaptation block keyed by the model (`model_prompts` map overrides the shipped `assets/model-prompts/` library, extendable by dropping a file) — swap a model, keep the role, and the driving notes follow the model.
+Every agent's model is configurable (`*_model` fields), and every prompt layers a role asset with an optional model-adaptation block keyed by the model (`model_prompts` map overrides the shipped `assets/model-prompts/` library, extendable by dropping a file) — swap a model, keep the role, and the driving notes follow the model. Blocks are matched **provider-agnostically**: a model id is normalized by dropping the provider prefix (everything before the last `/`), lowercasing, and keeping only letters and digits, so `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve to the same key `deepseekv4pro` (see [Model-adaptation prompts](docs/deployment.md#model-adaptation-prompts)).
 
 ## Prerequisites
 

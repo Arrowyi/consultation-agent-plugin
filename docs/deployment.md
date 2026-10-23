@@ -126,10 +126,10 @@ A missing file is fine; all fields have defaults. Create the file to override de
   "verifier_model": "opencode/gemini-3.8-flash",
   "writer_model": "opencode/claude-sonnet-5-5",
 
-  // Optional global model-adaptation blocks, keyed by the exact model id —
-  // overrides the shipped library block for that model; an explicit ""
-  // disables it.
-  // "model_prompts": { "provider/model": "…" },
+  // Optional global model-adaptation blocks, keyed by the provider-agnostic
+  // normalized model key (see "Model-adaptation prompts" below) — overrides
+  // the shipped library block for that model; an explicit "" disables it.
+  // "model_prompts": { "deepseekv4pro": "…" },
 
   // Prefer a stronger host-provided writing agent over the bundled one.
   // When set, the bundled writer is not registered; dispatch routes to this
@@ -238,7 +238,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `build_agent` | string | `"build"` | Target agent name for the `build` dispatch role (the host's native build agent by default) |
 | `build_model` | string (optional) | (none — host default) | Model pinned on the `build` role's target agent |
 | `build_enabled` | boolean | `true` | Whether the `build` dispatch role accepts work |
-| `model_prompts` | object (optional) | (none) | Global model-keyed adaptation-prompt map; key = exact model id ("provider/model"), value = the block; an explicit "" disables the block for that model |
+| `model_prompts` | object (optional) | (none) | Global model-keyed adaptation-prompt map; key = the provider-agnostic normalized model key (provider prefix dropped, lowercased, alphanumerics only), value = the block; an explicit "" disables the block for that model |
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
 | `team_caps.critic_search_cap` | number | `5` | Max critic verification searches per round |
@@ -263,29 +263,40 @@ The consultant routes bounded tasks to suitable specialist agents: `explorer` ga
 Every plugin-owned agent's prompt assembles in three layers: the role asset
 (`assets/agents/<agent>.md` — identity, scope, workflow, discipline) plus a
 model-adaptation block plus the runtime bindings. The model block is keyed by
-the **model**, not the agent: swap an agent's model in config and its driving
-notes follow automatically; a model with no block simply gets none. For the
-exact resolved model id, resolution is:
+the **model**, not the agent, and matched **provider-agnostically**: swap an
+agent's model in config (even to a different provider serving the same model)
+and its driving notes follow automatically; a model with no block simply gets
+none.
 
-1. your `model_prompts` entry for that model id wins (an explicit `""` disables
-   the block for that model);
-2. else the shipped library block `assets/model-prompts/<model-slug>.md`, where
-   the slug is the model id with every `/` replaced by `-` (so
-   `opencode-go/glm-5.3` → `opencode-go-glm-5.3.md`);
+A model id (`provider/model`) is normalized into a single match key by
+`normalizeModelKey`:
+
+1. drop the provider prefix — everything up to and including the last `/`
+   (`opencode-go/deepseek-v4-pro` → `deepseek-v4-pro`);
+2. lowercase the remainder;
+3. keep only letters and digits — strip `-`, `.`, spaces, etc.
+   (`deepseek-v4-pro` → `deepseekv4pro`).
+
+So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve to
+`deepseekv4pro` and share one block. Resolution, for that normalized key, is:
+
+1. your `model_prompts` entry for the key wins (an explicit `""` disables the
+   block for that model across every provider);
+2. else the shipped library block `assets/model-prompts/<key>.md`;
 3. else empty — the role asset runs standalone.
 
-Six blocks ship, one per shipped default model: `opencode-go-glm-5.3.md`
-(consultant), `opencode-go-deepseek-v4.1-flash.md` (simple, explorer),
-`opencode-go-qwen3.8-max.md` (analyst), `opencode-gemini-3.8-flash.md` (critic,
-verifier), `opencode-go-glm-5.3-flash.md` (build-lite), and
-`opencode-claude-sonnet-5-5.md` (writer).
+Six blocks ship, one per shipped default model, each file named by its
+normalized key: `glm53.md` (consultant), `deepseekv41flash.md` (simple,
+explorer), `qwen38max.md` (analyst), `gemini38flash.md` (critic, verifier),
+`glm53flash.md` (build-lite), and `claudesonnet55.md` (writer).
 
-To add a block for a model that has none: drop
-`assets/model-prompts/<provider>-<model>.md` into the library — the resolver
-discovers blocks by slug — and add the file to `REQUIRED_INSTALLED_FILES` in
-`script/install-local.ts` (a fork; installs verify the file). On an installed
-plugin you cannot drop files: point `model_prompts` at your own block text for
-that model id instead.
+To add a block for a model that has none: name the file after the model's
+normalized key — the same rule above applied to the model id — drop it at
+`assets/model-prompts/<key>.md`, and add the file to `REQUIRED_INSTALLED_FILES`
+in `script/install-local.ts` (a fork; installs verify the file). For example a
+custom model `acme/deepseek-v4-pro` gets the key `deepseekv4pro` and file
+`assets/model-prompts/deepseekv4pro.md`. On an installed plugin you cannot drop
+files: point `model_prompts` at your own block text for that key instead.
 
 Block content is model-trait only — the model's known habits (formatting
 tendency, verbosity, speed, protocol precision, long-session drift, agentic
