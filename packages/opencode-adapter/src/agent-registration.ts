@@ -1,4 +1,7 @@
+import { existsSync, mkdirSync } from "node:fs"
 import { readFile } from "node:fs/promises"
+import { homedir } from "node:os"
+import { join } from "node:path"
 import { resolveAsset } from "./asset-paths.ts"
 import {
   MODEL_DEFAULTS,
@@ -48,6 +51,149 @@ const VERIFIER_DESCRIPTION =
 const WRITER_DESCRIPTION =
   "Read-only writing specialist for author consultations. Produces a blueprint before outline approval, or a substantive section/chapter draft from the approved map and evidence packet after approval; never researches missing facts, executes commands, or writes files."
 
+const SIMPLE_DESCRIPTION =
+  "Economical daily-consultation agent (DeepSeek V4.1-Flash by default) for lightweight Q&A, fact and concept lookups, and simple how-to finding. Full read access and web search; escalates complex, high-risk, or evidence-heavy questions to the consultant. Also dispatchable by the consultant for bounded simple-consultation and search subtasks."
+
+export const SIMPLE_BASH_READONLY_RULES: Record<string, "allow"> = {
+  ls: "allow",
+  "ls *": "allow",
+  pwd: "allow",
+  "echo *": "allow",
+  "cat *": "allow",
+  "head *": "allow",
+  "tail *": "allow",
+  "wc *": "allow",
+  "file *": "allow",
+  "stat *": "allow",
+  "du *": "allow",
+  "df *": "allow",
+  "which *": "allow",
+  whoami: "allow",
+  id: "allow",
+  date: "allow",
+  "date *": "allow",
+  uname: "allow",
+  "uname *": "allow",
+  printenv: "allow",
+  "printenv *": "allow",
+  "git status": "allow",
+  "git status *": "allow",
+  "git log": "allow",
+  "git log *": "allow",
+  "git diff": "allow",
+  "git diff *": "allow",
+  "git show": "allow",
+  "git show *": "allow",
+}
+
+interface AllModeAgentEntry {
+  mode: "all"
+  description: string
+  prompt: string
+  model: string
+  permission: Record<string, unknown>
+}
+
+/**
+ * Resolve simple's pre-approved writable workspace directory:
+ * `simple_workspace_dir` config > `$XDG_DATA_HOME/consultation-agent/simple`
+ * > `$HOME/.local/share/consultation-agent/simple`.
+ */
+export function resolveSimpleWorkspaceDir(
+  pluginConfig: ConsultationPluginConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (pluginConfig.simple_workspace_dir !== undefined) return pluginConfig.simple_workspace_dir
+  const home = env.HOME !== undefined && env.HOME.length > 0 ? env.HOME : homedir()
+  const dataHome =
+    env.XDG_DATA_HOME !== undefined && env.XDG_DATA_HOME.length > 0
+      ? env.XDG_DATA_HOME
+      : join(home, ".local", "share")
+  return join(dataHome, "consultation-agent", "simple")
+}
+
+/**
+ * simple's permissions: read tools allowed, its own workspace writable
+ * without asking, everything else asks. Pattern objects put the `"*"`
+ * catch-all first (last matching rule wins).
+ */
+export function buildSimplePermission(workspaceDir: string): Record<string, unknown> {
+  return {
+    webfetch: "allow",
+    websearch: "allow",
+    edit: { "*": "ask", [`${workspaceDir}/**`]: "allow" },
+    bash: { "*": "ask", ...SIMPLE_BASH_READONLY_RULES },
+    external_directory: { [`${workspaceDir}/**`]: "allow" },
+  }
+}
+
+/**
+ * Build the runtime bindings block injected into the simple agent prompt.
+ * Reports the memory MCP server, simple's model, the explorer binding,
+ * the dispatch job-tool discipline, the pre-approved workspace, and the
+ * memory namespace.
+ */
+export function buildSimpleRuntimeBindings(
+  pluginConfig: ConsultationPluginConfig,
+  workspaceDir: string,
+  namespace: string,
+): string {
+  const memoryLine = pluginConfig.memory_enabled
+    ? "- Memory MCP server name: `consultation-memory` (tools: memory_recall, memory_expand, memory_prepare, memory_commit, memory_manage)"
+    : "- Memory: DISABLED by configuration (saving and recall are unavailable)"
+
+  const modelLine = `- Simple model: \`${resolveRoleModel(pluginConfig, "simple")}\``
+
+  const explorerLine = `- Explorer: \`${pluginConfig.explorer_agent}\` (\`${resolveRoleModel(pluginConfig, "explorer")}\`) — dispatch via \`consultation_dispatch\` (role="explorer", prompt) for multi-source graded retrieval`
+
+  const dispatchLine =
+    "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
+
+  const workspaceLine = `- Your writable workspace: \`${workspaceDir}\` — the only location where creating files is pre-approved; every other write asks first`
+
+  const namespaceLine = `- Memory namespace: \`${namespace}\``
+
+  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${modelLine}\n${explorerLine}\n${dispatchLine}\n${workspaceLine}\n${namespaceLine}`
+}
+
+/**
+ * Register the `simple` agent (mode "all": user-selectable primary AND
+ * dispatchable subagent). Reads `assets/agents/simple.md`, injects the
+ * runtime bindings block, attempts to create the workspace directory
+ * (non-fatal), and never clobbers a pre-existing user-defined entry.
+ */
+export async function registerSimple(
+  config: MutableConfig,
+  pluginConfig: ConsultationPluginConfig,
+  namespace: string,
+): Promise<void> {
+  if (config.agent?.[pluginConfig.simple_agent]) return
+
+  const workspaceDir = resolveSimpleWorkspaceDir(pluginConfig)
+  try {
+    mkdirSync(workspaceDir, { recursive: true })
+  } catch {
+    // Non-fatal: the permission pattern still ships; writes there may fail.
+  }
+
+  const body = await readFile(resolveAsset("agents/simple.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, "simple", resolveRoleModel(pluginConfig, "simple"))
+  const withModelPrompt = injectModelPrompt(body, modelBlock)
+  const runtimeBlock = buildSimpleRuntimeBindings(pluginConfig, workspaceDir, namespace)
+  const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
+
+  const entry: AllModeAgentEntry = {
+    mode: "all",
+    description: SIMPLE_DESCRIPTION,
+    prompt: assembledPrompt,
+    model: resolveRoleModel(pluginConfig, "simple"),
+    permission: buildSimplePermission(workspaceDir),
+  }
+
+  if (!config.agent) config.agent = {}
+  config.agent[pluginConfig.simple_agent] = entry
+}
+
 /**
  * Build the runtime bindings block that the adapter injects into the
  * consultant agent prompt.
@@ -93,6 +239,10 @@ export function buildRuntimeBindings(
   )
   const teamLine = `- Team subagents: ${roleParts.join(", ")}`
 
+  const simpleLine = pluginConfig.simple_enabled
+    ? `- Economical generalist: \`${pluginConfig.simple_agent}\` (\`${resolveRoleModel(pluginConfig, "simple")}\`) for bounded simple-consultation and search tasks`
+    : "- Economical generalist: simple DISABLED by configuration"
+
   const caps = resolveTeamCaps(pluginConfig)
   const tiers = resolveTierRoleCaps(pluginConfig)
   const costGuard = resolveCostGuardUsd(pluginConfig)
@@ -104,7 +254,7 @@ export function buildRuntimeBindings(
   const namespaceLine = `- Memory namespace: \`${namespace}\``
   const dispatchLine = "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
 
-  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${consultantModelLine}\n${teamLine}\n${dispatchLine}\n${capsLine}\n${tierMatrixLine}\n${costLine}\n${namespaceLine}`
+  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${consultantModelLine}\n${teamLine}\n${simpleLine}\n${dispatchLine}\n${capsLine}\n${tierMatrixLine}\n${costLine}\n${namespaceLine}`
 }
 
 /**

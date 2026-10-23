@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test"
+import { existsSync, mkdtempSync, rmSync } from "node:fs"
 import { readFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import {
   registerConsultantAgent,
   registerConsultationCritic,
@@ -7,7 +10,11 @@ import {
   registerAnalyst,
   registerVerifier,
   registerWriter,
+  registerSimple,
   buildRuntimeBindings,
+  buildSimpleRuntimeBindings,
+  buildSimplePermission,
+  resolveSimpleWorkspaceDir,
   injectRuntimeBindings,
   injectModelPrompt,
   resolveModelPrompt,
@@ -203,6 +210,26 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(block).toContain("writer DISABLED by configuration")
+  })
+
+  it("reports the simple generalist line and its DISABLED state", () => {
+    // given
+    const config = makeConfig()
+
+    // when
+    const block = buildRuntimeBindings(config, "oc-ns")
+
+    // then
+    expect(block).toContain("Economical generalist: `simple` (`opencode-go/deepseek-v4.1-flash`)")
+
+    // given
+    const disabled = makeConfig({ simple_enabled: false })
+
+    // when
+    const disabledBlock = buildRuntimeBindings(disabled, "oc-ns")
+
+    // then
+    expect(disabledBlock).toContain("Economical generalist: simple DISABLED by configuration")
   })
 })
 
@@ -601,6 +628,263 @@ describe("registerWriter", () => {
 
     // then
     expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5, fallback: opencode-go/kimi-k3)")
+  })
+})
+
+describe("resolveSimpleWorkspaceDir", () => {
+  it("defaults under XDG data home", () => {
+    // given
+    const config = makeConfig()
+    const env = { HOME: "/home/test-user", XDG_DATA_HOME: "/xdg/data" } as NodeJS.ProcessEnv
+
+    // when
+    const dir = resolveSimpleWorkspaceDir(config, env)
+
+    // then
+    expect(dir).toBe("/xdg/data/consultation-agent/simple")
+  })
+
+  it("falls back to HOME/.local/share when XDG_DATA_HOME is unset", () => {
+    // given
+    const config = makeConfig()
+    const env = { HOME: "/home/test-user" } as NodeJS.ProcessEnv
+
+    // when
+    const dir = resolveSimpleWorkspaceDir(config, env)
+
+    // then
+    expect(dir).toBe("/home/test-user/.local/share/consultation-agent/simple")
+  })
+
+  it("honors simple_workspace_dir when configured", () => {
+    // given
+    const config = makeConfig({ simple_workspace_dir: "/custom/simple-ws" })
+
+    // when
+    const dir = resolveSimpleWorkspaceDir(config, { HOME: "/home/test-user" } as NodeJS.ProcessEnv)
+
+    // then
+    expect(dir).toBe("/custom/simple-ws")
+  })
+})
+
+describe("buildSimplePermission", () => {
+  it("allows reads and its own workspace, asks for every other write and non-readonly bash", () => {
+    // given
+    const workspace = "/xdg/data/consultation-agent/simple"
+
+    // when
+    const permission = buildSimplePermission(workspace)
+
+    // then
+    expect(permission.webfetch).toBe("allow")
+    expect(permission.websearch).toBe("allow")
+    const edit = permission.edit as Record<string, string>
+    expect(edit["*"]).toBe("ask")
+    expect(edit[`${workspace}/**`]).toBe("allow")
+    const bash = permission.bash as Record<string, string>
+    expect(bash["*"]).toBe("ask")
+    expect(bash["cat *"]).toBe("allow")
+    expect(bash["git status"]).toBe("allow")
+    expect(bash["git log *"]).toBe("allow")
+    expect(bash["mkdir *"]).toBeUndefined()
+    expect(bash["find *"]).toBeUndefined()
+    expect(bash["curl *"]).toBeUndefined()
+    const external = permission.external_directory as Record<string, string>
+    expect(external[`${workspace}/**`]).toBe("allow")
+  })
+})
+
+describe("buildSimpleRuntimeBindings", () => {
+  it("reports memory, own model, explorer, dispatch discipline, workspace, and namespace", () => {
+    // given
+    const config = makeConfig()
+    const workspace = "/xdg/data/consultation-agent/simple"
+
+    // when
+    const block = buildSimpleRuntimeBindings(config, workspace, "oc-ns")
+
+    // then
+    expect(block).toContain("## Runtime Bindings (injected by opencode-adapter)")
+    expect(block).toContain("consultation-memory")
+    expect(block).toContain("Simple model: `opencode-go/deepseek-v4.1-flash`")
+    expect(block).toContain("consultation-explorer")
+    expect(block).toContain("consultation_dispatch_wait")
+    expect(block).toContain(`Your writable workspace: \`${workspace}\``)
+    expect(block).toContain("oc-ns")
+  })
+
+  it("says Memory DISABLED when memory_enabled is false", () => {
+    // given
+    const config = makeConfig({ memory_enabled: false })
+
+    // when
+    const block = buildSimpleRuntimeBindings(config, "/ws", "oc-ns")
+
+    // then
+    expect(block).toContain("Memory: DISABLED by configuration (saving and recall are unavailable)")
+  })
+})
+
+describe("registerSimple", () => {
+  // registerSimple always mkdirs its resolved workspace — every test in this
+  // describe must point it at a temp dir so nothing lands under the real HOME.
+  function tempWorkspaceConfig(overrides: Partial<ConsultationPluginConfig> = {}): { pluginConfig: ConsultationPluginConfig; cleanup: () => void } {
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    return {
+      pluginConfig: makeConfig({ simple_workspace_dir: join(workspaceParent, "simple"), ...overrides }),
+      cleanup: () => rmSync(workspaceParent, { recursive: true, force: true }),
+    }
+  }
+
+  it("registers mode all with the simple.md body, injected bindings, and patterned permission", async () => {
+    // given — temp workspace so the test never creates anything under the real HOME
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const workspace = join(workspaceParent, "simple")
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ simple_workspace_dir: workspace })
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-testns")
+
+      // then
+      const simple = config.agent?.["simple"] as {
+        mode: string
+        description: string
+        prompt: string
+        model: string
+        permission: Record<string, unknown>
+      }
+      expect(simple.mode).toBe("all")
+      expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
+      expect(simple.description).toContain("Economical daily-consultation agent")
+      expect(simple.prompt).toContain("# Simple")
+      expect(simple.prompt).toContain("## Driving DeepSeek V4.1-Flash")
+      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
+      expect(simple.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+      expect(simple.prompt).toContain("oc-testns")
+      expect(simple.prompt).toContain(workspace)
+      expect(simple.prompt).not.toContain("<!-- RUNTIME-BINDINGS")
+      expect(simple.permission.webfetch).toBe("allow")
+      const edit = simple.permission.edit as Record<string, string>
+      expect(edit[`${workspace}/**`]).toBe("allow")
+    } finally {
+      rmSync(workspaceParent, { recursive: true, force: true })
+    }
+  })
+
+  it("skips the default model block when the model is swapped and no user block exists", async () => {
+    // given — a swapped model with no user model-prompt entry
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      simple_workspace_dir: join(workspaceParent, "simple"),
+      simple_model: "my-provider/other-model",
+    })
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      const simple = config.agent?.["simple"] as { prompt: string }
+      expect(simple.prompt).toContain("<!-- MODEL-PROMPT")
+      expect(simple.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
+    } finally {
+      rmSync(workspaceParent, { recursive: true, force: true })
+    }
+  })
+
+  it("injects the user model block over the shipped default", async () => {
+    // given
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({
+      simple_workspace_dir: join(workspaceParent, "simple"),
+      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "user flash block" },
+    })
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      const simple = config.agent?.["simple"] as { prompt: string }
+      expect(simple.prompt).toContain("user flash block")
+      expect(simple.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
+      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
+    } finally {
+      rmSync(workspaceParent, { recursive: true, force: true })
+    }
+  })
+
+  it("creates the workspace directory under the resolved data home", async () => {
+    // given
+    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ simple_workspace_dir: join(workspaceParent, "simple") })
+
+    // when
+    await registerSimple(config, pluginConfig, "oc-ns")
+
+    // then
+    expect(existsSync(join(workspaceParent, "simple"))).toBe(true)
+    rmSync(workspaceParent, { recursive: true, force: true })
+  })
+
+  it("overrides the model from simple_model", async () => {
+    // given
+    const { pluginConfig, cleanup } = tempWorkspaceConfig({ simple_model: "test/simple-m" })
+    const config: { agent?: Record<string, unknown> } = {}
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      const simple = config.agent?.["simple"] as { model: string }
+      expect(simple.model).toBe("test/simple-m")
+    } finally {
+      cleanup()
+    }
+  })
+
+  it("uses the configured simple_agent name", async () => {
+    // given
+    const { pluginConfig, cleanup } = tempWorkspaceConfig({ simple_agent: "my-simple" })
+    const config: { agent?: Record<string, unknown> } = {}
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      expect(config.agent?.["my-simple"]).toBeDefined()
+      expect(config.agent?.["simple"]).toBeUndefined()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it("does NOT clobber a pre-existing user-defined simple agent entry", async () => {
+    // given
+    const userPrompt = "user-defined simple prompt"
+    const config: { agent?: Record<string, unknown> } = {
+      agent: { simple: { mode: "all", prompt: userPrompt } },
+    }
+    const { pluginConfig, cleanup } = tempWorkspaceConfig()
+
+    try {
+      // when
+      await registerSimple(config, pluginConfig, "oc-ns")
+
+      // then
+      const simple = config.agent?.["simple"] as { prompt: string }
+      expect(simple.prompt).toBe(userPrompt)
+    } finally {
+      cleanup()
+    }
   })
 })
 
