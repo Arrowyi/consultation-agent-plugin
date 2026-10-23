@@ -20,6 +20,7 @@ import {
   injectRuntimeBindings,
   injectModelPrompt,
   resolveModelPrompt,
+  modelSlug,
 } from "./agent-registration.ts"
 import { resolveAsset } from "./asset-paths.ts"
 import type { ConsultationPluginConfig } from "./plugin-config.ts"
@@ -101,7 +102,7 @@ describe("buildRuntimeBindings", () => {
     expect(block).toContain("openrouter/qwen-max")
   })
 
-  it("falls back to the default critic model when critic_model is unset", () => {
+  it("reports the default critic model when critic_model is unset", () => {
     // given
     const config = makeConfig()
 
@@ -109,7 +110,7 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("opencode-go/glm-5.3")
+    expect(block).toContain("opencode/gemini-3.8-flash")
   })
 
   it("reports the consultant and team role models", () => {
@@ -121,7 +122,7 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(block).toContain("Consultant model")
-    expect(block).toContain("opencode-go/deepseek-v4-pro")
+    expect(block).toContain("opencode-go/glm-5.3")
     expect(block).toContain("Team subagents")
     expect(block).toContain("consultation-explorer")
     expect(block).toContain("opencode-go/deepseek-v4.1-flash")
@@ -200,7 +201,7 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("writer `consultation-writer` (test/writer-model, fallback: opencode-go/kimi-k3)")
+    expect(block).toContain("writer `consultation-writer` (test/writer-model)")
   })
 
   it("says writer DISABLED when writer_enabled is false", () => {
@@ -319,32 +320,38 @@ describe("injectModelPrompt", () => {
   })
 })
 
+describe("modelSlug", () => {
+  it("converts a model id into its file slug", () => {
+    // given // when // then
+    expect(modelSlug("opencode-go/deepseek-v4.1-flash")).toBe("opencode-go-deepseek-v4.1-flash")
+    expect(modelSlug("opencode/claude-sonnet-5-5")).toBe("opencode-claude-sonnet-5-5")
+  })
+})
+
 describe("resolveModelPrompt", () => {
-  it("returns the user map entry for the exact resolved model, including an explicit empty string", async () => {
+  it("returns the user global map entry for the exact resolved model", async () => {
     // given
-    const config = makeConfig({
-      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "user block", "other/model": "" },
-    })
+    const config = makeConfig({ model_prompts: { "opencode-go/glm-5.3": "user block" } })
 
     // when // then
-    expect(await resolveModelPrompt(config, "simple", "opencode-go/deepseek-v4.1-flash")).toBe("user block")
-    expect(await resolveModelPrompt(config, "simple", "other/model")).toBe("")
+    expect(await resolveModelPrompt(config, "opencode-go/glm-5.3")).toBe("user block")
   })
 
-  it("returns empty for a non-default model with no user entry (never default-model advice on a swapped model)", async () => {
+  it("returns empty when the user entry is an explicit disable", async () => {
     // given
+    const config = makeConfig({ model_prompts: { "opencode-go/glm-5.3": "" } })
+
+    // when // then
+    expect(await resolveModelPrompt(config, "opencode-go/glm-5.3")).toBe("")
+  })
+
+  it("returns empty for a model with no user entry and no shipped slug file", async () => {
+    // given — no shipped model-prompts library yet (Task 4 creates the slug files)
     const config = makeConfig()
 
     // when // then
-    expect(await resolveModelPrompt(config, "explorer", "some/other-model")).toBe("")
-  })
-
-  it("returns empty for the default model when no shipped block file exists", async () => {
-    // given — critic's default model has no shipped block in this repo
-    const config = makeConfig()
-
-    // when // then
-    expect(await resolveModelPrompt(config, "critic", "opencode-go/glm-5.3")).toBe("")
+    expect(await resolveModelPrompt(config, "no-such/model")).toBe("")
+    expect(await resolveModelPrompt(config, "opencode-go/glm-5.3")).toBe("")
   })
 })
 
@@ -392,7 +399,7 @@ describe("registerConsultantAgent", () => {
     expect(consultant.model).toBe("anthropic/claude-sonnet")
   })
 
-  it("defaults the model to deepseek-v4-pro when agent_model is not configured", async () => {
+  it("defaults the model to glm-5.3 when agent_model is not configured", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -402,7 +409,7 @@ describe("registerConsultantAgent", () => {
 
     // then
     const consultant = config.agent?.["consultant"] as { model?: string }
-    expect(consultant.model).toBe("opencode-go/deepseek-v4-pro")
+    expect(consultant.model).toBe("opencode-go/glm-5.3")
   })
 
   it("does NOT clobber a pre-existing user-defined consultant agent entry", async () => {
@@ -472,7 +479,7 @@ describe("registerConsultationCritic", () => {
     expect(critic.model).toBe("anthropic/claude-sonnet-4")
   })
 
-  it("defaults the critic model to glm-5.3 when critic_model is unset", async () => {
+  it("defaults the critic model to gemini-3.8-flash when critic_model is unset", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -482,7 +489,7 @@ describe("registerConsultationCritic", () => {
 
     // then
     const critic = config.agent?.["consultation-critic"] as { model?: string }
-    expect(critic.model).toBe("opencode-go/glm-5.3")
+    expect(critic.model).toBe("opencode/gemini-3.8-flash")
   })
 
   it("uses the configured critic_agent name", async () => {
@@ -595,7 +602,7 @@ describe("registerVerifier", () => {
 
     expect(config.agent?.["consultation-verifier"]).toMatchObject({
       mode: "subagent",
-      model: "opencode-go/glm-5.3",
+      model: "opencode/gemini-3.8-flash",
       permission: { edit: "deny" },
     })
   })
@@ -613,7 +620,7 @@ describe("registerWriter", () => {
     // then
     expect(config.agent?.["consultation-writer"]).toMatchObject({
       mode: "subagent",
-      model: "opencode/claude-sonnet-5",
+      model: "opencode/claude-sonnet-5-5",
       permission: { edit: "deny", bash: "deny" },
     })
   })
@@ -641,7 +648,7 @@ describe("registerWriter", () => {
     expect(block).toContain("writer delegated to `host-writer`")
   })
 
-  it("reports the writer fallback chain in runtime bindings", () => {
+  it("reports the writer model without a fallback in runtime bindings", () => {
     // given
     const config = makeConfig()
 
@@ -649,7 +656,7 @@ describe("registerWriter", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5, fallback: opencode-go/kimi-k3)")
+    expect(block).toContain("writer `consultation-writer` (opencode/claude-sonnet-5-5)")
   })
 })
 
@@ -784,8 +791,9 @@ describe("registerSimple", () => {
       expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
       expect(simple.description).toContain("Economical daily-consultation agent")
       expect(simple.prompt).toContain("# Simple")
-      expect(simple.prompt).toContain("## Driving DeepSeek V4.1-Flash")
-      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
+      // No shipped slug file for deepseek-v4.1-flash yet (Task 4) — the
+      // placeholder stays inert until the model-prompt library lands.
+      expect(simple.prompt).toContain("<!-- MODEL-PROMPT")
       expect(simple.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
       expect(simple.prompt).toContain("oc-testns")
       expect(simple.prompt).toContain(workspace)
@@ -826,7 +834,7 @@ describe("registerSimple", () => {
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
       simple_workspace_dir: join(workspaceParent, "simple"),
-      simple_model_prompts: { "opencode-go/deepseek-v4.1-flash": "user flash block" },
+      model_prompts: { "opencode-go/deepseek-v4.1-flash": "user flash block" },
     })
 
     try {
@@ -932,7 +940,7 @@ describe("buildBuildLitePermission", () => {
 })
 
 describe("registerBuildLite", () => {
-  it("registers a leaf subagent with steps 50, the role body, and the default GLM driving block", async () => {
+  it("registers a leaf subagent with steps 50 and the role body", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -955,8 +963,9 @@ describe("registerBuildLite", () => {
     expect(lite.description).toContain("mechanical coding")
     expect(lite.prompt).toContain("# Build-Lite")
     expect(lite.prompt).toContain("Report-Up discipline")
-    expect(lite.prompt).toContain("## Driving GLM-5.3-Flash")
-    expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
+    // No shipped slug file for glm-5.3-flash yet (Task 4) — the placeholder
+    // stays inert until the model-prompt library lands.
+    expect(lite.prompt).toContain("<!-- MODEL-PROMPT")
     expect(lite.permission.task).toBe("deny")
   })
 
@@ -978,7 +987,7 @@ describe("registerBuildLite", () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
-      build_lite_model_prompts: { "opencode-go/glm-5.3-flash": "user glm block" },
+      model_prompts: { "opencode-go/glm-5.3-flash": "user glm block" },
     })
 
     // when
@@ -1059,7 +1068,7 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
       agent_model: "my-provider/consultant-m",
-      agent_model_prompts: { "my-provider/consultant-m": "drive the consultant carefully" },
+      model_prompts: { "my-provider/consultant-m": "drive the consultant carefully" },
     })
 
     // when
@@ -1077,7 +1086,7 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
       critic_model: "my/critic-m",
-      critic_model_prompts: { "my/critic-m": "challenge aggressively" },
+      model_prompts: { "my/critic-m": "challenge aggressively" },
     })
 
     // when

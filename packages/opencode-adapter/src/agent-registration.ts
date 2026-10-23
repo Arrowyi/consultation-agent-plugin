@@ -4,14 +4,12 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { resolveAsset } from "./asset-paths.ts"
 import {
-  MODEL_DEFAULTS,
   resolveCostGuardUsd,
   resolveRoleModel,
   resolveRoleModelChain,
   resolveTeamCaps,
   resolveTierRoleCaps,
   type ConsultationPluginConfig,
-  type ModelRole,
 } from "./plugin-config.ts"
 
 interface MutableConfig {
@@ -196,7 +194,7 @@ export async function registerSimple(
   }
 
   const body = await readFile(resolveAsset("agents/simple.md"), "utf8")
-  const modelBlock = await resolveModelPrompt(pluginConfig, "simple", resolveRoleModel(pluginConfig, "simple"))
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "simple"))
   const withModelPrompt = injectModelPrompt(body, modelBlock)
   const runtimeBlock = buildSimpleRuntimeBindings(pluginConfig, workspaceDir, namespace)
   const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
@@ -243,7 +241,7 @@ export async function registerBuildLite(
   if (config.agent?.[pluginConfig.build_lite_agent]) return
 
   const body = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
-  const modelBlock = await resolveModelPrompt(pluginConfig, "build-lite", resolveRoleModel(pluginConfig, "build-lite"))
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "build-lite"))
   const prompt = injectModelPrompt(body, modelBlock)
 
   const entry: BuildLiteAgentEntry = {
@@ -344,49 +342,28 @@ export function injectRuntimeBindings(body: string, runtimeBlock: string): strin
 }
 
 /**
- * Per-agent model-adaptation prompt maps from the plugin config.
+ * Convert a model id ("provider/model") into the file-slug form used by the
+ * shipped model-prompt library (`assets/model-prompts/<slug>.md`).
  */
-function modelPromptsFor(
-  pluginConfig: ConsultationPluginConfig,
-  role: ModelRole,
-): Record<string, string> | undefined {
-  switch (role) {
-    case "consultant":
-      return pluginConfig.agent_model_prompts
-    case "explorer":
-      return pluginConfig.explorer_model_prompts
-    case "analyst":
-      return pluginConfig.analyst_model_prompts
-    case "critic":
-      return pluginConfig.critic_model_prompts
-    case "verifier":
-      return pluginConfig.verifier_model_prompts
-    case "writer":
-      return pluginConfig.writer_model_prompts
-    case "simple":
-      return pluginConfig.simple_model_prompts
-    case "build-lite":
-      return pluginConfig.build_lite_model_prompts
-  }
+export function modelSlug(modelId: string): string {
+  return modelId.replaceAll("/", "-")
 }
 
 /**
- * Resolve the model-adaptation block for a plugin-owned agent. The user map
- * wins (exact resolved-model id keys; an explicit "" disables). The shipped
- * default `assets/model-prompts/<role>.md` applies only when the resolved
- * model IS the agent's default model — default-model advice is never
- * injected into a swapped model. Otherwise empty.
+ * Resolve the model-adaptation block for a model, keyed by the model itself
+ * and decoupled from the agent: the user's global `model_prompts` map wins
+ * (exact resolved-model id keys; an explicit "" disables that model's
+ * block), else the shipped `assets/model-prompts/<slug>.md` block if a file
+ * for the model exists, else empty.
  */
 export async function resolveModelPrompt(
   pluginConfig: ConsultationPluginConfig,
-  role: ModelRole,
   resolvedModel: string,
 ): Promise<string> {
-  const override = modelPromptsFor(pluginConfig, role)?.[resolvedModel]
+  const override = pluginConfig.model_prompts?.[resolvedModel]
   if (override !== undefined) return override
-  if (resolvedModel !== MODEL_DEFAULTS[role]) return ""
   try {
-    return await readFile(resolveAsset(`model-prompts/${role}.md`), "utf8")
+    return await readFile(resolveAsset(`model-prompts/${modelSlug(resolvedModel)}.md`), "utf8")
   } catch {
     return ""
   }
@@ -423,7 +400,7 @@ export async function registerConsultantAgent(
   const consultantPath = resolveAsset("agents/consultant.md")
   const consultantBody = await readFile(consultantPath, "utf8")
 
-  const modelBlock = await resolveModelPrompt(pluginConfig, "consultant", resolveRoleModel(pluginConfig, "consultant"))
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "consultant"))
   const withModelPrompt = injectModelPrompt(consultantBody, modelBlock)
   const runtimeBlock = buildRuntimeBindings(pluginConfig, namespace)
   const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
@@ -453,12 +430,11 @@ async function registerReadOnlySubagent(
     model: string
     denyBash?: boolean
     pluginConfig: ConsultationPluginConfig
-    role: ModelRole
   },
 ): Promise<void> {
   if (config.agent?.[options.name]) return
 
-  const modelBlock = await resolveModelPrompt(options.pluginConfig, options.role, options.model)
+  const modelBlock = await resolveModelPrompt(options.pluginConfig, options.model)
   const body = injectModelPrompt(await readFile(resolveAsset(options.assetFile), "utf8"), modelBlock)
 
   const entry: SubagentEntry = {
@@ -483,7 +459,6 @@ export async function registerExplorer(
     assetFile: "agents/explorer.md",
     model: resolveRoleModel(pluginConfig, "explorer"),
     pluginConfig,
-    role: "explorer",
   })
 }
 
@@ -497,7 +472,6 @@ export async function registerAnalyst(
     assetFile: "agents/analyst.md",
     model: resolveRoleModel(pluginConfig, "analyst"),
     pluginConfig,
-    role: "analyst",
   })
 }
 
@@ -511,7 +485,6 @@ export async function registerConsultationCritic(
     assetFile: "agents/consultation-critic.md",
     model: resolveRoleModel(pluginConfig, "critic"),
     pluginConfig,
-    role: "critic",
   })
 }
 
@@ -525,7 +498,6 @@ export async function registerVerifier(
     assetFile: "agents/consultation-verifier.md",
     model: resolveRoleModel(pluginConfig, "verifier"),
     pluginConfig,
-    role: "verifier",
   })
 }
 
@@ -541,6 +513,5 @@ export async function registerWriter(
     model: resolveRoleModel(pluginConfig, "writer"),
     denyBash: true,
     pluginConfig,
-    role: "writer",
   })
 }
