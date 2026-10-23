@@ -16,3 +16,6 @@ tmp/
 
 # superpowers SDD plan workspaces (scratch, not part of the plugin product)
 .superpowers/
+
+# user-authored local documents (not part of the plugin product)
+userdoc/
