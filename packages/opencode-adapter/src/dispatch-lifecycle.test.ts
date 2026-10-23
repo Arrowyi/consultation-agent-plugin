@@ -485,6 +485,70 @@ describe("unsupported promptAsync endpoint", () => {
   })
 })
 
+describe("synchronous provider-shaped launch failure", () => {
+  it("appends the model-config remediation hint when promptAsync fails with a provider error", async () => {
+    // Given a synchronous provider-shaped submission failure, e.g. the build
+    // role's agent-missing case surfacing UnknownError at promptAsync time.
+    const fake = createFakeSdk()
+    fake.setPromptAsyncError({ name: "UnknownError", statusCode: 404 })
+    const lifecycle = createDispatchLifecycle({ sdk: fake, clock: createFakeClock() })
+
+    const result = await lifecycle.launch({
+      role: "build",
+      prompt: "code",
+      agentName: "build",
+      modelChain: [null],
+      parentID: FAKE_PARENT_ID,
+      directory: FAKE_DIRECTORY,
+      waitMs: 50,
+    })
+
+    // Then the failure carries the §3.1 remediation hint with the role's
+    // config field and path, alongside the job identity.
+    expect(result.startsWith("Error:")).toBe(true)
+    expect(result).toContain("build dispatch failed")
+    expect(result).toContain("promptAsync failed: UnknownError: 404")
+    expect(result).toContain('set "build_model"')
+    expect(result).toContain("~/.config/consultation-agent/config.jsonc")
+    expect(result).toMatch(/job_id=ses_fake_\d+/)
+    expect(promptAsyncCount(fake)).toBe(1)
+    expect(abortCount(fake)).toBe(0)
+  })
+
+  it("keeps journal-persistence launch failures hint-free", async () => {
+    // Given the attempt-reservation journal write is rejected by the host
+    // after the job spec persisted.
+    const fake = createFakeSdk()
+    const base = fake.session.prompt.bind(fake.session)
+    let promptCalls = 0
+    fake.session.prompt = async (input) => {
+      promptCalls++
+      if (promptCalls > 1) throw new Error("journal write rejected")
+      return base(input)
+    }
+    const lifecycle = createDispatchLifecycle({ sdk: fake, clock: createFakeClock() })
+
+    const result = await lifecycle.launch({
+      role: "analyst",
+      prompt: "analyze",
+      agentName: "consultation-analyst",
+      modelChain: ["opencode-go/qwen3.8-max"],
+      parentID: FAKE_PARENT_ID,
+      directory: FAKE_DIRECTORY,
+      waitMs: 50,
+    })
+
+    // Then the LaunchError surfaces with job identity but no remediation hint.
+    expect(result.startsWith("Error:")).toBe(true)
+    expect(result).toContain("analyst dispatch failed")
+    expect(result).toContain("failed to persist attempt reservation")
+    expect(result).toMatch(/job_id=ses_fake_\d+/)
+    expect(result).not.toContain("Hint:")
+    expect(result).not.toContain('set "analyst_model"')
+    expect(promptAsyncCount(fake)).toBe(0)
+  })
+})
+
 describe("context abort during observation", () => {
   for (const budget of [0, 20]) {
     it(`rollback-6 cancels local status waiting without signalling SDK budget ${budget}`, async () => {

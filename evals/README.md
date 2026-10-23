@@ -122,7 +122,7 @@ of repository evidence; retain only redacted structural observations and verdict
 
 ### Per-role audit matrix
 
-All five roles share the identical recoverable launch/wait/cancel lifecycle:
+All dispatch roles share the identical recoverable launch/wait/cancel lifecycle:
 `consultation_dispatch{role,prompt}`, `consultation_dispatch_wait{job_id,wait_ms?}`,
 and `consultation_dispatch_cancel{job_id}`. Only the bundled writer has a configured
 multi-model fallback chain (primary + `writer_fallback_models`). Non-writer roles

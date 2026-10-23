@@ -168,6 +168,11 @@ describe("simple role configuration", () => {
     expect(cfg.simple_workspace_dir).toBe("/abs/simple-workspace")
   })
 
+  it("rejects an empty simple_workspace_dir instead of widening edit permission to all absolute paths", () => {
+    // given // when // then
+    expect(() => config({ simple_workspace_dir: "" })).toThrow()
+  })
+
   it("keeps parsing an old config with no simple or build keys (compat guarantee)", () => {
     // given — the pre-extension shape of a full config
     const cfg = config({

@@ -1,7 +1,7 @@
 import { DISPATCH_ROLES, PRODUCTION_WAIT_BUDGET_MS, createKeyedMutex, serializeOutcome, type Clock, type DispatchOutcome, type DispatchRole, type DispatchSdk, type JobSpec, type KeyedMutex } from "./dispatch-contract.ts"
 import { createJob, loadJob } from "./dispatch-journal.ts"
 import { STARTUP_GRACE_MS } from "./dispatch-observer.ts"
-import { buildChainFailureMessage, errorText, formatModel, isProviderErrorText, makeEnvelope, modelFailureHint, observationToOutcome } from "./dispatch-helpers.ts"
+import { buildChainFailureMessage, embedsProviderErrorText, errorText, formatModel, isProviderErrorText, makeEnvelope, modelFailureHint, observationToOutcome } from "./dispatch-helpers.ts"
 import { abortAndReconcile, createSystemClock, findActiveAttempt } from "./dispatch-cancel.ts"
 import { launchAttempt, observeAttempt, LaunchError, type AttemptSubmission } from "./dispatch-attempt.ts"
 export { createSystemClock } from "./dispatch-cancel.ts"
@@ -103,7 +103,8 @@ export function createDispatchLifecycle(input: CreateDispatchLifecycleInput): Di
       }
       const identity = error instanceof LaunchError && error.jobID !== undefined ? ` (job_id=${error.jobID})` : ""
       const message = error instanceof LaunchError ? error.message : errorText(error)
-      const hint = error instanceof LaunchError ? "" : isProviderErrorText(message) ? modelFailureHint(request.role, modelChain[0] ?? null) : ""
+      const providerShaped = error instanceof LaunchError ? embedsProviderErrorText(message) : isProviderErrorText(message)
+      const hint = providerShaped ? modelFailureHint(request.role, modelChain[0] ?? null) : ""
       return serializeOutcome({ kind: "failure", reason: `${request.role} dispatch failed: ${message}${identity}${hint}` })
     })
   }

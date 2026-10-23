@@ -42,7 +42,7 @@ export const ConsultationPluginConfigSchema = z.object({
   simple_agent: z.string().default("simple"),
   simple_model: z.string().optional(),
   simple_enabled: z.boolean().default(true),
-  simple_workspace_dir: z.string().optional(),
+  simple_workspace_dir: z.string().min(1).optional(),
   build_lite_agent: z.string().default("build-lite"),
   build_lite_model: z.string().optional(),
   build_lite_enabled: z.boolean().default(true),

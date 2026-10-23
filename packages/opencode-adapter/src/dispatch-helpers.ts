@@ -39,7 +39,9 @@ export function formatModel(model: string | null | undefined, agentName: string)
   return model ?? `host model of ${agentName}`
 }
 
-const PROVIDER_ERROR_PREFIX = /^(APIError|ProviderAuthError|UnknownError|MessageOutputLengthError)/
+const PROVIDER_ERROR_NAMES = "APIError|ProviderAuthError|UnknownError|MessageOutputLengthError"
+const PROVIDER_ERROR_PREFIX = new RegExp(`^(${PROVIDER_ERROR_NAMES})`)
+const EMBEDDED_PROVIDER_ERROR = new RegExp(` (${PROVIDER_ERROR_NAMES})[: ]`)
 
 /**
  * True when a failure text was produced by a recognized provider/model error
@@ -48,6 +50,15 @@ const PROVIDER_ERROR_PREFIX = /^(APIError|ProviderAuthError|UnknownError|Message
  */
 export function isProviderErrorText(text: string): boolean {
   return PROVIDER_ERROR_PREFIX.test(text)
+}
+
+/**
+ * True when a wrapper message embeds a provider-shaped error text (per
+ * `errorText`), e.g. a synchronous `LaunchError` reporting
+ * "promptAsync failed: UnknownError: 404".
+ */
+export function embedsProviderErrorText(text: string): boolean {
+  return EMBEDDED_PROVIDER_ERROR.test(text)
 }
 
 /**

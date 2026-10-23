@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import {
   buildChainFailureMessage,
+  embedsProviderErrorText,
   isProviderErrorText,
   modelFailureHint,
   observationToOutcome,
@@ -11,6 +12,16 @@ describe("isProviderErrorText", () => {
     expect(isProviderErrorText("APIError: 402")).toBe(true)
     expect(isProviderErrorText("ProviderAuthError: 401")).toBe(true)
     expect(isProviderErrorText("unrecognized provider error")).toBe(false)
+  })
+})
+
+describe("embedsProviderErrorText", () => {
+  it("matches a provider error embedded in wrapper text and rejects plain wrappers", () => {
+    expect(embedsProviderErrorText("promptAsync failed: UnknownError: 404")).toBe(true)
+    expect(embedsProviderErrorText("promptAsync failed: APIError: 402")).toBe(true)
+    expect(embedsProviderErrorText("promptAsync failed: unrecognized provider error")).toBe(false)
+    expect(embedsProviderErrorText("failed to persist attempt reservation: journal write was rejected by host")).toBe(false)
+    expect(embedsProviderErrorText("UnknownError: 404")).toBe(false)
   })
 })
 
