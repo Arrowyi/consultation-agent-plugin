@@ -7,11 +7,11 @@ import { stripJsonc } from "./jsonc.ts"
 export { stripJsonc }
 
 /**
- * Zod schema for the consultation-agent plugin config.
+ * Zod schema for the janus-agent plugin config.
  *
- * Loaded from `$CONSULTATION_CONFIG` or
- * `$XDG_CONFIG_HOME/consultation-agent/config.jsonc` or
- * `~/.config/consultation-agent/config.jsonc`.
+ * Loaded from `$JANUS_CONFIG` or
+ * `$XDG_CONFIG_HOME/janus-agent/config.jsonc` or
+ * `~/.config/janus-agent/config.jsonc`.
  */
 const roleCapsSchema = z.object({
   explorer: z.number().int().min(0),
@@ -21,7 +21,7 @@ const roleCapsSchema = z.object({
   writer: z.number().int().min(0).default(0),
 })
 
-export const ConsultationPluginConfigSchema = z.object({
+export const JanusPluginConfigSchema = z.object({
   agent_model: z.string().optional(),
   critic_agent: z.string().default("consultation-critic"),
   critic_model: z.string().optional(),
@@ -38,13 +38,16 @@ export const ConsultationPluginConfigSchema = z.object({
   writer_enabled: z.boolean().default(true),
   writer_delegate_agent: z.string().optional(),
   writer_delegate_model: z.string().optional(),
-  simple_agent: z.string().default("simple"),
-  simple_model: z.string().optional(),
-  simple_enabled: z.boolean().default(true),
-  simple_workspace_dir: z.string().min(1).optional(),
-  build_lite_agent: z.string().default("build-lite"),
-  build_lite_model: z.string().optional(),
-  build_lite_enabled: z.boolean().default(true),
+  coder_agent: z.string().default("coder"),
+  coder_model: z.string().optional(),
+  coder_enabled: z.boolean().default(true),
+  lite_agent: z.string().default("lite"),
+  lite_model: z.string().optional(),
+  lite_enabled: z.boolean().default(true),
+  lite_workspace_dir: z.string().min(1).optional(),
+  coder_lite_agent: z.string().default("coder-lite"),
+  coder_lite_model: z.string().optional(),
+  coder_lite_enabled: z.boolean().default(true),
   build_agent: z.string().default("build"),
   build_model: z.string().optional(),
   build_enabled: z.boolean().default(true),
@@ -85,7 +88,7 @@ export const ConsultationPluginConfigSchema = z.object({
     .optional(),
 })
 
-export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSchema>
+export type JanusPluginConfig = z.infer<typeof JanusPluginConfigSchema>
 
 // Cross-family audit structure: challenger (gemini) ≠ consultant (glm) ≠
 // analyst (qwen), so the challenge roles never share a model family with the
@@ -100,13 +103,14 @@ export type ConsultationPluginConfig = z.infer<typeof ConsultationPluginConfigSc
 // subscription allowance absorbs their usage (DeepSeek is served there at the
 // same price as the direct API, with a monthly per-model allowance).
 // analyst is qwen3.8-max (qwen3.7-max was retired from Go). explorer and
-// simple share deepseek-v4.1-flash. writer is claude-sonnet-5-5 (TB4.0 70.6%
+// lite share deepseek-v4.1-flash. writer is claude-sonnet-5-5 (TB4.0 70.6%
 // vs 5's 12.4% — the previous claude-sonnet-5 default's reputation collapsed)
 // and, like every role, resolves to a single model with no fallback.
-// simple is the economical daily-consultation generalist on V4.1-Flash.
-// build-lite is the mechanical coding lane on GLM-5.3-Flash (agentic-strong at
-// half of V4.1-Flash's peak price); the build role targets the host's native
-// build agent by name and has no plugin default model.
+// lite is the economical quick-answer entry on V4.1-Flash. coder is the
+// judgment-heavy coding entry, defaulting to the same strong agentic model as
+// the consultant; coder-lite is the mechanical lane on GLM-5.3-Flash
+// (agentic-strong at half of V4.1-Flash's peak price). The build role targets
+// the host's native build agent by name and has no plugin default model.
 export const MODEL_DEFAULTS = {
   consultant: "opencode-go/glm-5.3",
   explorer: "opencode-go/deepseek-v4.1-flash",
@@ -114,14 +118,15 @@ export const MODEL_DEFAULTS = {
   critic: "opencode/gemini-3.8-flash",
   verifier: "opencode/gemini-3.8-flash",
   writer: "opencode/claude-sonnet-5-5",
-  simple: "opencode-go/deepseek-v4.1-flash",
-  "build-lite": "opencode-go/glm-5.3-flash",
+  coder: "opencode-go/glm-5.3",
+  lite: "opencode-go/deepseek-v4.1-flash",
+  "coder-lite": "opencode-go/glm-5.3-flash",
   janus: "opencode-go/glm-5.3",
 } as const
 
 export type ModelRole = keyof typeof MODEL_DEFAULTS
 
-export function resolveRoleModel(config: ConsultationPluginConfig, role: ModelRole): string {
+export function resolveRoleModel(config: JanusPluginConfig, role: ModelRole): string {
   switch (role) {
     case "consultant":
       return config.agent_model ?? MODEL_DEFAULTS.consultant
@@ -135,16 +140,18 @@ export function resolveRoleModel(config: ConsultationPluginConfig, role: ModelRo
       return config.verifier_model ?? MODEL_DEFAULTS.verifier
     case "writer":
       return config.writer_model ?? MODEL_DEFAULTS.writer
-    case "simple":
-      return config.simple_model ?? MODEL_DEFAULTS.simple
-    case "build-lite":
-      return config.build_lite_model ?? MODEL_DEFAULTS["build-lite"]
+    case "coder":
+      return config.coder_model ?? MODEL_DEFAULTS.coder
+    case "lite":
+      return config.lite_model ?? MODEL_DEFAULTS.lite
+    case "coder-lite":
+      return config.coder_lite_model ?? MODEL_DEFAULTS["coder-lite"]
     case "janus":
       return config.janus_model ?? MODEL_DEFAULTS.janus
   }
 }
 
-export function resolveRoleModelChain(config: ConsultationPluginConfig, role: ModelRole): string[] {
+export function resolveRoleModelChain(config: JanusPluginConfig, role: ModelRole): string[] {
   return [resolveRoleModel(config, role)]
 }
 
@@ -182,7 +189,7 @@ export const TIER_ROLE_CAPS_DEFAULTS: TierRoleCapsConfig = {
 
 export const COST_GUARD_USD_DEFAULT = 10
 
-export function resolveTeamCaps(config: ConsultationPluginConfig): TeamCapsConfig {
+export function resolveTeamCaps(config: JanusPluginConfig): TeamCapsConfig {
   const caps = config.team_caps
   return {
     round_cap: caps?.round_cap ?? TEAM_CAPS_DEFAULTS.round_cap,
@@ -191,7 +198,7 @@ export function resolveTeamCaps(config: ConsultationPluginConfig): TeamCapsConfi
   }
 }
 
-export function resolveTierRoleCaps(config: ConsultationPluginConfig): TierRoleCapsConfig {
+export function resolveTierRoleCaps(config: JanusPluginConfig): TierRoleCapsConfig {
   const tiers = config.tier_role_caps
   return {
     fast: tiers?.fast ?? TIER_ROLE_CAPS_DEFAULTS.fast,
@@ -200,31 +207,31 @@ export function resolveTierRoleCaps(config: ConsultationPluginConfig): TierRoleC
   }
 }
 
-export function resolveCostGuardUsd(config: ConsultationPluginConfig): number {
+export function resolveCostGuardUsd(config: JanusPluginConfig): number {
   return config.cost_guard_provider_usd ?? COST_GUARD_USD_DEFAULT
 }
 
 /**
  * Resolve the plugin config file path from environment variables.
  *
- * Priority: `$CONSULTATION_CONFIG` >
- * `$XDG_CONFIG_HOME/consultation-agent/config.jsonc` >
- * `~/.config/consultation-agent/config.jsonc`.
+ * Priority: `$JANUS_CONFIG` >
+ * `$XDG_CONFIG_HOME/janus-agent/config.jsonc` >
+ * `~/.config/janus-agent/config.jsonc`.
  *
  * Returns `undefined` when no path can be derived (no HOME and no
- * XDG_CONFIG_HOME and no CONSULTATION_CONFIG).
+ * XDG_CONFIG_HOME and no JANUS_CONFIG).
  */
 export function resolvePluginConfigPath(env: NodeJS.ProcessEnv): string | undefined {
-  if (env.CONSULTATION_CONFIG && env.CONSULTATION_CONFIG.length > 0) {
-    return env.CONSULTATION_CONFIG
+  if (env.JANUS_CONFIG && env.JANUS_CONFIG.length > 0) {
+    return env.JANUS_CONFIG
   }
   const xdg = env.XDG_CONFIG_HOME
   if (xdg && xdg.length > 0) {
-    return join(xdg, "consultation-agent", "config.jsonc")
+    return join(xdg, "janus-agent", "config.jsonc")
   }
   const home = env.HOME
   if (!home || home.length === 0) return undefined
-  return join(home, ".config", "consultation-agent", "config.jsonc")
+  return join(home, ".config", "janus-agent", "config.jsonc")
 }
 
 function formatZodError(error: z.ZodError): string {
@@ -234,24 +241,24 @@ function formatZodError(error: z.ZodError): string {
 }
 
 /**
- * Load and validate the consultation-agent plugin config.
+ * Load and validate the janus-agent plugin config.
  *
  * A missing config file is tolerated and yields the schema defaults.
  * An invalid config (unparseable JSON or failed zod validation) throws
  * an `Error` with a message that names the config file path.
  */
-export async function loadPluginConfig(env: NodeJS.ProcessEnv): Promise<ConsultationPluginConfig> {
+export async function loadPluginConfig(env: NodeJS.ProcessEnv): Promise<JanusPluginConfig> {
   const configPath = resolvePluginConfigPath(env)
 
   if (!configPath) {
-    return ConsultationPluginConfigSchema.parse({})
+    return JanusPluginConfigSchema.parse({})
   }
 
   let rawText: string
   try {
     rawText = await readFile(configPath, "utf8")
   } catch {
-    return ConsultationPluginConfigSchema.parse({})
+    return JanusPluginConfigSchema.parse({})
   }
 
   let parsed: unknown
@@ -259,13 +266,13 @@ export async function loadPluginConfig(env: NodeJS.ProcessEnv): Promise<Consulta
     parsed = JSON.parse(stripJsonc(rawText))
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
-    throw new Error(`consultation-agent config: invalid JSON in ${configPath}: ${detail}`)
+    throw new Error(`janus-agent config: invalid JSON in ${configPath}: ${detail}`)
   }
 
-  const result = ConsultationPluginConfigSchema.safeParse(parsed)
+  const result = JanusPluginConfigSchema.safeParse(parsed)
   if (!result.success) {
     throw new Error(
-      `consultation-agent config: invalid configuration in ${configPath}:\n${formatZodError(result.error)}`,
+      `janus-agent config: invalid configuration in ${configPath}:\n${formatZodError(result.error)}`,
     )
   }
 

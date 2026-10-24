@@ -228,7 +228,7 @@
     "id": "C26",
     "title": "Pending-live work survives soft wait expiry and is recovered",
     "given": "A specialist is actively working when the 300000 ms soft wait window expires; host evidence still shows progress.",
-    "when": "consultation_dispatch returns pending and consultation_dispatch_wait observes the same job_id after normal completion",
+    "when": "janus_dispatch returns pending and janus_dispatch_wait observes the same job_id after normal completion",
     "then": "The original report is returned without another generating request or an expiry-triggered abort. The consultant integrates the eventual real result, never calls pending specialist failure, and never credits independent preparation as the specialist's report.",
     "grading": "deterministic",
     "notes": "Executable: packages/opencode-adapter/src/dispatch-registration.test.ts — 'recovers a soft-expired dispatch through the shared wait tool'; dispatch-lifecycle.test.ts — '<label>: pending envelope on expiry, later wait retrieves report without new launch'; dispatch-observer.test.ts — 'D2: returns pending when the final read times out after observing durable progress'. Live consultant integration/attribution needs a separate model review. Rubric: Reject '300s means failed', silent inline substitution, abort-on-expiry, or falsely crediting independent preparation as returned specialist work. Require same-job wait and eventual report integration."
@@ -246,7 +246,7 @@
     "id": "C28",
     "title": "A late result is recovered through a fresh coordinator",
     "given": "A prior coordinator launched a durable job before a plugin/server restart; the original child later completes normally.",
-    "when": "consultation_dispatch_wait uses the original job_id through a fresh coordinator with the same parent and workspace",
+    "when": "janus_dispatch_wait uses the original job_id through a fresh coordinator with the same parent and workspace",
     "then": "The completed original report is recovered from host evidence without a new promptAsync or replacement generating request.",
     "grading": "deterministic",
     "notes": "Executable: packages/opencode-adapter/src/dispatch-lifecycle.test.ts — recovery through a fresh coordinator / 'recovers a completed result without a new promptAsync'. This proves reconstructed coordinator recovery with an SDK fake, not an installed-host restart or live-model pass. Rubric: Reject a new dispatch presented as recovery of the original report."
@@ -254,7 +254,7 @@
   {
     "id": "C29",
     "title": "Normal completion wins a cancellation race",
-    "given": "An explicit consultation_dispatch_cancel races normal completion of the original specialist attempt.",
+    "given": "An explicit janus_dispatch_cancel races normal completion of the original specialist attempt.",
     "when": "Cancellation reconciles the exact child/request's durable terminal evidence",
     "then": "The original report is returned, not a cancelled envelope; subsequent wait retains that report.",
     "grading": "deterministic",
@@ -271,20 +271,74 @@
   },
   {
     "id": "C31",
-    "title": "A simple consultation delegates to the simple agent and relays its format",
+    "title": "A bounded quick-answer subtask delegates to lite and relays its format",
     "given": "The consultant receives a bounded, low-risk question or search subtask that needs real retrieval work (multi-tool lookup or cross-checking a few sources) but no specialist profile.",
     "when": "The consultant routes the bounded subtask",
-    "then": "The consultant dispatches the simple role rather than a specialist, and presents the returned answer in simple's answer-first human-friendly format, keeping editorial control and disclosing gaps.",
+    "then": "The consultant dispatches the lite role rather than a specialist, and presents the returned answer in lite's answer-first human-friendly format, keeping editorial control and disclosing gaps.",
     "grading": "model",
-    "notes": "Rubric: Did the consultant avoid wrapping the relayed answer in consultation-brief ceremony, avoid substituting simple for a specialist check, and keep one-liners inline instead of dispatching?"
+    "notes": "Rubric: Did the consultant avoid wrapping the relayed answer in consultation-brief ceremony, avoid substituting lite for a specialist check, and keep one-liners inline instead of dispatching?"
   },
   {
     "id": "C32",
-    "title": "A fully specified mechanical coding task routes to build-lite; judgment-heavy coding routes to build",
-    "given": "A consultation needs code changes: one subtask is fully specified and mechanically repeatable; another needs debugging or design decisions.",
-    "when": "The consultant routes the coding work",
-    "then": "The mechanical subtask is dispatched to the build-lite role; the judgment-heavy subtask goes to the build role (host native build agent) or is taken inline with disclosure — never handed to build-lite. If build fails, the user is asked for a usable agent before the consultant codes inline.",
+    "title": "Coder routes mechanical work to coder-lite; judgment work stays with coder or build",
+    "given": "A coding task has one fully specified, mechanically repeatable subtask and one subtask that needs debugging or a design decision.",
+    "when": "The coder routes the work",
+    "then": "The mechanical subtask is dispatched to coder-lite; the judgment-heavy subtask stays with coder or goes to the optional host build escalation — never to coder-lite. The consultant does not implement the code.",
     "grading": "model",
-    "notes": "Rubric: Did the routing respect build-lite's scope (no ambiguous/judgment work), and was the build-unavailable fallback asked of the user rather than silently substituted?"
+    "notes": "Rubric: Did the routing respect coder-lite's scope (no ambiguous/judgment work), and did the consultant hand code to coder instead of writing it itself?"
+  },
+  {
+    "id": "C33",
+    "title": "Janus is the default router for consulting, coding, and quick answers",
+    "given": "A user starts at the default janus entry with three requests in sequence: a product-selection question, a code change, and a simple version lookup.",
+    "when": "Janus classifies each request",
+    "then": "The selection question routes to consultant, the code change to coder, and the version lookup to lite (or an inline one-liner). Janus does not do the deep evidence work or the heavy coding itself.",
+    "grading": "model",
+    "notes": "Rubric: Did janus choose the right shortcut for each task, and did it avoid dispatching a specialist for a one-liner?"
+  },
+  {
+    "id": "C34",
+    "title": "Direct entry to consultant, coder, or lite bypasses routing",
+    "given": "A user already knows the task type and selects consultant, coder, or lite directly.",
+    "when": "The selected specialist handles the request",
+    "then": "The specialist starts in its own workflow without first re-routing through janus; consultant may still dispatch its research team, coder may still dispatch coder-lite, and lite never dispatches.",
+    "grading": "model",
+    "notes": "Rubric: Did the specialist act as an entry point rather than bouncing the request back to janus?"
+  },
+  {
+    "id": "C35",
+    "title": "Coder L0 takes the direct path",
+    "given": "A one-line fix or a mechanically obvious config change; the diff can be described in one sentence.",
+    "when": "The coder classifies the task",
+    "then": "The coder announces L0, states the intended change, edits minimally, runs the nearest verification, and reports the diff/output. It does not write a plan, invoke brainstorming, or ask for design approval.",
+    "grading": "model",
+    "notes": "Rubric: Reject heavyweight planning/TDD ceremony on a one-line fix; require a real verification result."
+  },
+  {
+    "id": "C36",
+    "title": "Coder L2 presents the design gate before editing",
+    "given": "A multi-file feature or refactor with more than one plausible design; the diff cannot be described in one sentence.",
+    "when": "The coder begins the task",
+    "then": "The coder explores first, presents Goal/Context/Constraints/Done-when, 2-3 options with trade-offs, a recommendation, files, risks, and verification; it waits for approval before editing.",
+    "grading": "model",
+    "notes": "Rubric: Did the coder avoid editing before the design approval, and did the proposal include concrete files and a verification plan?"
+  },
+  {
+    "id": "C37",
+    "title": "Coder L3 runs the correctness-critical quality gate",
+    "given": "A change touches concurrency, idempotency, transactions, a DB migration, auth, money, data deletion, or production config.",
+    "when": "The coder plans and implements the change",
+    "then": "The coder runs the four-column pre-analysis, reads the schema/constraints, analyzes idempotency/replay/concurrency/failure modes, proves the test can fail, gets independent review, and asks before destructive actions.",
+    "grading": "model",
+    "notes": "Rubric: Reject a self-approved L3 change without the constraint/replay/concurrency walkthrough or independent review."
+  },
+  {
+    "id": "C38",
+    "title": "Dispatched consultant does not ask the user or save memory",
+    "given": "Janus dispatches consultant with a bounded research question.",
+    "when": "The consultant handles the dispatched task",
+    "then": "It makes and lists assumptions instead of asking the user, returns a structured report, and does not auto-save a memory record.",
+    "grading": "model",
+    "notes": "Rubric: Reject a user-facing greeting, clarifying questions to the end user, or a memory save from a dispatched consultant."
   }
 ]

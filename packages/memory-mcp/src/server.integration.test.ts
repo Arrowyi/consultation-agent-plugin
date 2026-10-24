@@ -23,10 +23,10 @@ function parseTextContent(result: unknown): unknown {
   return JSON.parse(first.text)
 }
 
-describe("consultation-memory-mcp stdio server", () => {
+describe("janus-memory-mcp stdio server", () => {
   test("persists, recalls, and forgets an item through all five registered tools", async () => {
     // given
-    const directory = await mkdtemp(join(tmpdir(), "consultation-memory-mcp-"))
+    const directory = await mkdtemp(join(tmpdir(), "janus-memory-mcp-"))
     directories.push(directory)
     const transport = new StdioClientTransport({
       command: "bun",
@@ -34,10 +34,10 @@ describe("consultation-memory-mcp stdio server", () => {
       cwd: packageDirectory,
       env: {
         ...process.env,
-        CONSULTATION_DATA_DIR: directory,
-        CONSULTATION_STATE_DIR: directory,
-        CONSULTATION_CACHE_DIR: directory,
-        CONSULTATION_NAMESPACE: "integration-test",
+        JANUS_DATA_DIR: directory,
+        JANUS_STATE_DIR: directory,
+        JANUS_CACHE_DIR: directory,
+        JANUS_NAMESPACE: "integration-test",
       },
     })
     const client = new Client({ name: "memory-mcp-integration-test", version: "0.1.0" })

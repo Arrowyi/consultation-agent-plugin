@@ -1,8 +1,8 @@
 {
-  "name": "consultation-agent-plugin",
+  "name": "janus-agent-plugin",
   "version": "0.2.0",
   "private": true,
-  "description": "Evidence-driven consultation agent plugin for OpenCode with a portable, user-approved memory core",
+  "description": "Janus agent plugin for OpenCode — evidence-driven consultation, adaptive coding, and a portable user-approved memory core",
   "type": "module",
   "workspaces": [
     "packages/*"

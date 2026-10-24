@@ -2,7 +2,7 @@
 // MemoryError -> { isError, content: [{ type: "text", text: { code, message } }] }
 // Unexpected   -> { isError, content: [{ type: "text", text: { code: "INTERNAL", message: sanitized } }] }
 
-import { MemoryError } from "@consultation-agent/memory-core"
+import { MemoryError } from "@janus-agent/memory-core"
 
 const MAX_MESSAGE_LENGTH = 500
 

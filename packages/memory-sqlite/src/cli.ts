@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-// consultation-memory CLI. Maintenance: export | import | migrate | check | reindex.
+// janus-memory CLI. Maintenance: export | import | migrate | check | reindex.
 // Browsing the consultation record: list | show <id> | search <q> | delete <id> | forget <id>.
 // Minimal argv parsing, no external dependency. Opens the store from
-// CONSULTATION_* env vars (falling back to XDG defaults).
+// JANUS_* env vars (falling back to XDG defaults).
 
 import { readFile, writeFile } from "node:fs/promises"
 import { openMemoryStore, type OpenStoreOptions } from "./store.ts"
@@ -11,7 +11,7 @@ import { exportMemory, importMemory } from "./export-import.ts"
 type Row = Record<string, unknown>
 type Store = Awaited<ReturnType<typeof openMemoryStore>>
 
-const USAGE = "usage: consultation-memory <export [--out f] | import --in f | migrate | check | reindex | list [--limit N] [--namespace NS] | show <id> | search <q> [--limit N] | delete <id> | forget <id>> [--json]\n"
+const USAGE = "usage: janus-memory <export [--out f] | import --in f | migrate | check | reindex | list [--limit N] [--namespace NS] | show <id> | search <q> [--limit N] | delete <id> | forget <id>> [--json]\n"
 
 export async function runCli(argv: string[], env: NodeJS.ProcessEnv): Promise<number> {
   const [command, ...rest] = argv
@@ -54,9 +54,9 @@ export async function runCli(argv: string[], env: NodeJS.ProcessEnv): Promise<nu
 
 function storeOptionsFromEnv(env: NodeJS.ProcessEnv): OpenStoreOptions {
   return {
-    ...(env.CONSULTATION_DATA_DIR !== undefined && env.CONSULTATION_DATA_DIR.length > 0 ? { dataDir: env.CONSULTATION_DATA_DIR } : {}),
-    ...(env.CONSULTATION_STATE_DIR !== undefined && env.CONSULTATION_STATE_DIR.length > 0 ? { stateDir: env.CONSULTATION_STATE_DIR } : {}),
-    ...(env.CONSULTATION_CACHE_DIR !== undefined && env.CONSULTATION_CACHE_DIR.length > 0 ? { cacheDir: env.CONSULTATION_CACHE_DIR } : {}),
+    ...(env.JANUS_DATA_DIR !== undefined && env.JANUS_DATA_DIR.length > 0 ? { dataDir: env.JANUS_DATA_DIR } : {}),
+    ...(env.JANUS_STATE_DIR !== undefined && env.JANUS_STATE_DIR.length > 0 ? { stateDir: env.JANUS_STATE_DIR } : {}),
+    ...(env.JANUS_CACHE_DIR !== undefined && env.JANUS_CACHE_DIR.length > 0 ? { cacheDir: env.JANUS_CACHE_DIR } : {}),
   }
 }
 

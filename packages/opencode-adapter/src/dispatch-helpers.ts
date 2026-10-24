@@ -62,8 +62,8 @@ export function embedsProviderErrorText(text: string): boolean {
 }
 
 /**
- * Role → plugin-config model-field map. Explicit because "build-lite" maps to
- * the underscored `build_lite_model` (role-name interpolation would be wrong).
+ * Role → plugin-config model-field map. Explicit because "coder-lite" maps to
+ * the underscored `coder_lite_model` (role-name interpolation would be wrong).
  */
 export const ROLE_MODEL_FIELDS: Record<DispatchRole, string> = {
   explorer: "explorer_model",
@@ -71,8 +71,9 @@ export const ROLE_MODEL_FIELDS: Record<DispatchRole, string> = {
   critic: "critic_model",
   verifier: "verifier_model",
   writer: "writer_model",
-  simple: "simple_model",
-  "build-lite": "build_lite_model",
+  coder: "coder_model",
+  lite: "lite_model",
+  "coder-lite": "coder_lite_model",
   build: "build_model",
   consultant: "agent_model",
 }
@@ -84,7 +85,7 @@ export const ROLE_MODEL_FIELDS: Record<DispatchRole, string> = {
 export function modelFailureHint(role: DispatchRole, model: string | null | undefined): string {
   const label = model !== undefined && model !== null && model.length > 0 ? ` (model: ${model})` : ""
   const field = ROLE_MODEL_FIELDS[role]
-  return `${label}. Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "${field}" in ~/.config/consultation-agent/config.jsonc (or point $CONSULTATION_CONFIG at your config), then retry the dispatch.`
+  return `${label}. Hint: default models assume an OpenCode Go subscription. If this provider is not configured on this machine, set "${field}" in ~/.config/janus-agent/config.jsonc (or point $JANUS_CONFIG at your config), then retry the dispatch.`
 }
 
 export function buildChainFailureMessage(
@@ -104,7 +105,7 @@ export function makeEnvelope(
   sessionID: string,
   waitedMs: number,
   reason: string,
-  next: DispatchEnvelope["next"] = "consultation_dispatch_wait",
+  next: DispatchEnvelope["next"] = "janus_dispatch_wait",
 ): DispatchOutcome {
   return {
     kind: "nonterminal",
@@ -144,7 +145,7 @@ export function observationToOutcome(
           session_id: attempt.sessionID,
           waited_ms: Math.max(0, Math.floor(waitedMs)),
           reason: "dispatch was cancelled",
-          next: "consultation_dispatch_wait",
+          next: "janus_dispatch_wait",
         },
       }
     case "failed":

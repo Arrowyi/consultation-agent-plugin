@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { resolveStoragePaths } from "./paths.ts"
 
 describe("resolveStoragePaths", () => {
-  test("uses XDG env vars when set and appends the consultation-agent suffix", () => {
+  test("uses XDG env vars when set and appends the janus-agent suffix", () => {
     // given
     const env = {
       XDG_DATA_HOME: "/custom/data",
@@ -13,9 +13,9 @@ describe("resolveStoragePaths", () => {
     // when
     const paths = resolveStoragePaths(env)
     // then
-    expect(paths.dataDir).toBe("/custom/data/consultation-agent")
-    expect(paths.stateDir).toBe("/custom/state/consultation-agent")
-    expect(paths.cacheDir).toBe("/custom/cache/consultation-agent")
+    expect(paths.dataDir).toBe("/custom/data/janus-agent")
+    expect(paths.stateDir).toBe("/custom/state/janus-agent")
+    expect(paths.cacheDir).toBe("/custom/cache/janus-agent")
   })
 
   test("falls back to ~/.local/share, ~/.local/state, ~/.cache under HOME when XDG vars are absent", () => {
@@ -24,9 +24,9 @@ describe("resolveStoragePaths", () => {
     // when
     const paths = resolveStoragePaths(env)
     // then
-    expect(paths.dataDir).toBe("/home/user/.local/share/consultation-agent")
-    expect(paths.stateDir).toBe("/home/user/.local/state/consultation-agent")
-    expect(paths.cacheDir).toBe("/home/user/.cache/consultation-agent")
+    expect(paths.dataDir).toBe("/home/user/.local/share/janus-agent")
+    expect(paths.stateDir).toBe("/home/user/.local/state/janus-agent")
+    expect(paths.cacheDir).toBe("/home/user/.cache/janus-agent")
   })
 
   test("treats an empty XDG var as unset and falls back to the default", () => {
@@ -35,6 +35,6 @@ describe("resolveStoragePaths", () => {
     // when
     const paths = resolveStoragePaths(env)
     // then
-    expect(paths.dataDir).toBe("/home/user/.local/share/consultation-agent")
+    expect(paths.dataDir).toBe("/home/user/.local/share/janus-agent")
   })
 })

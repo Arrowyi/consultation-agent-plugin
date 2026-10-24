@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { PluginInput, ToolContext } from "@opencode-ai/plugin"
-import { createConsultationDispatchTool } from "./dispatch-tool.ts"
+import { createJanusDispatchTool } from "./dispatch-tool.ts"
 import { createFakeClock, createFakeSdk, type FakeSdk } from "./dispatch-test-fixtures.ts"
 import { PRODUCTION_WAIT_BUDGET_MS, parseOutcomeEnvelope, type Clock, type DispatchEnvelope, type SdkAssistantMessage, type SdkMessageWithParts, type SdkTextPart } from "./dispatch-contract.ts"
 
@@ -12,15 +12,15 @@ describe("consultation dispatch reliability", () => {
   let previousConfig: string | undefined
 
   beforeEach(() => {
-    previousConfig = process.env.CONSULTATION_CONFIG
+    previousConfig = process.env.JANUS_CONFIG
     directory = mkdtempSync(join(tmpdir(), "consultation-dispatch-reliability-"))
-    process.env.CONSULTATION_CONFIG = join(directory, "config.jsonc")
-    writeFileSync(process.env.CONSULTATION_CONFIG, "{}")
+    process.env.JANUS_CONFIG = join(directory, "config.jsonc")
+    writeFileSync(process.env.JANUS_CONFIG, "{}")
   })
 
   afterEach(() => {
-    if (previousConfig === undefined) delete process.env.CONSULTATION_CONFIG
-    else process.env.CONSULTATION_CONFIG = previousConfig
+    if (previousConfig === undefined) delete process.env.JANUS_CONFIG
+    else process.env.JANUS_CONFIG = previousConfig
     rmSync(directory, { recursive: true, force: true })
   })
 
@@ -88,7 +88,7 @@ describe("consultation dispatch reliability", () => {
       fake.seedMessages(sessionID, [completedAssistantMessage(requestMessageID, parts, { sessionID, id: `msg-reply-${sessionID}` })])
       return result
     }
-    const dispatch = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatch = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
     return { dispatch, fake }
   }
 
@@ -121,7 +121,7 @@ describe("consultation dispatch reliability", () => {
     { role: "writer", config: { writer_enabled: false } },
   ] as const) {
     it(`rejects a disabled ${scenario.role} before creating a child session`, async () => {
-      writeFileSync(process.env.CONSULTATION_CONFIG ?? "", JSON.stringify(scenario.config))
+      writeFileSync(process.env.JANUS_CONFIG ?? "", JSON.stringify(scenario.config))
       const { dispatch, fake } = fakeSession([{ type: "text", text: "should not run" }])
 
       const result = await dispatch.execute({ role: scenario.role, prompt: "check" }, context)
@@ -132,12 +132,12 @@ describe("consultation dispatch reliability", () => {
   }
 
   it("uses an explicitly delegated writer even when the bundled writer is disabled", async () => {
-    writeFileSync(process.env.CONSULTATION_CONFIG ?? "", JSON.stringify({
+    writeFileSync(process.env.JANUS_CONFIG ?? "", JSON.stringify({
       writer_enabled: false,
       writer_delegate_agent: "host-writer",
     }))
     const fake = createRespondingFake("usable manuscript")
-    const tool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
+    const tool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
 
     const result = await tool.execute({ role: "writer", prompt: "draft" }, context)
 
@@ -175,7 +175,7 @@ describe("consultation dispatch reliability", () => {
     const clock = createFakeClock()
     const fake = createFakeSdk()
     fake.setPromptAsyncResult({ data: undefined })
-    const dispatch = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatch = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const promise = dispatch.execute({ role: "analyst", prompt: "analyze evidence" }, context)
     await advanceClockTo(clock, PRODUCTION_WAIT_BUDGET_MS)
@@ -184,7 +184,7 @@ describe("consultation dispatch reliability", () => {
     const envelope = parseEnvelope(result)
     expect(envelope.status).toMatch(/pending|unknown/)
     expect(envelope.job_id).toMatch(/^ses_fake_/)
-    expect(envelope.next).toBe("consultation_dispatch_wait")
+    expect(envelope.next).toBe("janus_dispatch_wait")
     expect(abortCount(fake)).toBe(0)
     expect(promptAsyncCount(fake)).toBe(1)
   })

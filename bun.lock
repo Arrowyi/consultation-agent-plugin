@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "consultation-agent-plugin",
+      "name": "janus-agent-plugin",
       "dependencies": {
         "zod": "^3.25.76",
       },
@@ -13,45 +13,45 @@
       },
     },
     "packages/consultation-core": {
-      "name": "@consultation-agent/consultation-core",
+      "name": "@janus-agent/consultation-core",
       "version": "0.1.0",
       "dependencies": {
         "zod": "^3.25.76",
       },
     },
     "packages/memory-core": {
-      "name": "@consultation-agent/memory-core",
+      "name": "@janus-agent/memory-core",
       "version": "0.1.0",
       "dependencies": {
         "zod": "^3.25.76",
       },
     },
     "packages/memory-mcp": {
-      "name": "@consultation-agent/memory-mcp",
+      "name": "@janus-agent/memory-mcp",
       "version": "0.1.0",
       "bin": {
-        "consultation-memory-mcp": "./src/server.ts",
+        "janus-memory-mcp": "./src/server.ts",
       },
       "dependencies": {
-        "@consultation-agent/memory-core": "workspace:*",
-        "@consultation-agent/memory-sqlite": "workspace:*",
+        "@janus-agent/memory-core": "workspace:*",
+        "@janus-agent/memory-sqlite": "workspace:*",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "zod": "^3.25.76",
       },
     },
     "packages/memory-sqlite": {
-      "name": "@consultation-agent/memory-sqlite",
+      "name": "@janus-agent/memory-sqlite",
       "version": "0.1.0",
       "bin": {
-        "consultation-memory": "./src/cli.ts",
+        "janus-memory": "./src/cli.ts",
       },
       "dependencies": {
-        "@consultation-agent/memory-core": "workspace:*",
+        "@janus-agent/memory-core": "workspace:*",
         "zod": "^3.25.76",
       },
     },
     "packages/opencode-adapter": {
-      "name": "@consultation-agent/opencode-adapter",
+      "name": "@janus-agent/opencode-adapter",
       "version": "0.1.0",
       "dependencies": {
         "zod": "^3.25.76",
@@ -64,15 +64,15 @@
   "packages": {
     "@ai-sdk/provider": ["@ai-sdk/provider@3.0.8", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ=="],
 
-    "@consultation-agent/consultation-core": ["@consultation-agent/consultation-core@workspace:packages/consultation-core"],
+    "@janus-agent/consultation-core": ["@janus-agent/consultation-core@workspace:packages/consultation-core"],
 
-    "@consultation-agent/memory-core": ["@consultation-agent/memory-core@workspace:packages/memory-core"],
+    "@janus-agent/memory-core": ["@janus-agent/memory-core@workspace:packages/memory-core"],
 
-    "@consultation-agent/memory-mcp": ["@consultation-agent/memory-mcp@workspace:packages/memory-mcp"],
+    "@janus-agent/memory-mcp": ["@janus-agent/memory-mcp@workspace:packages/memory-mcp"],
 
-    "@consultation-agent/memory-sqlite": ["@consultation-agent/memory-sqlite@workspace:packages/memory-sqlite"],
+    "@janus-agent/memory-sqlite": ["@janus-agent/memory-sqlite@workspace:packages/memory-sqlite"],
 
-    "@consultation-agent/opencode-adapter": ["@consultation-agent/opencode-adapter@workspace:packages/opencode-adapter"],
+    "@janus-agent/opencode-adapter": ["@janus-agent/opencode-adapter@workspace:packages/opencode-adapter"],
 
     "@hono/node-server": ["@hono/node-server@1.19.17", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ=="],
 

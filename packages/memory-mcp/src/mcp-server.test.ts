@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js"
-import { MemoryError } from "@consultation-agent/memory-core"
+import { MemoryError } from "@janus-agent/memory-core"
 import type {
   CommitInput,
   CommitResult,
@@ -14,7 +14,7 @@ import type {
   PrepareResult,
   RecallQuery,
   RecallResult,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 import { createMemoryMcpServer } from "./mcp-server.ts"
 
 async function writerLocked(): Promise<never> {

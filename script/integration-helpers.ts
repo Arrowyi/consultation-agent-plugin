@@ -76,7 +76,7 @@ export type InstallMetadata = {
 }
 
 export function computeInstallMetadata(prefix: string): InstallMetadata {
-  const installRoot = join(prefix, "consultation-agent-plugin")
+  const installRoot = join(prefix, "janus-agent-plugin")
   return {
     prefix,
     installRoot,
@@ -90,7 +90,7 @@ async function installBundleToTempPrefix(): Promise<InstallMetadata> {
   console.log(`integration: installing bundle to ${metadata.installRoot}`)
   const proc = Bun.spawn(["bun", "run", "script/install-local.ts"], {
     cwd: repoRoot,
-    env: { ...process.env, CONSULTATION_INSTALL_DIR: metadata.installRoot },
+    env: { ...process.env, JANUS_INSTALL_DIR: metadata.installRoot },
     stdout: "inherit",
     stderr: "inherit",
   })
@@ -106,7 +106,7 @@ export type PluginEntry =
   | ({ readonly kind: "installed" } & InstallMetadata)
 
 export async function resolvePluginEntry(): Promise<PluginEntry> {
-  const override = process.env.CONSULTATION_PLUGIN_ENTRY
+  const override = process.env.JANUS_PLUGIN_ENTRY
   if (override !== undefined && override.length > 0) {
     return { kind: "override", entry: override }
   }

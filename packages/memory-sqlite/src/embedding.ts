@@ -3,7 +3,7 @@
 // OpenAI-wire-format /embeddings endpoint, reading the api key from the env var
 // NAMED by apiKeyEnv at call time.
 
-import { MemoryError } from "@consultation-agent/memory-core"
+import { MemoryError } from "@janus-agent/memory-core"
 
 export interface EmbeddingProvider {
   readonly id: string

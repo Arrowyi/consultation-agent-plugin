@@ -20,7 +20,7 @@ export type SandboxPaths = {
  * removed before spawning the OpenCode server under test.
  */
 export const CLEANROOM_BLOCKED_KEYS = [
-  "CONSULTATION_CONFIG",
+  "JANUS_CONFIG",
   "OPENCODE_CONFIG",
   "OPENCODE_CONFIG_CONTENT",
   "OPENCODE_CONFIG_DIR",
@@ -35,7 +35,7 @@ export const CLEANROOM_BLOCKED_KEYS = [
  * - Sandboxes HOME and XDG_* to the supplied paths.
  * - Disables autoupdate, model fetching, and external skill loading.
  * - Removes any parent env keys that point to developer-local config.
- * - Preserves everything else, including `CONSULTATION_PLUGIN_ENTRY`.
+ * - Preserves everything else, including `JANUS_PLUGIN_ENTRY`.
  */
 export function buildCleanRoomEnv(
   parent: NodeJS.ProcessEnv,

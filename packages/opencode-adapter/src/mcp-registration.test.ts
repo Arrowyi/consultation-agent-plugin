@@ -7,9 +7,9 @@ import {
   resolveBunExecutable,
   resolveMemoryMcpServerEntry,
 } from "./mcp-registration.ts"
-import type { ConsultationPluginConfig } from "./plugin-config.ts"
+import type { JanusPluginConfig } from "./plugin-config.ts"
 
-function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): ConsultationPluginConfig {
+function makeConfig(overrides: Partial<JanusPluginConfig> = {}): JanusPluginConfig {
   return {
     install_skill: true,
     install_commands: true,
@@ -22,10 +22,12 @@ function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): Consulta
     verifier_enabled: true,
     writer_agent: "consultation-writer",
     writer_enabled: true,
-    simple_agent: "simple",
-    simple_enabled: true,
-    build_lite_agent: "build-lite",
-    build_lite_enabled: true,
+    coder_agent: "coder",
+    coder_enabled: true,
+    lite_agent: "lite",
+    lite_enabled: true,
+    coder_lite_agent: "coder-lite",
+    coder_lite_enabled: true,
     build_agent: "build",
     build_enabled: true,
     janus_agent: "janus",
@@ -89,7 +91,7 @@ describe("resolveMemoryMcpServerEntry", () => {
 })
 
 describe("registerMemoryMcp", () => {
-  it("registers config.mcp.consultation-memory as a local MCP with enabled true", () => {
+  it("registers config.mcp.janus-memory as a local MCP with enabled true", () => {
     // given
     const config: { mcp?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -99,7 +101,7 @@ describe("registerMemoryMcp", () => {
 
     // then
     expect(config.mcp).toBeDefined()
-    const mcp = config.mcp?.["consultation-memory"] as {
+    const mcp = config.mcp?.["janus-memory"] as {
       type: string
       command: string[]
       enabled: boolean
@@ -112,7 +114,7 @@ describe("registerMemoryMcp", () => {
     expect(mcp.command[1]).toBe(resolveMemoryMcpServerEntry())
   })
 
-  it("sets CONSULTATION_NAMESPACE in the MCP environment", () => {
+  it("sets JANUS_NAMESPACE in the MCP environment", () => {
     // given
     const config: { mcp?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
@@ -121,10 +123,10 @@ describe("registerMemoryMcp", () => {
     registerMemoryMcp(config, pluginConfig, "oc-mynamespace")
 
     // then
-    const mcp = config.mcp?.["consultation-memory"] as {
+    const mcp = config.mcp?.["janus-memory"] as {
       environment: Record<string, string>
     }
-    expect(mcp.environment.CONSULTATION_NAMESPACE).toBe("oc-mynamespace")
+    expect(mcp.environment.JANUS_NAMESPACE).toBe("oc-mynamespace")
   })
 
   it("sets embedding env vars when embedding config is present", () => {
@@ -143,13 +145,13 @@ describe("registerMemoryMcp", () => {
     registerMemoryMcp(config, pluginConfig, "oc-ns")
 
     // then
-    const mcp = config.mcp?.["consultation-memory"] as {
+    const mcp = config.mcp?.["janus-memory"] as {
       environment: Record<string, string>
     }
-    expect(mcp.environment.CONSULTATION_EMBEDDING_BASE_URL).toBe("https://api.example.com")
-    expect(mcp.environment.CONSULTATION_EMBEDDING_API_KEY_ENV).toBe("MY_API_KEY")
-    expect(mcp.environment.CONSULTATION_EMBEDDING_MODEL).toBe("text-embed-3")
-    expect(mcp.environment.CONSULTATION_EMBEDDING_DIMENSIONS).toBe("1536")
+    expect(mcp.environment.JANUS_EMBEDDING_BASE_URL).toBe("https://api.example.com")
+    expect(mcp.environment.JANUS_EMBEDDING_API_KEY_ENV).toBe("MY_API_KEY")
+    expect(mcp.environment.JANUS_EMBEDDING_MODEL).toBe("text-embed-3")
+    expect(mcp.environment.JANUS_EMBEDDING_DIMENSIONS).toBe("1536")
   })
 
   it("omits embedding env vars when embedding config is absent", () => {
@@ -161,18 +163,18 @@ describe("registerMemoryMcp", () => {
     registerMemoryMcp(config, pluginConfig, "oc-ns")
 
     // then
-    const mcp = config.mcp?.["consultation-memory"] as {
+    const mcp = config.mcp?.["janus-memory"] as {
       environment: Record<string, string>
     }
-    expect(mcp.environment.CONSULTATION_EMBEDDING_BASE_URL).toBeUndefined()
-    expect(mcp.environment.CONSULTATION_EMBEDDING_MODEL).toBeUndefined()
+    expect(mcp.environment.JANUS_EMBEDDING_BASE_URL).toBeUndefined()
+    expect(mcp.environment.JANUS_EMBEDDING_MODEL).toBeUndefined()
   })
 
-  it("does not overwrite an existing consultation-memory MCP entry", () => {
+  it("does not overwrite an existing janus-memory MCP entry", () => {
     // given
     const existingCommand = ["/usr/bin/node", "/path/to/server.js"]
     const config: { mcp?: Record<string, unknown> } = {
-      mcp: { "consultation-memory": { type: "local", command: existingCommand, enabled: false } },
+      mcp: { "janus-memory": { type: "local", command: existingCommand, enabled: false } },
     }
     const pluginConfig = makeConfig()
 
@@ -182,7 +184,7 @@ describe("registerMemoryMcp", () => {
     // then — the existing entry is overwritten by the adapter registration
     // (the adapter always registers its MCP when memory_enabled; user can
     // disable via plugin config memory_enabled=false, not via mcp config)
-    const mcp = config.mcp?.["consultation-memory"] as { command: string[] }
+    const mcp = config.mcp?.["janus-memory"] as { command: string[] }
     expect(mcp.command).not.toEqual(existingCommand)
   })
 })

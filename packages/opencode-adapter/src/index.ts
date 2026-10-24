@@ -1,2 +1,2 @@
-export { ConsultationAgentPlugin } from "./plugin.ts"
-export { ConsultationAgentPlugin as default } from "./plugin.ts"
+export { JanusAgentPlugin } from "./plugin.ts"
+export { JanusAgentPlugin as default } from "./plugin.ts"

@@ -5,26 +5,27 @@ import {
   registerConsultationCritic,
   registerExplorer,
   registerAnalyst,
-  registerSimple,
-  registerBuildLite,
+  registerCoder,
+  registerLite,
+  registerCoderLite,
   registerVerifier,
   registerWriter,
   registerJanus,
 } from "./agent-registration.ts"
-import { createConsultationDispatchTools } from "./dispatch-tool.ts"
+import { createJanusDispatchTools } from "./dispatch-tool.ts"
 import { registerMemoryMcp } from "./mcp-registration.ts"
 import { installConsultationSkill } from "./skill-installer.ts"
 import { installMemoryCommands } from "./command-installer.ts"
 import { computeNamespace } from "./namespace.ts"
 
 /**
- * Create the config hook that registers the consultant agent, the
- * consultation-memory MCP server, and the consultation skill.
+ * Create the config hook that registers the agent family, the
+ * janus-memory MCP server, and the consultation skill.
  *
  * Exported separately from the plugin so tests can invoke the hook
  * without constructing a full `PluginInput`.
  */
-export function createConsultationConfigHook(
+export function createJanusConfigHook(
   project: { id: string },
   directory: string,
 ): (config: Config) => Promise<void> {
@@ -35,12 +36,16 @@ export function createConsultationConfigHook(
 
     await registerConsultantAgent(config, pluginConfig, namespace)
 
-    if (pluginConfig.simple_enabled) {
-      await registerSimple(config, pluginConfig, namespace)
+    if (pluginConfig.coder_enabled) {
+      await registerCoder(config, pluginConfig)
     }
 
-    if (pluginConfig.build_lite_enabled) {
-      await registerBuildLite(config, pluginConfig)
+    if (pluginConfig.lite_enabled) {
+      await registerLite(config, pluginConfig, namespace)
+    }
+
+    if (pluginConfig.coder_lite_enabled) {
+      await registerCoderLite(config, pluginConfig)
     }
 
     if (pluginConfig.janus_enabled) {
@@ -77,13 +82,13 @@ export function createConsultationConfigHook(
 }
 
 /**
- * The consultation-agent OpenCode plugin.
+ * The janus-agent OpenCode plugin.
  *
  * Uses only the `config` hook to register the `consultant` primary agent,
- * the `consultation-memory` local MCP server, and the `consultation` skill.
+ * the `janus-memory` local MCP server, and the `consultation` skill.
  * Contains no evidence, recommendation, or persistence logic.
  */
-export const ConsultationAgentPlugin: Plugin = async (input) => ({
-  config: createConsultationConfigHook(input.project, input.directory),
-  tool: createConsultationDispatchTools(input.client),
+export const JanusAgentPlugin: Plugin = async (input) => ({
+  config: createJanusConfigHook(input.project, input.directory),
+  tool: createJanusDispatchTools(input.client),
 })

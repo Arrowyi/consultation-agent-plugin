@@ -9,7 +9,7 @@ export async function createRuntimeHost(providerURL: string) {
   const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "consult-lifecycle-")))
   const project = join(sandbox, "proj")
   const configHome = join(sandbox, "config")
-  for (const name of ["home", "data", "state", "cache", "proj", "config/opencode", "config/consultation-agent"]) mkdirSync(join(sandbox, name), { recursive: true })
+  for (const name of ["home", "data", "state", "cache", "proj", "config/opencode", "config/janus-agent"]) mkdirSync(join(sandbox, name), { recursive: true })
   const entry = await resolvePluginEntry()
   const modelNames = ["consultant", "explorer", "analyst", "critic", "verifier", "writer", "delegate"]
   const config = {
@@ -21,7 +21,7 @@ export async function createRuntimeHost(providerURL: string) {
   }
   writeFileSync(join(configHome, "opencode/opencode.json"), JSON.stringify(config))
   const pluginConfig = { agent_model: "fixture/consultant", explorer_model: "fixture/explorer", analyst_model: "fixture/analyst", critic_model: "fixture/critic", verifier_model: "fixture/verifier", writer_model: "fixture/writer", memory_enabled: false }
-  const pluginConfigPath = join(configHome, "consultation-agent/config.jsonc")
+  const pluginConfigPath = join(configHome, "janus-agent/config.jsonc")
   writeFileSync(pluginConfigPath, JSON.stringify(pluginConfig))
   writeFileSync(join(project, "fixture.txt"), "deterministic read fixture")
   const env = buildCleanRoomEnv(process.env, { home: join(sandbox, "home"), xdgConfigHome: configHome, xdgDataHome: join(sandbox, "data"), xdgStateHome: join(sandbox, "state"), xdgCacheHome: join(sandbox, "cache") })

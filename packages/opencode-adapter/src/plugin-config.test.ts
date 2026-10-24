@@ -3,7 +3,7 @@ import { z } from "zod"
 
 import {
   COST_GUARD_USD_DEFAULT,
-  ConsultationPluginConfigSchema,
+  JanusPluginConfigSchema,
   TEAM_CAPS_DEFAULTS,
   TIER_ROLE_CAPS_DEFAULTS,
   resolveCostGuardUsd,
@@ -12,13 +12,13 @@ import {
   resolveTeamCaps,
   resolveTierRoleCaps,
   stripJsonc,
-  type ConsultationPluginConfig,
+  type JanusPluginConfig,
 } from "./plugin-config.ts"
 
-// Typed as the schema *input*: parse is the boundary, so legacy matrices
-// without `writer` must stay expressible here and get defaulted by parse.
-function config(overrides: z.input<typeof ConsultationPluginConfigSchema> = {}): ConsultationPluginConfig {
-  return ConsultationPluginConfigSchema.parse(overrides)
+// Typed as the schema *input*: parse is the boundary, so partial tier matrices
+// without `writer` are expressible and defaulted by parse.
+function config(overrides: z.input<typeof JanusPluginConfigSchema> = {}): JanusPluginConfig {
+  return JanusPluginConfigSchema.parse(overrides)
 }
 
 describe("resolveTeamCaps", () => {
@@ -65,7 +65,7 @@ describe("resolveCostGuardUsd", () => {
   })
 })
 
-describe("ConsultationPluginConfigSchema", () => {
+describe("JanusPluginConfigSchema", () => {
   it("rejects negative role caps and non-positive caps", () => {
     // given // when // then
     expect(() => config({ tier_role_caps: { fast: { explorer: -1, analyst: 0, critic: 0, verifier: 0 }, standard: { explorer: 5, analyst: 1, critic: 1, verifier: 1 }, deep: { explorer: 5, analyst: 3, critic: 2, verifier: 2 } } })).toThrow()
@@ -130,7 +130,7 @@ describe("writer role configuration", () => {
     expect(cfg.writer_delegate_model).toBe("p/m")
   })
 
-  it("accepts a legacy custom role-cap matrix without writer", () => {
+  it("defaults writer to 0 when a tier matrix omits it", () => {
     // given
     const cfg = config({
       tier_role_caps: {
@@ -147,80 +147,68 @@ describe("writer role configuration", () => {
   })
 })
 
-describe("simple role configuration", () => {
-  it("defaults the simple role and resolves its model", () => {
+describe("lite, coder, and coder-lite role configuration", () => {
+  it("defaults the lite and coder roles and resolves their models", () => {
     // given
     const cfg = config()
 
     // when // then
-    expect(cfg.simple_agent).toBe("simple")
-    expect(cfg.simple_enabled).toBe(true)
-    expect(cfg.simple_model).toBeUndefined()
-    expect(cfg.simple_workspace_dir).toBeUndefined()
-    expect(resolveRoleModel(cfg, "simple")).toBe("opencode-go/deepseek-v4.1-flash")
-    expect(resolveRoleModelChain(cfg, "simple")).toEqual(["opencode-go/deepseek-v4.1-flash"])
+    expect(cfg.lite_agent).toBe("lite")
+    expect(cfg.lite_enabled).toBe(true)
+    expect(cfg.lite_model).toBeUndefined()
+    expect(cfg.lite_workspace_dir).toBeUndefined()
+    expect(resolveRoleModel(cfg, "lite")).toBe("opencode-go/deepseek-v4.1-flash")
+    expect(resolveRoleModelChain(cfg, "lite")).toEqual(["opencode-go/deepseek-v4.1-flash"])
+    expect(cfg.coder_agent).toBe("coder")
+    expect(cfg.coder_enabled).toBe(true)
+    expect(resolveRoleModel(cfg, "coder")).toBe("opencode-go/glm-5.3")
+    expect(cfg.coder_lite_agent).toBe("coder-lite")
+    expect(cfg.coder_lite_enabled).toBe(true)
+    expect(resolveRoleModel(cfg, "coder-lite")).toBe("opencode-go/glm-5.3-flash")
   })
 
-  it("overrides the simple model when simple_model is set", () => {
+  it("overrides the lite and coder models", () => {
     // given
-    const cfg = config({ simple_model: "test/simple-model" })
+    const cfg = config({ lite_model: "test/lite-model", coder_model: "test/coder-model", coder_lite_model: "test/glm-flash" })
 
     // when // then
-    expect(resolveRoleModel(cfg, "simple")).toBe("test/simple-model")
+    expect(resolveRoleModel(cfg, "lite")).toBe("test/lite-model")
+    expect(resolveRoleModel(cfg, "coder")).toBe("test/coder-model")
+    expect(resolveRoleModel(cfg, "coder-lite")).toBe("test/glm-flash")
   })
 
-  it("accepts a relocated workspace dir", () => {
+  it("accepts a relocated lite workspace dir", () => {
     // given
-    const cfg = config({ simple_workspace_dir: "/abs/simple-workspace" })
+    const cfg = config({ lite_workspace_dir: "/abs/lite-workspace" })
 
     // when // then
-    expect(cfg.simple_workspace_dir).toBe("/abs/simple-workspace")
+    expect(cfg.lite_workspace_dir).toBe("/abs/lite-workspace")
   })
 
-  it("rejects an empty simple_workspace_dir instead of widening edit permission to all absolute paths", () => {
+  it("rejects an empty lite_workspace_dir instead of widening edit permission to all absolute paths", () => {
     // given // when // then
-    expect(() => config({ simple_workspace_dir: "" })).toThrow()
+    expect(() => config({ lite_workspace_dir: "" })).toThrow()
   })
 
-  it("keeps parsing an old config with no simple or build keys (compat guarantee)", () => {
-    // given — the pre-extension shape of a full config
-    const cfg = config({
-      agent_model: "opencode-go/glm-5.3",
-      explorer_agent: "consultation-explorer",
-      analyst_agent: "consultation-analyst",
-      critic_agent: "consultation-critic",
-      verifier_agent: "consultation-verifier",
-      writer_agent: "consultation-writer",
-    })
-
-    // when // then
-    expect(cfg.simple_agent).toBe("simple")
-    expect(cfg.simple_enabled).toBe(true)
-    expect(cfg.build_lite_agent).toBe("build-lite")
-    expect(cfg.build_lite_enabled).toBe(true)
-    expect(cfg.build_agent).toBe("build")
-    expect(cfg.build_enabled).toBe(true)
-    expect(cfg.build_model).toBeUndefined()
-  })
 })
 
-describe("build-lite and build role configuration", () => {
-  it("defaults the build-lite lane model and the build routing target", () => {
+describe("coder-lite and build role configuration", () => {
+  it("defaults the coder-lite lane model and the build routing target", () => {
     // given
     const cfg = config()
 
     // when // then
-    expect(resolveRoleModel(cfg, "build-lite")).toBe("opencode-go/glm-5.3-flash")
+    expect(resolveRoleModel(cfg, "coder-lite")).toBe("opencode-go/glm-5.3-flash")
     expect(cfg.build_agent).toBe("build")
     expect(cfg.build_model).toBeUndefined()
   })
 
-  it("overrides build-lite and build from config", () => {
+  it("overrides coder-lite and build from config", () => {
     // given
-    const cfg = config({ build_lite_model: "test/glm-flash", build_agent: "my-build", build_model: "test/build-m" })
+    const cfg = config({ coder_lite_model: "test/glm-flash", build_agent: "my-build", build_model: "test/build-m" })
 
     // when // then
-    expect(resolveRoleModel(cfg, "build-lite")).toBe("test/glm-flash")
+    expect(resolveRoleModel(cfg, "coder-lite")).toBe("test/glm-flash")
     expect(cfg.build_agent).toBe("my-build")
     expect(cfg.build_model).toBe("test/build-m")
   })
@@ -247,7 +235,7 @@ describe("janus role configuration", () => {
     expect(resolveRoleModel(cfg, "janus")).toBe("test/janus-model")
   })
 
-  it("keeps parsing an old config with no janus keys (compat guarantee)", () => {
+  it("defaults the janus role when its keys are unset", () => {
     // given
     const cfg = config({ agent_model: "opencode-go/glm-5.3" })
 
@@ -274,23 +262,6 @@ describe("model-prompt config surface (v2)", () => {
     expect(cfg.model_prompts?.["opencode-go/deepseek-v4.1-flash"]).toBe("")
   })
 
-  it("strips the removed per-agent prompt maps and writer_fallback_models instead of throwing", () => {
-    // given — legacy keys are unknown to the schema; parse strips them
-    const cfg = config({
-      simple_model_prompts: { a: "b" },
-      writer_fallback_models: ["opencode-go/kimi-k3"],
-    } as any) as Record<string, unknown>
-
-    // when // then
-    expect(cfg.simple_model_prompts).toBeUndefined()
-    expect(cfg.writer_fallback_models).toBeUndefined()
-  })
-
-  it("still parses a config with no new keys (compat)", () => {
-    // given // when // then
-    expect(config()).toBeDefined()
-    expect(resolveRoleModelChain(config(), "explorer")).toEqual(["opencode-go/deepseek-v4.1-flash"])
-  })
 })
 
 describe("stripJsonc", () => {

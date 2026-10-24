@@ -1,4 +1,4 @@
-// XDG Base Directory resolution with the consultation-agent suffix.
+// XDG Base Directory resolution with the janus-agent suffix.
 // An empty XDG var is treated as unset (per the XDG spec).
 
 import { homedir } from "node:os"
@@ -15,8 +15,8 @@ function xdgOr(env: NodeJS.ProcessEnv, key: string, fallback: string): string {
 export function resolveStoragePaths(env: NodeJS.ProcessEnv = process.env): StoragePaths {
   const home = (env.HOME !== undefined && env.HOME.length > 0 ? env.HOME : homedir()) || "/tmp"
   return {
-    dataDir: join(xdgOr(env, "XDG_DATA_HOME", join(home, ".local", "share")), "consultation-agent"),
-    stateDir: join(xdgOr(env, "XDG_STATE_HOME", join(home, ".local", "state")), "consultation-agent"),
-    cacheDir: join(xdgOr(env, "XDG_CACHE_HOME", join(home, ".cache")), "consultation-agent"),
+    dataDir: join(xdgOr(env, "XDG_DATA_HOME", join(home, ".local", "share")), "janus-agent"),
+    stateDir: join(xdgOr(env, "XDG_STATE_HOME", join(home, ".local", "state")), "janus-agent"),
+    cacheDir: join(xdgOr(env, "XDG_CACHE_HOME", join(home, ".cache")), "janus-agent"),
   }
 }

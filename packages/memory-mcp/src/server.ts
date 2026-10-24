@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// consultation-memory-mcp entry point. Boots the stdio MCP server when run
+// janus-memory-mcp entry point. Boots the stdio MCP server when run
 // directly. All logs go to stderr; stdout is reserved for protocol frames.
 
 import { startMemoryMcpServer } from "./mcp-server.ts"

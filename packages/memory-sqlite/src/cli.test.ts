@@ -17,7 +17,7 @@ async function tempDir(): Promise<string> {
 }
 
 function envFor(dir: string): NodeJS.ProcessEnv {
-  return { CONSULTATION_DATA_DIR: dir, CONSULTATION_STATE_DIR: dir, CONSULTATION_CACHE_DIR: dir }
+  return { JANUS_DATA_DIR: dir, JANUS_STATE_DIR: dir, JANUS_CACHE_DIR: dir }
 }
 
 async function seed(dir: string): Promise<void> {
@@ -81,7 +81,7 @@ async function itemIdFor(dir: string, topicKey: string): Promise<string> {
   return row.id
 }
 
-describe("consultation-memory CLI", () => {
+describe("janus-memory CLI", () => {
   test("check runs integrity_check and exits 0", async () => {
     // given
     const dir = await tempDir()
@@ -135,7 +135,7 @@ describe("consultation-memory CLI", () => {
   })
 })
 
-describe("consultation-memory CLI — browse", () => {
+describe("janus-memory CLI — browse", () => {
   test("list shows consultations with question and conclusion", async () => {
     // given
     const dir = await tempDir()

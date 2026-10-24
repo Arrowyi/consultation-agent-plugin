@@ -1,8 +1,8 @@
 // Expand: levels 3 (evidence + revisions + decisions) and 4 (+ excerpts +
 // full stored summaries). Loads by item ids within a namespace.
 
-import { estimateTokens } from "@consultation-agent/memory-core"
-import type { Decision, Evidence, EvidenceRelation, ExpandInput, ExpandResult, Revision } from "@consultation-agent/memory-core"
+import { estimateTokens } from "@janus-agent/memory-core"
+import type { Decision, Evidence, EvidenceRelation, ExpandInput, ExpandResult, Revision } from "@janus-agent/memory-core"
 import type { SqliteDatabase } from "./driver.ts"
 
 type Row = Record<string, unknown>

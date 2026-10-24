@@ -20,7 +20,7 @@ function envFor(configDir: string): NodeJS.ProcessEnv {
 }
 
 describe("installMemoryCommands", () => {
-  test("writes the consultation-memory command with the resolved CLI path and subcommand dispatch", async () => {
+  test("writes the janus-memory command with the resolved CLI path and subcommand dispatch", async () => {
     // given
     const configDir = await tempConfigDir()
     // when

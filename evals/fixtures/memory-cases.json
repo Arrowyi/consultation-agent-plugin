@@ -84,10 +84,10 @@
     "id": "M10",
     "title": "Indexes rebuild after model changes",
     "given": "The embedding or summarization model is changed and derived indexes are stale.",
-    "when": "the consultation-memory CLI reindex command is run",
+    "when": "the janus-memory CLI reindex command is run",
     "then": "The FTS index (and derived embeddings) are dropped and rebuilt from canonical tables without losing accepted experience.",
     "grading": "deterministic",
-    "notes": "Covered by packages/memory-sqlite/src/cli.test.ts (consultation-memory CLI reindex)."
+    "notes": "Covered by packages/memory-sqlite/src/cli.test.ts (janus-memory CLI reindex)."
   },
   {
     "id": "M11",

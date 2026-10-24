@@ -1,6 +1,6 @@
 # Local Deployment Guide
 
-This guide covers installing the consultation-agent plugin into a local OpenCode setup.
+This guide covers installing the janus-agent plugin into a local OpenCode setup.
 
 ## Deployment Rule
 
@@ -19,7 +19,7 @@ Any change that reintroduces an external runtime import, or a config entry point
 
 - **Bun >= 1.1** - the runtime and package manager. Install from <https://bun.sh>.
 - **OpenCode** - the agent harness. Install from <https://opencode.ai> or your package manager. Verify with `opencode --version`.
-- **Model providers** — the shipped defaults assume an **OpenCode Go subscription** for the `opencode-go/*` pool models, plus the `opencode` provider for the writer (`opencode/claude-sonnet-5-5`) and the critic/verifier (`opencode/gemini-3.8-flash`, Zen pay-per-use). Without these providers, the agents register but fail at model resolution when used. Non-Go users: copy the config below into `~/.config/consultation-agent/config.jsonc` and set every `*_model` to a provider configured on your machine. Dispatch failures print this remediation hint with the exact field name.
+- **Model providers** — the shipped defaults assume an **OpenCode Go subscription** for the `opencode-go/*` pool models, plus the `opencode` provider for the writer (`opencode/claude-sonnet-5-5`) and the critic/verifier (`opencode/gemini-3.8-flash`, Zen pay-per-use). Without these providers, the agents register but fail at model resolution when used. Non-Go users: copy the config below into `~/.config/janus-agent/config.jsonc` and set every `*_model` to a provider configured on your machine. Dispatch failures print this remediation hint with the exact field name.
 
   ```jsonc
   {
@@ -29,8 +29,9 @@ Any change that reintroduces an external runtime import, or a config entry point
     "critic_model": "<your-provider>/different-family-model",
     "verifier_model": "<your-provider>/different-family-model",
     "writer_model": "<your-provider>/writing-model",
-    "simple_model": "<your-provider>/fast-cheap-model",
-    "build_lite_model": "<your-provider>/mechanical-coding-model",
+    "coder_model": "<your-provider>/strong-coding-model",
+    "lite_model": "<your-provider>/fast-cheap-model",
+    "coder_lite_model": "<your-provider>/mechanical-coding-model",
     "build_model": "<your-provider>/strong-coding-model"
   }
   ```
@@ -42,8 +43,8 @@ Bun and OpenCode must be on your `PATH`.
 Clone this repository and install its dependencies. Bun is the only package manager; never use npm, yarn, or pnpm.
 
 ```bash
-git clone <repo-url> consultation-agent-plugin
-cd consultation-agent-plugin
+git clone <repo-url> janus-agent-plugin
+cd janus-agent-plugin
 bun install
 ```
 
@@ -55,12 +56,12 @@ Build the bundle and install it into a stable prefix:
 bun run install:local
 ```
 
-The installer stages `dist/` + `assets/` into the install root (default `~/.local/share/consultation-agent-plugin`; override with `CONSULTATION_INSTALL_DIR`), writes `package.json` + `build-meta.json` for provenance, and fails if any required file is missing. It prints the exact plugin entry to add to `~/.config/opencode/opencode.json` (create the file if missing):
+The installer stages `dist/` + `assets/` into the install root (default `~/.local/share/janus-agent-plugin`; override with `JANUS_INSTALL_DIR`), writes `package.json` + `build-meta.json` for provenance, and fails if any required file is missing. It prints the exact plugin entry to add to `~/.config/opencode/opencode.json` (create the file if missing):
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["file:///Users/you/.local/share/consultation-agent-plugin/dist/index.js"]
+  "plugin": ["file:///Users/you/.local/share/janus-agent-plugin/dist/index.js"]
 }
 ```
 
@@ -79,7 +80,7 @@ Installed layout:
 
 Re-running `bun run install:local` rebuilds and replaces the installed bundle. Restart OpenCode afterwards to load it.
 
-The installed plugin ships every prompt it needs, including `assets/agents/writer.md`, and does not require OMO, Janus, global agent files under `~/.config/opencode/agents/`, external skills, or the source checkout at runtime. Missing writer capability degrades to disclosed inline work: the consultant must not claim an independent blueprint or chapter draft was produced.
+The installed plugin ships every prompt it needs, including `assets/agents/writer.md`, and does not require OMO, an external janus agent, global agent files under `~/.config/opencode/agents/`, external skills, or the source checkout at runtime. Missing writer capability degrades to disclosed inline work: the consultant must not claim an independent blueprint or chapter draft was produced.
 
 ### Development only: source mode
 
@@ -89,36 +90,36 @@ For iterating on this repo (unit tests, the integration proof, or a throwaway se
 
 Restart OpenCode so it picks up the new plugin entry. On startup the plugin's `config` hook runs and:
 1. registers the `consultant` primary agent;
-2. registers the `simple` agent (mode `all`: selectable as a primary agent and dispatchable), on the configured model, with patterned permissions — read tools allowed, read-only bash commands allowed, its own workspace directory (`$XDG_DATA_HOME/consultation-agent/simple`) writable without asking, every other write asking;
-3. registers the `build-lite` mechanical coding lane (mode `subagent`, steps 50, workspace edits allowed without asking, further dispatch denied);
-4. registers the five team subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its configured model; the verifier reuses the critic's model by default; the writer also denies shell execution);
-5. registers the `consultation-memory` local MCP server (when memory is enabled, the default);
-6. registers `consultation_dispatch{role,prompt}`, `consultation_dispatch_wait{job_id,wait_ms?}` and `consultation_dispatch_cancel{job_id}` for the eight dispatch roles (these do not interfere with the built-in `task` tool or other plugins);
-7. installs the `consultation` skill and the `consultation-memory` browse command into your OpenCode config directory.
+2. registers the `coder` coding entry (mode `all`: selectable and dispatchable), the `lite` economical leaf (mode `all`, dispatch denied), and the `coder-lite` mechanical lane (mode `subagent`, steps 50, workspace edits allowed without asking, further dispatch denied);
+3. registers the `lite` workspace directory (`$XDG_DATA_HOME/janus-agent/lite`) writable without asking; every other write asks;
+4. registers the five research subagents `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, `consultation-writer` (each read-only, each on its configured model, each with shell and dispatch denied; the verifier reuses the critic's model by default);
+5. registers the `janus-memory` local MCP server (when memory is enabled, the default);
+6. registers `janus_dispatch{role,prompt}`, `janus_dispatch_wait{job_id,wait_ms?}` and `janus_dispatch_cancel{job_id}` for the ten dispatch roles (these do not interfere with the built-in `task` tool or other plugins);
+7. installs the `consultation` skill and the `janus-memory` browse command into your OpenCode config directory.
 
 ### Recoverable team jobs
 
 All roles share the same recoverable dispatch lifecycle; every agent resolves to a single configured model with no plugin fallback chain. Launch observes for a 300000 ms soft wait window. Expiry returns a recoverable job envelope, not specialist failure, and never aborts the child. Wait uses the same `job_id`, including after a coordinator restart; `wait_ms` is an optional integer 0..300000 (default 300000; zero is a snapshot). Pending/unknown jobs must not trigger duplicate launches, backup models, or silent inline substitution. The consultant integrates the eventual original report and discloses any unresolved independent check.
 
-Cancel is explicit and may return `cancelling` until durable abort evidence confirms `cancelled`; normal completion racing cancellation wins and returns the report. Nonterminal envelopes name `consultation_dispatch_wait` as their next action. Wait/cancel use the caller's parent session and workspace for ownership, not routing overrides. See [the architecture API contract](architecture.md#64-recoverable-dispatch-api).
+Cancel is explicit and may return `cancelling` until durable abort evidence confirms `cancelled`; normal completion racing cancellation wins and returns the report. Nonterminal envelopes name `janus_dispatch_wait` as their next action. Wait/cancel use the caller's parent session and workspace for ownership, not routing overrides. See [the architecture API contract](architecture.md#64-recoverable-dispatch-api).
 
 ## Step 4: Optional Plugin Configuration
 
 The plugin reads an optional JSONC config file. Default locations (first found wins):
 
-1. `$CONSULTATION_CONFIG` - explicit path override
-2. `$XDG_CONFIG_HOME/consultation-agent/config.jsonc`
-3. `~/.config/consultation-agent/config.jsonc`
+1. `$JANUS_CONFIG` - explicit path override
+2. `$XDG_CONFIG_HOME/janus-agent/config.jsonc`
+3. `~/.config/janus-agent/config.jsonc`
 
 A missing file is fine; all fields have defaults. Create the file to override defaults:
 
 ```jsonc
 {
-  // Models for the consultant and its five team subagents. All are optional;
-  // the defaults below ship with the plugin and are tuned for cross-model
-  // verification (consultant vs analyst vs critic use different families;
-  // the verifier reuses the critic's model by configuration, keeping it
-  // different from the analyst; this is not a claim of model superiority).
+  // Models for the agent family. All are optional; the defaults below ship
+  // with the plugin and are tuned for cross-model verification (consultant vs
+  // analyst vs critic use different families; the verifier reuses the critic's
+  // model by configuration, keeping it different from the analyst; this is not
+  // a claim of model superiority).
   "agent_model": "opencode-go/glm-5.3",
   "explorer_model": "opencode-go/deepseek-v4.1-flash",
   "analyst_model": "opencode-go/qwen3.8-max",
@@ -137,30 +138,36 @@ A missing file is fine; all fields have defaults. Create the file to override de
   // "writer_delegate_agent": "host-writer",
   // "writer_delegate_model": "provider/model",
 
-  // simple — the economical daily-consultation agent (mode: all).
-  "simple_agent": "simple",
-  "simple_model": "opencode-go/deepseek-v4.1-flash",
-  "simple_enabled": true,
-  // simple's pre-approved writable workspace. Default shown; any absolute path.
-  // "simple_workspace_dir": "~/.local/share/consultation-agent/simple",
+  // coder — the coding entry (mode: all). Selects L0/L1/L2/L3 process weight
+  // by task complexity; owns the quality gate and the coding lanes.
+  "coder_agent": "coder",
+  "coder_model": "opencode-go/glm-5.3",
+  "coder_enabled": true,
 
-  // build-lite — the mechanical coding lane (mode: subagent, leaf, steps 50).
+  // lite — the economical quick-answer leaf (mode: all, dispatch denied).
+  "lite_agent": "lite",
+  "lite_model": "opencode-go/deepseek-v4.1-flash",
+  "lite_enabled": true,
+  // lite's pre-approved writable workspace. Default shown; any absolute path.
+  // "lite_workspace_dir": "~/.local/share/janus-agent/lite",
+
+  // coder-lite — the mechanical coding lane (mode: subagent, leaf, steps 50).
   // Workspace edits are allowed without asking; external edits ask.
-  "build_lite_agent": "build-lite",
-  "build_lite_model": "opencode-go/glm-5.3-flash",
-  "build_lite_enabled": true,
+  "coder_lite_agent": "coder-lite",
+  "coder_lite_model": "opencode-go/glm-5.3-flash",
+  "coder_lite_enabled": true,
 
-  // build — a dispatch role targeting the host's native build agent by name.
+  // build — an optional host-model escalation, normally dispatched by coder.
   // The plugin registers no build agent; when the role fails (agent missing or
   // model unresolvable), the dispatch prints a remediation hint.
   "build_agent": "build",
   // "build_model": "provider/model",   // pin only when the host default is wrong
   "build_enabled": true,
 
-  // janus — the daily-driver primary (mode: all), the execution-side sibling
-  // of consultant. Discusses design/config/coding direction with the user
-  // before implementing; no memory attachment. Defaults to GLM-5.3, the same
-  // as consultant, so both share the shipped glm53.md driving block.
+  // janus — the default general entry (mode: all). Routes consulting to
+  // consultant, coding to coder, and quick answers to lite. No memory
+  // attachment. Defaults to GLM-5.3, the same as consultant, so both share
+  // the shipped glm53.md driving block.
   "janus_agent": "janus",
   // "janus_model": "opencode-go/glm-5.3",
   "janus_enabled": true,
@@ -186,8 +193,7 @@ A missing file is fine; all fields have defaults. Create the file to override de
 
   // Max instances per role per tier (explorer/analyst/critic/verifier/writer),
   // never minimum dispatch counts or a required team roster.
-  // All optional; defaults shown. A legacy matrix without `writer` still parses;
-  // `writer` then defaults to 0 in the supplied tiers.
+  // All optional; defaults shown.
   "tier_role_caps": {
     "fast":     { "explorer": 5, "analyst": 0, "critic": 0, "verifier": 0, "writer": 0 },
     "standard": { "explorer": 5, "analyst": 1, "critic": 1, "verifier": 1, "writer": 1 },
@@ -236,13 +242,16 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `writer_delegate_agent` | string (optional) | (none) | Host-provided writing agent preferred over the bundled writer; the bundled writer is not registered when set, and its permissions are controlled by the host |
 | `writer_delegate_model` | string (optional) | (none) | Model pinned on the delegate agent; when unset the delegate uses its own model |
 | `writer_enabled` | boolean | `true` | Whether to register the writer subagent |
-| `simple_agent` | string | `"simple"` | Name of the economical daily-consultation agent (mode `all`) |
-| `simple_model` | string (optional) | `opencode-go/deepseek-v4.1-flash` | Model for the simple agent |
-| `simple_enabled` | boolean | `true` | Whether to register the simple agent |
-| `simple_workspace_dir` | string (optional) | `$XDG_DATA_HOME/consultation-agent/simple` | simple's pre-approved writable workspace (absolute path) |
-| `build_lite_agent` | string | `"build-lite"` | Name of the mechanical coding lane (mode `subagent`, leaf node) |
-| `build_lite_model` | string (optional) | `opencode-go/glm-5.3-flash` | Model for the build-lite lane |
-| `build_lite_enabled` | boolean | `true` | Whether to register the build-lite lane |
+| `coder_agent` | string | `"coder"` | Name of the coding entry (mode `all`) |
+| `coder_model` | string (optional) | `opencode-go/glm-5.3` | Model for the coder agent |
+| `coder_enabled` | boolean | `true` | Whether to register the coder agent |
+| `lite_agent` | string | `"lite"` | Name of the economical quick-answer leaf (mode `all`, dispatch denied) |
+| `lite_model` | string (optional) | `opencode-go/deepseek-v4.1-flash` | Model for the lite agent |
+| `lite_enabled` | boolean | `true` | Whether to register the lite agent |
+| `lite_workspace_dir` | string (optional) | `$XDG_DATA_HOME/janus-agent/lite` | lite's pre-approved writable workspace (absolute path) |
+| `coder_lite_agent` | string | `"coder-lite"` | Name of the mechanical coding lane (mode `subagent`, leaf node) |
+| `coder_lite_model` | string (optional) | `opencode-go/glm-5.3-flash` | Model for the coder-lite lane |
+| `coder_lite_enabled` | boolean | `true` | Whether to register the coder-lite lane |
 | `build_agent` | string | `"build"` | Target agent name for the `build` dispatch role (the host's native build agent by default) |
 | `build_model` | string (optional) | (none — host default) | Model pinned on the `build` role's target agent |
 | `build_enabled` | boolean | `true` | Whether the `build` dispatch role accepts work |
@@ -253,10 +262,10 @@ A missing file is fine; all fields have defaults. Create the file to override de
 | `team_caps.round_cap` | number | `3` | Rounds of explore->critique->synthesize before forced synthesis |
 | `team_caps.explorer_cap` | number | `5` | Max parallel explorer instances |
 | `team_caps.critic_search_cap` | number | `5` | Max critic verification searches per round |
-| `tier_role_caps.*` | object | fast `5/0/0/0/0`, standard `5/1/1/1/1`, deep `5/3/2/2/2` | Advisory maximum instances per role per tier, never minimum calls; a supplied matrix without `writer` resolves it to 0 |
+| `tier_role_caps.*` | object | fast `5/0/0/0/0`, standard `5/1/1/1/1`, deep `5/3/2/2/2` | Advisory maximum instances per role per tier, never minimum calls; `writer` defaults to 0 when a tier omits it |
 | `cost_guard_provider_usd` | number | `10` | Advisory stop-loss per provider (converge when approaching) |
 | `install_skill` | boolean | `true` | Whether to install the consultation skill into the OpenCode config dir |
-| `install_commands` | boolean | `true` | Whether to install the `consultation-memory` browse slash command |
+| `install_commands` | boolean | `true` | Whether to install the `janus-memory` browse slash command |
 | `memory_enabled` | boolean | `true` | Whether to register and launch the memory MCP server |
 | `embedding.base_url` | string | (none) | OpenAI-compatible embedding API base URL |
 | `embedding.api_key_env` | string | (none) | Name of the env var holding the embedding API key |
@@ -267,9 +276,11 @@ The `embedding` block is all-or-nothing: set all four sub-fields or omit the blo
 
 Every role has one configured attempt and every agent resolves to a single model, with no plugin fallback advance. A delegate without `writer_delegate_model` uses host model selection (`null` in the durable job spec); it keeps host permissions and host-internal retry behavior. Neither wait expiry nor unknown observation authorizes a backup model.
 
-The consultant routes bounded tasks to suitable specialist agents: `explorer` gathers missing evidence, `analyst` interprets material disputes, `critic` independently challenges consequential conclusions, `verifier` triages unclear influence or independence of user/third-party/promotional sources, and `writer` produces a blueprint before outline approval or usable section/chapter prose afterward. A potentially relevant check is delegated when its necessity cannot be ruled out; a role is skipped only with a task-specific reason. These roles are not a tier-dependent required roster. Plugin-owned subagents have `permission.edit = "deny"`; the bundled writer also has `permission.bash = "deny"`. An external `writer_delegate_agent` keeps its host-defined permissions and does not inherit these restrictions. Analyst follows evidence, critic follows a draft conclusion, writer's substantive prose follows approved scope and evidence, and the consultant verifies, integrates and writes final files. The default consultant, analyst and critic use different model families; verifier reuses critic's configured model, without a performance guarantee from that choice. Role caps are advisory ceilings rather than a runtime-enforced scheduler. Bounded, low-risk simple-consultation and search subtasks may route to the `simple` generalist instead; answers produced through simple are relayed in simple's answer-first format, and a specialist profile is never substituted by simple. Coding routes through two lanes: fully specified mechanical coding and file tasks go to the `build-lite` lane (workspace edits allowed, external edits ask, further dispatch denied — its stop-and-report is a legitimate partial outcome the dispatcher integrates); judgment-heavy coding goes to the `build` role targeting the host's native build agent, and when that fails the dispatch prints a remediation hint naming `build_agent`/`build_model`.
+The consultant routes bounded tasks to its research team: `explorer` gathers missing evidence, `analyst` interprets material disputes, `critic` independently challenges consequential conclusions, `verifier` audits unclear influence or independence of user/third-party/promotional sources, and `writer` produces a blueprint before outline approval or usable section/chapter prose afterward. A potentially relevant check is delegated when its necessity cannot be ruled out; a role is skipped only with a task-specific reason. These roles are not a tier-dependent required roster. Plugin-owned research subagents have `permission.edit = "deny"`, `permission.bash = "deny"`, and `permission.task = "deny"`; an external `writer_delegate_agent` keeps its host-defined permissions and does not inherit these restrictions. Analyst follows evidence, critic follows a draft conclusion, writer's substantive prose follows approved scope and evidence, and the consultant verifies, integrates and writes final files. The default consultant, analyst and critic use different model families; verifier reuses critic's configured model, without a performance guarantee from that choice. Role caps are advisory ceilings rather than a runtime-enforced scheduler.
 
-The `janus` agent is the daily-driver primary and default entry point, the execution-side sibling of `consultant`. It finishes most work itself, discusses design/config/coding direction with the user and waits for agreement before implementing, and routes only on a confirmed weak spot or a task needing another profile: `consultant` for evidence-graded research or a decision, `explorer` for bulk retrieval, `build-lite` for mechanical coding, `build` for judgment-heavy coding, and `simple` for lightweight lookup — all through the same `consultation_dispatch` mechanism. `consultant` is therefore also a dispatch role (targeting the `consultant` agent by name), and its model follows `agent_model`.
+The consultant may route a bounded quick-answer subtask to `lite` and a bounded code example to `coder`; it does not implement production code itself. Coding is owned by `coder`: fully specified mechanical work goes to `coder-lite` (workspace edits allowed, external edits ask, further dispatch denied — its stop-and-report is a legitimate partial outcome the dispatcher integrates); judgment-heavy work stays with `coder` or goes to the optional `build` host escalation. `coder` selects L0/L1/L2/L3 process weight by task complexity and gates L2/L3 on user approval before editing.
+
+The `janus` agent is the default general entry: it handles general questions and light tasks, and routes consulting to `consultant`, coding to `coder`, quick answers to `lite`, and bulk retrieval to `explorer` — all through the same `janus_dispatch` mechanism. It does not do deep research or heavy coding itself. `consultant` and `coder` are therefore also dispatch roles (targeting their agents by name); `consultant` follows `agent_model`, `coder` follows `coder_model`.
 
 ### Model-adaptation prompts
 
@@ -299,11 +310,11 @@ So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve to
 3. else empty — the role asset runs standalone.
 
 Seven blocks ship, each file named by its normalized key: six for the shipped
-default models — `glm53.md` (GLM-5.3; default for consultant and janus),
-`deepseekv41flash.md` (DeepSeek V4.1-Flash; default for simple and explorer),
+default models — `glm53.md` (GLM-5.3; default for consultant, janus, and coder),
+`deepseekv41flash.md` (DeepSeek V4.1-Flash; default for lite and explorer),
 `qwen38max.md` (Qwen3.8-Max; default for analyst), `gemini38flash.md` (Gemini
 3.8-Flash; default for critic and verifier), `glm53flash.md` (GLM-5.3-Flash;
-default for build-lite), and `claudesonnet55.md` (Claude Sonnet 5.5; default
+default for coder-lite), and `claudesonnet55.md` (Claude Sonnet 5.5; default
 for writer) — plus `deepseekflash.md` for the direct-provider id
 `deepseek/deepseek-flash` (the same V4.1-Flash model, but a different
 normalized key).
@@ -334,21 +345,21 @@ The memory SQLite store uses XDG Base Directory paths with environment overrides
 
 | Path | Default | What lives there |
 |------|---------|------------------|
-| Data | `$XDG_DATA_HOME/consultation-agent/` (default `~/.local/share/consultation-agent/`) | `memory.sqlite3` and user-controlled exports |
-| State | `$XDG_STATE_HOME/consultation-agent/` (default `~/.local/state/consultation-agent/`) | Writer lock, pending enrichment state, operational records |
-| Cache | `$XDG_CACHE_HOME/consultation-agent/` (default `~/.cache/consultation-agent/`) | Rebuildable query caches |
+| Data | `$XDG_DATA_HOME/janus-agent/` (default `~/.local/share/janus-agent/`) | `memory.sqlite3` and user-controlled exports |
+| State | `$XDG_STATE_HOME/janus-agent/` (default `~/.local/state/janus-agent/`) | Writer lock, pending enrichment state, operational records |
+| Cache | `$XDG_CACHE_HOME/janus-agent/` (default `~/.cache/janus-agent/`) | Rebuildable query caches |
 
-The database file defaults to `<dataDir>/memory.sqlite3`. Override with the `CONSULTATION_DATA_DIR`, `CONSULTATION_STATE_DIR`, and `CONSULTATION_CACHE_DIR` environment variables when launching the MCP server.
+The database file defaults to `<dataDir>/memory.sqlite3`. Override with the `JANUS_DATA_DIR`, `JANUS_STATE_DIR`, and `JANUS_CACHE_DIR` environment variables when launching the MCP server.
 
 Canonical experience records (user-approved items, claims, evidence, decisions, preferences, revisions) live in the data directory. Derived artifacts (summaries, embeddings, FTS indexes, tags) are rebuildable and live alongside canonical data but can be deleted and rebuilt without losing accepted experience.
 
 ## Step 5: Verify the Install
 
-1. **Agent selectable**: start OpenCode and confirm the `consultant` agent appears in the agent list.
-2. **simple agent selectable**: the `simple` agent appears in the agent list (mode `all`) with its own workspace at `~/.local/share/consultation-agent/simple`.
-3. **build-lite lane registered**: the `build-lite` agent appears as a subagent (steps 50, workspace-allow edits).
-4. **Memory MCP starts**: the `consultation-memory` MCP server is registered. Its five tools (`memory_recall`, `memory_expand`, `memory_prepare`, `memory_commit`, `memory_manage`) are available to the consultant agent.
-5. **Team subagents registered**: `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, and `consultation-writer` appear as subagents (mode `subagent`), dispatched by the consultant via the `consultation_dispatch` tool.
+1. **Entries selectable**: start OpenCode and confirm `janus`, `consultant`, `coder`, and `lite` appear in the agent list.
+2. **lite workspace**: `~/.local/share/janus-agent/lite` exists and is the only pre-approved write location.
+3. **coder-lite lane registered**: the `coder-lite` agent appears as a subagent (steps 50, workspace-allow edits, task denied).
+4. **Memory MCP starts**: the `janus-memory` MCP server is registered. Its five tools (`memory_recall`, `memory_expand`, `memory_prepare`, `memory_commit`, `memory_manage`) are available to the consultant agent.
+5. **Research subagents registered**: `consultation-explorer`, `consultation-analyst`, `consultation-critic`, `consultation-verifier`, and `consultation-writer` appear as subagents (mode `subagent`), dispatched by the consultant via the `janus_dispatch` tool.
 6. **Skill present**: the skill file exists at `~/.config/opencode/skills/consultation/SKILL.md` (or your `$OPENCODE_CONFIG_DIR/skills/consultation/SKILL.md`).
 
 You can also run the automated integration proof:
@@ -362,7 +373,7 @@ This spawns an isolated OpenCode server in a temp sandbox (never touching your r
 By default it loads the packaged `dist/index.js`. To prove an installed bundle — the artifact the deployment rule requires — pass its path:
 
 ```bash
-CONSULTATION_PLUGIN_ENTRY=~/.local/share/consultation-agent-plugin/dist/index.js bun run integration
+JANUS_PLUGIN_ENTRY=~/.local/share/janus-agent-plugin/dist/index.js bun run integration
 ```
 
 ## Running Tests, Typecheck, Build, and Install
@@ -385,10 +396,10 @@ The evaluation fixtures under `evals/fixtures/` encode the architecture verifica
 2. **Remove the installed bundle:**
 
    ```bash
-   rm -rf ~/.local/share/consultation-agent-plugin
+   rm -rf ~/.local/share/janus-agent-plugin
    ```
 
-   Or remove `$CONSULTATION_INSTALL_DIR` if you set one.
+   Or remove `$JANUS_INSTALL_DIR` if you set one.
 
 3. **Remove the installed skill** (optional):
 
@@ -399,31 +410,31 @@ The evaluation fixtures under `evals/fixtures/` encode the architecture verifica
 4. **Remove the plugin config file** (optional):
 
    ```bash
-   rm -f ~/.config/consultation-agent/config.jsonc
+   rm -f ~/.config/janus-agent/config.jsonc
    ```
 
    Or if you used `$XDG_CONFIG_HOME`:
 
    ```bash
-   rm -f "$XDG_CONFIG_HOME/consultation-agent/config.jsonc"
+   rm -f "$XDG_CONFIG_HOME/janus-agent/config.jsonc"
    ```
 
 5. **Remove the memory data, state, and cache** (optional, this deletes all stored experience):
 
    ```bash
-   rm -rf ~/.local/share/consultation-agent
-   rm -rf ~/.local/state/consultation-agent
-   rm -rf ~/.cache/consultation-agent
+   rm -rf ~/.local/share/janus-agent
+   rm -rf ~/.local/state/janus-agent
+   rm -rf ~/.cache/janus-agent
    ```
 
    Or with custom XDG paths:
 
    ```bash
-   rm -rf "$XDG_DATA_HOME/consultation-agent"
-   rm -rf "$XDG_STATE_HOME/consultation-agent"
-   rm -rf "$XDG_CACHE_HOME/consultation-agent"
+   rm -rf "$XDG_DATA_HOME/janus-agent"
+   rm -rf "$XDG_STATE_HOME/janus-agent"
+   rm -rf "$XDG_CACHE_HOME/janus-agent"
    ```
 
-6. **Remove simple's workspace (optional):** `rm -rf ~/.local/share/consultation-agent/simple`.
+6. **Remove lite's workspace (optional):** `rm -rf ~/.local/share/janus-agent/lite`.
 
 7. **Restart OpenCode** to confirm the plugin is no longer loaded.

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import type { Plugin, PluginInput, Config } from "@opencode-ai/plugin"
-import { ConsultationAgentPlugin, createConsultationConfigHook } from "./plugin.ts"
+import { JanusAgentPlugin, createJanusConfigHook } from "./plugin.ts"
 import { resolveAsset } from "./asset-paths.ts"
 import { computeNamespace } from "./namespace.ts"
 
@@ -13,9 +13,9 @@ function makeTempHome(): string {
   return mkdtempSync(join(tmpdir(), "plugin-integration-"))
 }
 
-describe("createConsultationConfigHook", () => {
+describe("createJanusConfigHook", () => {
   const savedEnv: Record<string, string | undefined> = {}
-  const envKeys = ["CONSULTATION_CONFIG", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "HOME", "OPENCODE_CONFIG_DIR"]
+  const envKeys = ["JANUS_CONFIG", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "HOME", "OPENCODE_CONFIG_DIR"]
 
   beforeEach(() => {
     for (const key of envKeys) savedEnv[key] = process.env[key]
@@ -32,11 +32,11 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -57,11 +57,11 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -79,11 +79,11 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -114,138 +114,142 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      const writer = config.agent?.["consultation-writer"] as { mode: string; permission: { edit: string; bash: string } }
+      const writer = config.agent?.["consultation-writer"] as { mode: string; permission: Record<string, unknown> }
       expect(writer.mode).toBe("subagent")
-      expect(writer.permission).toEqual({ edit: "deny", bash: "deny" })
+      expect(writer.permission).toEqual({ edit: "deny", bash: "deny", task: "deny" })
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
 
-  it("registers the simple agent with mode all and patterned permission", async () => {
+  it("registers the lite agent with mode all, a leaf permission, and its workspace", async () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     delete process.env.XDG_DATA_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      const simple = config.agent?.["simple"] as {
+      const lite = config.agent?.["lite"] as {
         mode: string
         model: string
         permission: Record<string, unknown>
       }
-      expect(simple.mode).toBe("all")
-      expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
-      const edit = simple.permission.edit as Record<string, string>
+      expect(lite.mode).toBe("all")
+      expect(lite.model).toBe("opencode-go/deepseek-v4.1-flash")
+      expect(lite.permission.task).toBe("deny")
+      const edit = lite.permission.edit as Record<string, string>
       expect(edit["*"]).toBe("ask")
-      expect(edit[`${join(tmpHome, ".local", "share", "consultation-agent", "simple")}/**`]).toBe("allow")
+      expect(edit[`${join(tmpHome, ".local", "share", "janus-agent", "lite")}/**`]).toBe("allow")
     } finally {
       delete process.env.XDG_DATA_HOME
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
 
-  it("omits the simple agent when simple_enabled=false", async () => {
+  it("omits the lite agent when lite_enabled=false", async () => {
     // given
     const tmpHome = makeTempHome()
-    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-simpleoff-"))
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-liteoff-"))
     const configPath = join(tmpConfigDir, "config.jsonc")
-    writeFileSync(configPath, '{\n  "simple_enabled": false\n}')
+    writeFileSync(configPath, '{\n  "lite_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      expect(config.agent?.["simple"]).toBeUndefined()
+      expect(config.agent?.["lite"]).toBeUndefined()
       const consultant = config.agent?.["consultant"] as { prompt: string }
-      expect(consultant.prompt).toContain("simple DISABLED by configuration")
+      expect(consultant.prompt).toContain("lite DISABLED by configuration")
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
       rmSync(tmpConfigDir, { recursive: true, force: true })
     }
   })
 
-  it("registers the build-lite lane by default and omits it when build_lite_enabled=false", async () => {
+  it("registers the coder and coder-lite agents by default", async () => {
     // given — default registration
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     delete process.env.XDG_DATA_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      const lite = config.agent?.["build-lite"] as {
+      const coder = config.agent?.["coder"] as { mode: string; model: string }
+      expect(coder.mode).toBe("all")
+      expect(coder.model).toBe("opencode-go/glm-5.3")
+      const coderLite = config.agent?.["coder-lite"] as {
         mode: string
         model: string
         steps: number
         permission: Record<string, unknown>
       }
-      expect(lite.mode).toBe("subagent")
-      expect(lite.model).toBe("opencode-go/glm-5.3-flash")
-      expect(lite.steps).toBe(50)
-      expect(lite.permission.task).toBe("deny")
+      expect(coderLite.mode).toBe("subagent")
+      expect(coderLite.model).toBe("opencode-go/glm-5.3-flash")
+      expect(coderLite.steps).toBe(50)
+      expect(coderLite.permission.task).toBe("deny")
     } finally {
       delete process.env.XDG_DATA_HOME
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
 
-  it("omits the build-lite agent when build_lite_enabled=false", async () => {
+  it("omits coder-lite when coder_lite_enabled=false", async () => {
     // given
     const tmpHome = makeTempHome()
-    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-buildliteoff-"))
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-coderliteoff-"))
     const configPath = join(tmpConfigDir, "config.jsonc")
-    writeFileSync(configPath, '{\n  "build_lite_enabled": false\n}')
+    writeFileSync(configPath, '{\n  "coder_lite_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     delete process.env.XDG_DATA_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      expect(config.agent?.["build-lite"]).toBeUndefined()
-      const consultant = config.agent?.["consultant"] as { prompt: string }
-      expect(consultant.prompt).toContain("build-lite DISABLED by configuration")
+      expect(config.agent?.["coder-lite"]).toBeUndefined()
+      const coder = config.agent?.["coder"] as { prompt: string }
+      expect(coder.prompt).toContain("coder-lite DISABLED by configuration")
     } finally {
       delete process.env.XDG_DATA_HOME
       rmSync(tmpHome, { recursive: true, force: true })
@@ -257,12 +261,12 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     delete process.env.XDG_DATA_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -273,7 +277,7 @@ describe("createConsultationConfigHook", () => {
       expect(janus.mode).toBe("all")
       expect(janus.model).toBe("opencode-go/glm-5.3")
       expect(janus.prompt).toContain("# Janus")
-      expect(janus.prompt).not.toContain("consultation-memory")
+      expect(janus.prompt).not.toContain("janus-memory")
     } finally {
       delete process.env.XDG_DATA_HOME
       rmSync(tmpHome, { recursive: true, force: true })
@@ -287,11 +291,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "janus_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -313,11 +317,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "writer_delegate_agent": "host-writer"}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -338,11 +342,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "writer_enabled": false}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -363,11 +367,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "critic_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -390,11 +394,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "critic_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -415,11 +419,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "critic_model": "opencode-go/qwen3.7-plus"\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -440,14 +444,14 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const userPrompt = "user-defined consultant prompt"
     const config: Config = {
       agent: { consultant: { mode: "primary", prompt: userPrompt } },
     }
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -461,15 +465,15 @@ describe("createConsultationConfigHook", () => {
     }
   })
 
-  it("registers config.mcp.consultation-memory as local with enabled true and CONSULTATION_NAMESPACE when memory enabled", async () => {
+  it("registers config.mcp.janus-memory as local with enabled true and JANUS_NAMESPACE when memory enabled", async () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -477,7 +481,7 @@ describe("createConsultationConfigHook", () => {
 
       // then
       expect(config.mcp).toBeDefined()
-      const mcp = config.mcp?.["consultation-memory"] as {
+      const mcp = config.mcp?.["janus-memory"] as {
         type: string
         command: string[]
         enabled: boolean
@@ -486,7 +490,7 @@ describe("createConsultationConfigHook", () => {
       expect(mcp.type).toBe("local")
       expect(mcp.enabled).toBe(true)
       expect(mcp.command).toHaveLength(2)
-      expect(mcp.environment.CONSULTATION_NAMESPACE).toBe(computeNamespace("proj-123", "/tmp/project"))
+      expect(mcp.environment.JANUS_NAMESPACE).toBe(computeNamespace("proj-123", "/tmp/project"))
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
     }
@@ -499,18 +503,18 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "memory_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      expect(config.mcp?.["consultation-memory"]).toBeUndefined()
+      expect(config.mcp?.["janus-memory"]).toBeUndefined()
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
       rmSync(tmpConfigDir, { recursive: true, force: true })
@@ -524,11 +528,11 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "config.jsonc")
     writeFileSync(configPath, '{\n  "memory_enabled": false\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -549,12 +553,12 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const targetFile = join(tmpHome, "skills", "consultation", "SKILL.md")
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       expect(existsSync(targetFile)).toBe(false)
@@ -575,7 +579,7 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const targetDir = join(tmpHome, "skills", "consultation")
@@ -584,7 +588,7 @@ describe("createConsultationConfigHook", () => {
     const userContent = "<!-- user-modified -->\n# custom\n"
     writeFileSync(targetFile, userContent)
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -601,40 +605,40 @@ describe("createConsultationConfigHook", () => {
     // given
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
     const projectId = "namespace-test-id"
     const expectedNs = "oc-" + createHash("sha256").update(projectId).digest("hex").slice(0, 12)
-    const hook = createConsultationConfigHook({ id: projectId }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: projectId }, "/tmp/project")
 
     try {
       // when
       await hook(config)
 
       // then
-      const mcp = config.mcp?.["consultation-memory"] as {
+      const mcp = config.mcp?.["janus-memory"] as {
         environment: Record<string, string>
       }
-      expect(mcp.environment.CONSULTATION_NAMESPACE).toBe(expectedNs)
+      expect(mcp.environment.JANUS_NAMESPACE).toBe(expectedNs)
     } finally {
       rmSync(tmpHome, { recursive: true, force: true })
     }
   })
 
-  it("plugin config loads from $CONSULTATION_CONFIG", async () => {
+  it("plugin config loads from $JANUS_CONFIG", async () => {
     // given
     const tmpHome = makeTempHome()
     const tmpConfigDir = mkdtempSync(join(tmpdir(), "plugin-cfg-direct-"))
     const configPath = join(tmpConfigDir, "custom.jsonc")
     writeFileSync(configPath, '{\n  "agent_model": "test/model"\n}')
     process.env.HOME = tmpHome
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -649,19 +653,19 @@ describe("createConsultationConfigHook", () => {
     }
   })
 
-  it("plugin config loads from $XDG_CONFIG_HOME/consultation-agent/config.jsonc when CONSULTATION_CONFIG is unset", async () => {
+  it("plugin config loads from $XDG_CONFIG_HOME/janus-agent/config.jsonc when JANUS_CONFIG is unset", async () => {
     // given
     const xdgHome = mkdtempSync(join(tmpdir(), "plugin-cfg-xdg-int-"))
-    const consultationConfigDir = join(xdgHome, "consultation-agent")
+    const consultationConfigDir = join(xdgHome, "janus-agent")
     mkdirSync(consultationConfigDir, { recursive: true })
     writeFileSync(join(consultationConfigDir, "config.jsonc"), '{\n  "critic_agent": "xdg-critic"\n}')
     const tmpHome = makeTempHome()
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     process.env.XDG_CONFIG_HOME = xdgHome
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -676,19 +680,19 @@ describe("createConsultationConfigHook", () => {
     }
   })
 
-  it("plugin config loads from ~/.config/consultation-agent/config.jsonc when no env overrides", async () => {
+  it("plugin config loads from ~/.config/janus-agent/config.jsonc when no env overrides", async () => {
     // given
     const tmpHome = makeTempHome()
-    const consultationConfigDir = join(tmpHome, ".config", "consultation-agent")
+    const consultationConfigDir = join(tmpHome, ".config", "janus-agent")
     mkdirSync(consultationConfigDir, { recursive: true })
     writeFileSync(join(consultationConfigDir, "config.jsonc"), '{\n  "install_skill": false\n}')
     process.env.HOME = tmpHome
-    delete process.env.CONSULTATION_CONFIG
+    delete process.env.JANUS_CONFIG
     delete process.env.XDG_CONFIG_HOME
     process.env.OPENCODE_CONFIG_DIR = tmpHome
     const targetFile = join(tmpHome, "skills", "consultation", "SKILL.md")
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when
@@ -709,10 +713,10 @@ describe("createConsultationConfigHook", () => {
     const configPath = join(tmpConfigDir, "bad.jsonc")
     writeFileSync(configPath, '{\n  "memory_enabled": 42\n}')
     process.env.HOME = makeTempHome()
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
     delete process.env.XDG_CONFIG_HOME
     const config: Config = {}
-    const hook = createConsultationConfigHook({ id: "proj-123" }, "/tmp/project")
+    const hook = createJanusConfigHook({ id: "proj-123" }, "/tmp/project")
 
     try {
       // when / then
@@ -723,7 +727,7 @@ describe("createConsultationConfigHook", () => {
   })
 })
 
-describe("ConsultationAgentPlugin", () => {
+describe("JanusAgentPlugin", () => {
   it("is a function that returns a Promise of hooks with a config property", async () => {
     // given
     const input: PluginInput = {
@@ -737,7 +741,7 @@ describe("ConsultationAgentPlugin", () => {
     }
 
     // when
-    const hooks = await ConsultationAgentPlugin(input)
+    const hooks = await JanusAgentPlugin(input)
 
     // then
     expect(typeof hooks.config).toBe("function")
@@ -756,21 +760,21 @@ describe("ConsultationAgentPlugin", () => {
     }
 
     // when
-    const hooks = await ConsultationAgentPlugin(input)
+    const hooks = await JanusAgentPlugin(input)
 
     // then
     expect(hooks.tool).toBeDefined()
     expect(Object.keys(hooks.tool ?? {})).toEqual([
-      "consultation_dispatch",
-      "consultation_dispatch_wait",
-      "consultation_dispatch_cancel",
+      "janus_dispatch",
+      "janus_dispatch_wait",
+      "janus_dispatch_cancel",
     ])
-    expect(hooks.tool?.["consultation_dispatch"]).toBeDefined()
+    expect(hooks.tool?.["janus_dispatch"]).toBeDefined()
   })
 
   it("is typed as Plugin", () => {
     // then — the export is assignable to Plugin
-    const p: Plugin = ConsultationAgentPlugin
+    const p: Plugin = JanusAgentPlugin
     expect(typeof p).toBe("function")
   })
 })

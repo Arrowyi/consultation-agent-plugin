@@ -34,7 +34,7 @@ describe("buildCleanRoomEnv", () => {
   test("scrubs developer-local OpenCode and plugin config overrides", () => {
     const parent: NodeJS.ProcessEnv = {
       HOME: "/home/dev",
-      CONSULTATION_CONFIG: "/home/dev/.config/consultation-agent/config.jsonc",
+      JANUS_CONFIG: "/home/dev/.config/janus-agent/config.jsonc",
       OPENCODE_CONFIG: "/home/dev/.config/opencode/opencode.json",
       OPENCODE_CONFIG_CONTENT: '{"model":"local"}',
       OPENCODE_CONFIG_DIR: "/home/dev/.config/opencode",
@@ -50,7 +50,7 @@ describe("buildCleanRoomEnv", () => {
   test("disables external skills and autoupdate while preserving explicit plugin entry", () => {
     const parent: NodeJS.ProcessEnv = {
       HOME: "/home/dev",
-      CONSULTATION_PLUGIN_ENTRY: "file:///tmp/stage/dist/index.js",
+      JANUS_PLUGIN_ENTRY: "file:///tmp/stage/dist/index.js",
     }
 
     const env = buildCleanRoomEnv(parent, sandbox)
@@ -59,7 +59,7 @@ describe("buildCleanRoomEnv", () => {
     expect(env.OPENCODE_DISABLE_CLAUDE_CODE_SKILLS).toBe("1")
     expect(env.OPENCODE_DISABLE_AUTOUPDATE).toBe("1")
     expect(env.OPENCODE_DISABLE_MODELS_FETCH).toBe("1")
-    expect(env.CONSULTATION_PLUGIN_ENTRY).toBe("file:///tmp/stage/dist/index.js")
+    expect(env.JANUS_PLUGIN_ENTRY).toBe("file:///tmp/stage/dist/index.js")
   })
 
   test("scrubs inherited pure-mode and default-plugin disabling flags", () => {

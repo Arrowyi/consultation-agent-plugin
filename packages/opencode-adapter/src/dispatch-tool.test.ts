@@ -5,18 +5,18 @@ import { tmpdir } from "node:os"
 import type { PluginInput, ToolContext } from "@opencode-ai/plugin"
 
 import {
-  createConsultationDispatchTool,
-  createConsultationDispatchTools,
+  createJanusDispatchTool,
+  createJanusDispatchTools,
   resolveRoleTarget,
   splitModel,
 } from "./dispatch-tool.ts"
-import { ConsultationPluginConfigSchema, type ConsultationPluginConfig } from "./plugin-config.ts"
+import { JanusPluginConfigSchema, type JanusPluginConfig } from "./plugin-config.ts"
 import { createFakeClock, createFakeSdk, type FakeSdk } from "./dispatch-test-fixtures.ts"
 import { PRODUCTION_WAIT_BUDGET_MS, type DispatchEnvelope, type SdkAssistantMessage, type SdkMessageWithParts, type SdkTextPart } from "./dispatch-contract.ts"
 import type { DispatchLifecycle, LaunchInput } from "./dispatch-lifecycle.ts"
 
-function config(overrides: Partial<ConsultationPluginConfig> = {}): ConsultationPluginConfig {
-  return ConsultationPluginConfigSchema.parse(overrides)
+function config(overrides: Partial<JanusPluginConfig> = {}): JanusPluginConfig {
+  return JanusPluginConfigSchema.parse(overrides)
 }
 
 function fakeContext(overrides: Partial<ToolContext> = {}): ToolContext {
@@ -95,19 +95,21 @@ describe("resolveRoleTarget", () => {
     expect(critic).toEqual({ agentName: "consultation-critic", model: "opencode/gemini-3.8-flash" })
     expect(verifier).toEqual({ agentName: "consultation-verifier", model: "opencode/gemini-3.8-flash" })
     expect(writer).toEqual({ agentName: "consultation-writer", model: "opencode/claude-sonnet-5-5" })
-    const simple = resolveRoleTarget(config(), "simple")
-    expect(simple).toEqual({ agentName: "simple", model: "opencode-go/deepseek-v4.1-flash" })
-    const buildLite = resolveRoleTarget(config(), "build-lite")
-    expect(buildLite).toEqual({ agentName: "build-lite", model: "opencode-go/glm-5.3-flash" })
+    const coder = resolveRoleTarget(config(), "coder")
+    expect(coder).toEqual({ agentName: "coder", model: "opencode-go/glm-5.3" })
+    const lite = resolveRoleTarget(config(), "lite")
+    expect(lite).toEqual({ agentName: "lite", model: "opencode-go/deepseek-v4.1-flash" })
+    const coderLite = resolveRoleTarget(config(), "coder-lite")
+    expect(coderLite).toEqual({ agentName: "coder-lite", model: "opencode-go/glm-5.3-flash" })
     const build = resolveRoleTarget(config(), "build")
     expect(build).toEqual({ agentName: "build", model: undefined })
     const consultant = resolveRoleTarget(config(), "consultant")
     expect(consultant).toEqual({ agentName: "consultant", model: "opencode-go/glm-5.3" })
   })
 
-  it("resolves a renamed simple agent", () => {
-    const cfg = config({ simple_agent: "my-simple", simple_model: "test/simple" })
-    expect(resolveRoleTarget(cfg, "simple")).toEqual({ agentName: "my-simple", model: "test/simple" })
+  it("resolves a renamed lite agent", () => {
+    const cfg = config({ lite_agent: "my-lite", lite_model: "test/lite" })
+    expect(resolveRoleTarget(cfg, "lite")).toEqual({ agentName: "my-lite", model: "test/lite" })
   })
 
   it("routes the build role to the configured host agent and pins its model only when set", () => {
@@ -151,13 +153,13 @@ describe("splitModel", () => {
   })
 })
 
-describe("createConsultationDispatchTool", () => {
+describe("createJanusDispatchTool", () => {
   const savedEnv: Record<string, string | undefined> = {}
   let tmpConfigDir: string
   let configPath: string
 
   beforeEach(() => {
-    savedEnv.CONSULTATION_CONFIG = process.env.CONSULTATION_CONFIG
+    savedEnv.JANUS_CONFIG = process.env.JANUS_CONFIG
     savedEnv.HOME = process.env.HOME
     tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-config-"))
     configPath = join(tmpConfigDir, "config.jsonc")
@@ -169,12 +171,12 @@ describe("createConsultationDispatchTool", () => {
         critic_model: "provider-c/critic-m",
       }),
     )
-    process.env.CONSULTATION_CONFIG = configPath
+    process.env.JANUS_CONFIG = configPath
   })
 
   afterEach(() => {
-    if (savedEnv.CONSULTATION_CONFIG === undefined) delete process.env.CONSULTATION_CONFIG
-    else process.env.CONSULTATION_CONFIG = savedEnv.CONSULTATION_CONFIG
+    if (savedEnv.JANUS_CONFIG === undefined) delete process.env.JANUS_CONFIG
+    else process.env.JANUS_CONFIG = savedEnv.JANUS_CONFIG
     if (savedEnv.HOME === undefined) delete process.env.HOME
     else process.env.HOME = savedEnv.HOME
     rmSync(tmpConfigDir, { recursive: true, force: true })
@@ -183,7 +185,7 @@ describe("createConsultationDispatchTool", () => {
   it("dispatches to the right agent and model and returns the subagent text", async () => {
     const clock = createFakeClock()
     const fake = createRespondingFake("the analyst result", clock)
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const result = await dispatchTool.execute({ role: "analyst", prompt: "analyze claims" }, fakeContext())
 
@@ -205,7 +207,7 @@ describe("createConsultationDispatchTool", () => {
   it("returns a clear error string when session create fails", async () => {
     const fake = createFakeSdk()
     fake.session.create = async () => ({ error: "boom", data: undefined })
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
 
     const result = await dispatchTool.execute({ role: "critic", prompt: "challenge" }, fakeContext())
 
@@ -217,7 +219,7 @@ describe("createConsultationDispatchTool", () => {
   it("returns a clear error string when promptAsync fails", async () => {
     const fake = createFakeSdk()
     fake.setPromptAsyncError({ status: 500, message: "model auth failed" })
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock: createFakeClock() })
 
     const result = await dispatchTool.execute({ role: "explorer", prompt: "search" }, fakeContext())
 
@@ -251,7 +253,7 @@ describe("createConsultationDispatchTool", () => {
       ])
       return result
     }
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
@@ -285,7 +287,7 @@ describe("createConsultationDispatchTool", () => {
       ])
       return result
     }
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
@@ -318,7 +320,7 @@ describe("createConsultationDispatchTool", () => {
       ])
       return result
     }
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
@@ -330,7 +332,7 @@ describe("createConsultationDispatchTool", () => {
     writeFileSync(configPath, JSON.stringify({ writer_delegate_agent: "host-writer" }))
     const clock = createFakeClock()
     const fake = createRespondingFake("host wrote it", clock)
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { clock })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { clock })
 
     const result = await dispatchTool.execute({ role: "writer", prompt: "blueprint" }, fakeContext())
 
@@ -341,38 +343,38 @@ describe("createConsultationDispatchTool", () => {
     expect(prompt.input.body.model).toBeUndefined()
   })
 
-  it("rejects the simple role when simple_enabled=false", async () => {
+  it("rejects the lite role when lite_enabled=false", async () => {
     // given
-    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-simpleoff-"))
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-liteoff-"))
     const configPath = join(tmpConfigDir, "config.jsonc")
-    writeFileSync(configPath, '{\n  "simple_enabled": false\n}')
-    process.env.CONSULTATION_CONFIG = configPath
-    const tools = createConsultationDispatchTools(createFakeSdk() as unknown as PluginInput["client"])
+    writeFileSync(configPath, '{\n  "lite_enabled": false\n}')
+    process.env.JANUS_CONFIG = configPath
+    const tools = createJanusDispatchTools(createFakeSdk() as unknown as PluginInput["client"])
 
     try {
       // when
-      const result = await tools.consultation_dispatch.execute({ role: "simple", prompt: "quick lookup" }, fakeContext())
+      const result = await tools.janus_dispatch.execute({ role: "lite", prompt: "quick lookup" }, fakeContext())
 
       // then
-      expect(result).toBe("Error: simple is disabled by configuration")
+      expect(result).toBe("Error: lite is disabled by configuration")
     } finally {
-      delete process.env.CONSULTATION_CONFIG
+      delete process.env.JANUS_CONFIG
       rmSync(tmpConfigDir, { recursive: true, force: true })
     }
   })
 
-  it("launches build-lite with the configured agent and model", async () => {
+  it("launches coder-lite with the configured agent and model", async () => {
     // given
-    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-bl-"))
+    const tmpConfigDir = mkdtempSync(join(tmpdir(), "dispatch-cl-"))
     const configPath = join(tmpConfigDir, "config.jsonc")
-    writeFileSync(configPath, JSON.stringify({ build_lite_agent: "custom-lite", build_lite_model: "custom/glm-flash" }))
-    process.env.CONSULTATION_CONFIG = configPath
+    writeFileSync(configPath, JSON.stringify({ coder_lite_agent: "custom-lite", coder_lite_model: "custom/glm-flash" }))
+    process.env.JANUS_CONFIG = configPath
     const fake = createRespondingFake("done")
-    const tools = createConsultationDispatchTools(fake as unknown as PluginInput["client"])
+    const tools = createJanusDispatchTools(fake as unknown as PluginInput["client"])
 
     try {
       // when
-      const result = await tools.consultation_dispatch.execute({ role: "build-lite", prompt: "rename A to B" }, fakeContext())
+      const result = await tools.janus_dispatch.execute({ role: "coder-lite", prompt: "rename A to B" }, fakeContext())
 
       // then
       const body = lastPromptAsyncCall(fake).input.body
@@ -380,7 +382,7 @@ describe("createConsultationDispatchTool", () => {
       expect(body.model).toEqual({ providerID: "custom", modelID: "glm-flash" })
       expect(result).toBe("done")
     } finally {
-      delete process.env.CONSULTATION_CONFIG
+      delete process.env.JANUS_CONFIG
       rmSync(tmpConfigDir, { recursive: true, force: true })
     }
   })
@@ -388,10 +390,10 @@ describe("createConsultationDispatchTool", () => {
   it("launches the build role against the host agent without a pinned model", async () => {
     // given
     const fake = createRespondingFake("done")
-    const tools = createConsultationDispatchTools(fake as unknown as PluginInput["client"])
+    const tools = createJanusDispatchTools(fake as unknown as PluginInput["client"])
 
     // when
-    const result = await tools.consultation_dispatch.execute({ role: "build", prompt: "refactor X" }, fakeContext())
+    const result = await tools.janus_dispatch.execute({ role: "build", prompt: "refactor X" }, fakeContext())
 
     // then
     const body = lastPromptAsyncCall(fake).input.body
@@ -414,14 +416,14 @@ describe("createConsultationDispatchTool", () => {
           session_id: "ses_spy",
           waited_ms: 0,
           reason: "spy",
-          next: "consultation_dispatch_wait",
+          next: "janus_dispatch_wait",
         }
         return JSON.stringify(envelope)
       },
       wait: async () => "never called",
     }
     const fake = createFakeSdk()
-    const dispatchTool = createConsultationDispatchTool(fake as unknown as PluginInput["client"], { lifecycle: spyLifecycle })
+    const dispatchTool = createJanusDispatchTool(fake as unknown as PluginInput["client"], { lifecycle: spyLifecycle })
 
     await dispatchTool.execute({ role: "analyst", prompt: "analyze evidence" }, fakeContext())
 

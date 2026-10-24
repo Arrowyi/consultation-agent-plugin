@@ -1,8 +1,8 @@
 // Manage actions: retire (status flip only), forget (delete canonical + derived
 // + FTS), forget_session, list/upsert/delete preferences, stats.
 
-import { assertTransition, MemoryError } from "@consultation-agent/memory-core"
-import type { ExperienceItem, ManageInput, ManageResult, Outcome, RevisionStatus, SessionSummary, UserPreference } from "@consultation-agent/memory-core"
+import { assertTransition, MemoryError } from "@janus-agent/memory-core"
+import type { ExperienceItem, ManageInput, ManageResult, Outcome, RevisionStatus, SessionSummary, UserPreference } from "@janus-agent/memory-core"
 import { runInTransaction, type SqliteDatabase } from "./driver.ts"
 
 type Row = Record<string, unknown>

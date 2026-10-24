@@ -244,7 +244,7 @@ describe("soft wait expiry and recovery", () => {
       expect(envelope.role).toBe(role)
       expect(envelope.attempt.index).toBe(0)
       expect(envelope.session_id).toMatch(/^ses_fake_/)
-      expect(envelope.next).toBe("consultation_dispatch_wait")
+      expect(envelope.next).toBe("janus_dispatch_wait")
       expect(promptAsyncCount(fake)).toBe(1)
       expect(abortCount(fake)).toBe(0)
 
@@ -509,7 +509,7 @@ describe("synchronous provider-shaped launch failure", () => {
     expect(result).toContain("build dispatch failed")
     expect(result).toContain("promptAsync failed: UnknownError: 404")
     expect(result).toContain('set "build_model"')
-    expect(result).toContain("~/.config/consultation-agent/config.jsonc")
+    expect(result).toContain("~/.config/janus-agent/config.jsonc")
     expect(result).toMatch(/job_id=ses_fake_\d+/)
     expect(promptAsyncCount(fake)).toBe(1)
     expect(abortCount(fake)).toBe(0)

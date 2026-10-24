@@ -3,8 +3,8 @@
 // changed conclusions with a Revision; reject unconfirmed sensitive fields and
 // secrets. Same previewToken replay returns the existing result with created=false.
 
-import { MemoryError, computeFingerprint, containsSecret } from "@consultation-agent/memory-core"
-import type { CommitInput, CommitResult, PreparedItem } from "@consultation-agent/memory-core"
+import { MemoryError, computeFingerprint, containsSecret } from "@janus-agent/memory-core"
+import type { CommitInput, CommitResult, PreparedItem } from "@janus-agent/memory-core"
 import type { SqliteDatabase } from "./driver.ts"
 import { runInTransaction } from "./driver.ts"
 import type { EmbeddingProvider } from "./embedding.ts"

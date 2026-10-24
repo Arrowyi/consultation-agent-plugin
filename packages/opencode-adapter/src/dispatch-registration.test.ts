@@ -5,26 +5,26 @@ import { join } from "node:path"
 import { setImmediate } from "node:timers/promises"
 import type { ToolDefinition } from "@opencode-ai/plugin"
 import * as dispatchTools from "./dispatch-tool.ts"
-import { ConsultationAgentPlugin } from "./plugin.ts"
+import { JanusAgentPlugin } from "./plugin.ts"
 import { buildRuntimeBindings } from "./agent-registration.ts"
-import { ConsultationPluginConfigSchema } from "./plugin-config.ts"
+import { JanusPluginConfigSchema } from "./plugin-config.ts"
 import { createFakeClock } from "./dispatch-test-fixtures.ts"
 import { context, envelope, fixture, pluginInput } from "./dispatch-registration-fixtures.ts"
 
-const { createConsultationDispatchTools } = dispatchTools
+const { createJanusDispatchTools } = dispatchTools
 
 describe("unified dispatch registration", () => {
   let directory: string
   let previousConfig: string | undefined
   beforeEach(() => {
-    previousConfig = process.env.CONSULTATION_CONFIG
+    previousConfig = process.env.JANUS_CONFIG
     directory = mkdtempSync(join(tmpdir(), "dispatch-registration-"))
-    process.env.CONSULTATION_CONFIG = join(directory, "config.jsonc")
+    process.env.JANUS_CONFIG = join(directory, "config.jsonc")
     writeFileSync(join(directory, "config.jsonc"), "{}")
   })
   afterEach(() => {
-    if (previousConfig === undefined) delete process.env.CONSULTATION_CONFIG
-    else process.env.CONSULTATION_CONFIG = previousConfig
+    if (previousConfig === undefined) delete process.env.JANUS_CONFIG
+    else process.env.JANUS_CONFIG = previousConfig
     rmSync(directory, { recursive: true, force: true })
   })
 
@@ -33,8 +33,8 @@ describe("unified dispatch registration", () => {
     const f = fixture()
     const clock = createFakeClock()
     f.sdk.setStatusResult({ data: { ses_fake_1: { type: "busy" } } })
-    const tools = createConsultationDispatchTools(pluginInput(f.sdk).client, { clock })
-    const launched = tools.consultation_dispatch.execute({ role: "analyst", prompt: "analyze" }, context())
+    const tools = createJanusDispatchTools(pluginInput(f.sdk).client, { clock })
+    const launched = tools.janus_dispatch.execute({ role: "analyst", prompt: "analyze" }, context())
     await setImmediate()
     for (let i = 0; i < 300; i++) {
       await setImmediate()
@@ -45,7 +45,7 @@ describe("unified dispatch registration", () => {
     expect(f.aborts).toEqual([])
     f.finish()
     // When a later wait observes the same durable job.
-    const result = await tools.consultation_dispatch_wait.execute({ job_id: job.job_id, wait_ms: 0 }, context())
+    const result = await tools.janus_dispatch_wait.execute({ job_id: job.job_id, wait_ms: 0 }, context())
     // Then no replacement generation occurs.
     expect(result).toBe("final report")
     expect(f.submissions).toHaveLength(1)
@@ -62,11 +62,11 @@ describe("unified dispatch registration", () => {
         controller.abort()
         return result
       }
-      const hooks = await ConsultationAgentPlugin(pluginInput(f.sdk))
+      const hooks = await JanusAgentPlugin(pluginInput(f.sdk))
       const tools = hooks.tool
       if (!tools) throw new Error("missing plugin tools")
-      const dispatch = tools["consultation_dispatch"]
-      const control = tools[`consultation_dispatch_${action}`]
+      const dispatch = tools["janus_dispatch"]
+      const control = tools[`janus_dispatch_${action}`]
       if (!dispatch || !control) throw new Error("missing job control tool")
       const job = envelope(await dispatch.execute({ role: "explorer", prompt: "search" }, context(controller.signal)))
       if (action === "wait") f.finish()
@@ -92,9 +92,9 @@ describe("unified dispatch registration", () => {
     it(`rejects wait_ms=${wait_ms} before any SDK access`, async () => {
       // Given untrusted out-of-contract wait arguments.
       const f = fixture()
-      const tools = createConsultationDispatchTools(pluginInput(f.sdk).client)
+      const tools = createJanusDispatchTools(pluginInput(f.sdk).client)
       // When invoking wait directly (without framework schema validation).
-      const result = await tools.consultation_dispatch_wait.execute({ job_id: "ses_missing", wait_ms }, context())
+      const result = await tools.janus_dispatch_wait.execute({ job_id: "ses_missing", wait_ms }, context())
       // Then the typed boundary reports an error, never clamps or reads.
       expect(result).toMatch(/^Error:/)
       expect(f.sdk.calls).toEqual([])
@@ -105,15 +105,15 @@ describe("unified dispatch registration", () => {
     // Given a job belonging to another parent and malicious extra fields.
     const f = fixture()
     f.sdk.setPromptAsyncRejection(new Error("lost acknowledgement"))
-    const tools = createConsultationDispatchTools(pluginInput(f.sdk).client)
-    const job = envelope(await tools.consultation_dispatch.execute({ role: "writer", prompt: "draft" }, context()))
-    expect(Object.keys(tools.consultation_dispatch_cancel.args)).toEqual(["job_id"])
-    expect(Object.keys(tools.consultation_dispatch_wait.args)).toEqual(["job_id", "wait_ms"])
+    const tools = createJanusDispatchTools(pluginInput(f.sdk).client)
+    const job = envelope(await tools.janus_dispatch.execute({ role: "writer", prompt: "draft" }, context()))
+    expect(Object.keys(tools.janus_dispatch_cancel.args)).toEqual(["job_id"])
+    expect(Object.keys(tools.janus_dispatch_wait.args)).toEqual(["job_id", "wait_ms"])
     // When the attacker supplies the actual owner in args instead of context.
     const maliciousArgs = {
       job_id: job.job_id, parentID: "ses_parent", role: "analyst", agent: "evil", model: "evil/model", wait_ms: 0,
     }
-    const result = await tools.consultation_dispatch_cancel.execute(maliciousArgs, { ...context(), sessionID: "ses_attacker" })
+    const result = await tools.janus_dispatch_cancel.execute(maliciousArgs, { ...context(), sessionID: "ses_attacker" })
     // Then the context binding prevails and nothing is aborted/generated.
     expect(result).toMatch(/^Error:/)
     expect(f.aborts).toEqual([])
@@ -124,8 +124,8 @@ describe("unified dispatch registration", () => {
     // Given a launched job and a wait holding the job lock during a deferred read.
     const f = fixture()
     f.sdk.setPromptAsyncRejection(new Error("lost acknowledgement"))
-    const tools = createConsultationDispatchTools(pluginInput(f.sdk).client)
-    const job = envelope(await tools.consultation_dispatch.execute({ role: "analyst", prompt: "analyze" }, context()))
+    const tools = createJanusDispatchTools(pluginInput(f.sdk).client)
+    const job = envelope(await tools.janus_dispatch.execute({ role: "analyst", prompt: "analyze" }, context()))
     const entered = Promise.withResolvers<void>()
     const release = Promise.withResolvers<void>()
     const read = f.sdk.session.messages
@@ -136,11 +136,11 @@ describe("unified dispatch registration", () => {
       }
       return read(input)
     }
-    const waiting = tools.consultation_dispatch_wait.execute({ job_id: job.job_id, wait_ms: 0 }, context())
+    const waiting = tools.janus_dispatch_wait.execute({ job_id: job.job_id, wait_ms: 0 }, context())
     await entered.promise
     // When cancel queues behind the observation, and the specialist finishes.
     const readsBeforeCancel = f.sdk.calls.length
-    const cancelling = tools.consultation_dispatch_cancel.execute({ job_id: job.job_id }, context())
+    const cancelling = tools.janus_dispatch_cancel.execute({ job_id: job.job_id }, context())
     await setImmediate()
     expect(f.sdk.calls).toHaveLength(readsBeforeCancel)
     f.finish()
@@ -153,12 +153,12 @@ describe("unified dispatch registration", () => {
 
   it("names all job-control tools in assembled runtime bindings", () => {
     // Given default role configuration.
-    const config = ConsultationPluginConfigSchema.parse({})
+    const config = JanusPluginConfigSchema.parse({})
     // When building runtime bindings consumed by the consultant.
     const bindings = buildRuntimeBindings(config, "oc-test")
     // Then routing-bearing structural tool names are available (no prose pin).
-    expect(bindings.match(/`consultation_dispatch(?:_wait|_cancel)?`/g)).toEqual([
-      "`consultation_dispatch`", "`consultation_dispatch_wait`", "`consultation_dispatch_cancel`",
+    expect(bindings.match(/`janus_dispatch(?:_wait|_cancel)?`/g)).toEqual([
+      "`janus_dispatch`", "`janus_dispatch_wait`", "`janus_dispatch_cancel`",
     ])
   })
 
@@ -168,7 +168,8 @@ describe("unified dispatch registration", () => {
     { role: "critic", agent: "consultation-critic", model: "opencode/gemini-3.8-flash" },
     { role: "verifier", agent: "consultation-verifier", model: "opencode/gemini-3.8-flash" },
     { role: "writer", agent: "consultation-writer", model: "opencode/claude-sonnet-5-5" },
-    { role: "simple", agent: "simple", model: "opencode-go/deepseek-v4.1-flash" },
+    { role: "coder", agent: "coder", model: "opencode-go/glm-5.3" },
+    { role: "lite", agent: "lite", model: "opencode-go/deepseek-v4.1-flash" },
   ] as const) {
     for (const custom of [false, true]) {
       it(`routes ${scenario.role} through the shared factory with ${custom ? "custom" : "default"} configuration`, async () => {
@@ -185,9 +186,9 @@ describe("unified dispatch registration", () => {
           f.finish()
           return result
         }
-        const tools = createConsultationDispatchTools(pluginInput(f.sdk).client)
+        const tools = createJanusDispatchTools(pluginInput(f.sdk).client)
         // When dispatching the configured role.
-        const result = await tools.consultation_dispatch.execute({ role: scenario.role, prompt: "bounded task" }, context())
+        const result = await tools.janus_dispatch.execute({ role: scenario.role, prompt: "bounded task" }, context())
         // Then the actual generating request uses the selected route.
         expect(result).toBe("final report")
         expect(f.submissions.map((s) => ({ agent: s.body.agent, model: s.body.model }))).toEqual([{
@@ -200,9 +201,9 @@ describe("unified dispatch registration", () => {
   it("rejects an invalid role without SDK access", async () => {
     // Given an unsupported role arriving at the execution boundary.
     const f = fixture()
-    const tools = createConsultationDispatchTools(pluginInput(f.sdk).client)
+    const tools = createJanusDispatchTools(pluginInput(f.sdk).client)
     // When dispatching an invalid role.
-    const dispatch: ToolDefinition = tools.consultation_dispatch
+    const dispatch: ToolDefinition = tools.janus_dispatch
     const result = await dispatch.execute({ role: "general", prompt: "task" }, context())
     // Then no child or generating request is created.
     expect(result).toMatch(/^Error:/)
@@ -223,9 +224,9 @@ describe("unified dispatch registration", () => {
         f.finish()
         return result
       }
-      const tools = createConsultationDispatchTools(pluginInput(f.sdk).client)
+      const tools = createJanusDispatchTools(pluginInput(f.sdk).client)
       // When dispatching the delegated writer despite the bundled disable flag.
-      const result = await tools.consultation_dispatch.execute({ role: "writer", prompt: "draft" }, context())
+      const result = await tools.janus_dispatch.execute({ role: "writer", prompt: "draft" }, context())
       // Then host routing, optional model pinning and single-attempt semantics survive.
       expect(result).toBe("final report")
       expect(f.submissions.map((s) => ({ agent: s.body.agent, model: s.body.model }))).toEqual([{

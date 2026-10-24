@@ -10,24 +10,25 @@ import {
   registerAnalyst,
   registerVerifier,
   registerWriter,
-  registerSimple,
-  registerBuildLite,
+  registerCoder,
+  registerLite,
+  registerCoderLite,
   registerJanus,
   buildRuntimeBindings,
-  buildSimpleRuntimeBindings,
+  buildLiteRuntimeBindings,
   buildJanusRuntimeBindings,
-  buildSimplePermission,
-  buildBuildLitePermission,
-  resolveSimpleWorkspaceDir,
+  buildLitePermission,
+  buildCoderLitePermission,
+  resolveLiteWorkspaceDir as resolveLiteWorkspaceDirLocal,
   injectRuntimeBindings,
   injectModelPrompt,
   resolveModelPrompt,
   normalizeModelKey,
 } from "./agent-registration.ts"
 import { resolveAsset } from "./asset-paths.ts"
-import type { ConsultationPluginConfig } from "./plugin-config.ts"
+import type { JanusPluginConfig } from "./plugin-config.ts"
 
-function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): ConsultationPluginConfig {
+function makeConfig(overrides: Partial<JanusPluginConfig> = {}): JanusPluginConfig {
   return {
     install_skill: true,
     install_commands: true,
@@ -40,10 +41,12 @@ function makeConfig(overrides: Partial<ConsultationPluginConfig> = {}): Consulta
     verifier_enabled: true,
     writer_agent: "consultation-writer",
     writer_enabled: true,
-    simple_agent: "simple",
-    simple_enabled: true,
-    build_lite_agent: "build-lite",
-    build_lite_enabled: true,
+    coder_agent: "coder",
+    coder_enabled: true,
+    lite_agent: "lite",
+    lite_enabled: true,
+    coder_lite_agent: "coder-lite",
+    coder_lite_enabled: true,
     build_agent: "build",
     build_enabled: true,
     janus_agent: "janus",
@@ -62,7 +65,7 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(block).toContain("## Runtime Bindings (injected by opencode-adapter)")
-    expect(block).toContain("consultation-memory")
+    expect(block).toContain("janus-memory")
     expect(block).toContain("memory_recall")
     expect(block).toContain("memory_expand")
     expect(block).toContain("memory_prepare")
@@ -91,7 +94,7 @@ describe("buildRuntimeBindings", () => {
 
     // then
     expect(block).toContain("Memory: DISABLED by configuration (saving and recall are unavailable)")
-    expect(block).not.toContain("consultation-memory")
+    expect(block).not.toContain("janus-memory")
   })
 
   it("includes the critic subagent name and model line when critic is enabled", () => {
@@ -219,7 +222,7 @@ describe("buildRuntimeBindings", () => {
     expect(block).toContain("writer DISABLED by configuration")
   })
 
-  it("reports the simple generalist line and its DISABLED state", () => {
+  it("reports the lite leaf and coder delegate lines with their DISABLED states", () => {
     // given
     const config = makeConfig()
 
@@ -227,36 +230,18 @@ describe("buildRuntimeBindings", () => {
     const block = buildRuntimeBindings(config, "oc-ns")
 
     // then
-    expect(block).toContain("Economical generalist: `simple` (`opencode-go/deepseek-v4.1-flash`)")
+    expect(block).toContain("Economical leaf: `lite` (`opencode-go/deepseek-v4.1-flash`)")
+    expect(block).toContain("Coding delegate: `coder` (`opencode-go/glm-5.3`)")
 
     // given
-    const disabled = makeConfig({ simple_enabled: false })
+    const disabled = makeConfig({ lite_enabled: false, coder_enabled: false })
 
     // when
     const disabledBlock = buildRuntimeBindings(disabled, "oc-ns")
 
     // then
-    expect(disabledBlock).toContain("Economical generalist: simple DISABLED by configuration")
-
-    // given — coding lanes
-    const lanes = makeConfig()
-
-    // when
-    const lanesBlock = buildRuntimeBindings(lanes, "oc-ns")
-
-    // then
-    expect(lanesBlock).toContain("Mechanical coding lane: `build-lite` (`opencode-go/glm-5.3-flash`)")
-    expect(lanesBlock).toContain("Strong coding lane: role `build` routes to agent `build` (`host default model`)")
-
-    // given
-    const lanesOff = makeConfig({ build_lite_enabled: false, build_enabled: false })
-
-    // when
-    const lanesOffBlock = buildRuntimeBindings(lanesOff, "oc-ns")
-
-    // then
-    expect(lanesOffBlock).toContain("Mechanical coding lane: build-lite DISABLED by configuration")
-    expect(lanesOffBlock).toContain("Strong coding lane: build DISABLED by configuration")
+    expect(disabledBlock).toContain("Economical leaf: lite DISABLED by configuration")
+    expect(disabledBlock).toContain("Coding delegate: coder DISABLED by configuration")
   })
 })
 
@@ -513,13 +498,13 @@ describe("registerConsultationCritic", () => {
       mode: string
       prompt: string
       description: string
-      permission: { edit: string }
+      permission: Record<string, unknown>
     }
     expect(critic.mode).toBe("subagent")
     expect(critic.prompt).toContain("# Consultation Critic")
     expect(critic.prompt).toContain("counterEvidence")
     expect(critic.description).toContain("counter-evidence")
-    expect(critic.permission).toEqual({ edit: "deny" })
+    expect(critic.permission).toMatchObject({ edit: "deny", bash: "deny", task: "deny" })
   })
 
   it("sets the critic model when critic_model is configured", async () => {
@@ -592,12 +577,12 @@ describe("registerExplorer", () => {
       mode: string
       prompt: string
       model: string
-      permission: { edit: string }
+      permission: Record<string, unknown>
     }
     expect(explorer.mode).toBe("subagent")
     expect(explorer.prompt).toContain("# Explorer")
     expect(explorer.model).toBe("opencode-go/deepseek-v4.1-flash")
-    expect(explorer.permission).toEqual({ edit: "deny" })
+    expect(explorer.permission).toMatchObject({ edit: "deny", bash: "deny", task: "deny" })
   })
 
   it("overrides the explorer model from explorer_model", async () => {
@@ -628,12 +613,12 @@ describe("registerAnalyst", () => {
       mode: string
       prompt: string
       model: string
-      permission: { edit: string }
+      permission: Record<string, unknown>
     }
     expect(analyst.mode).toBe("subagent")
     expect(analyst.prompt).toContain("# Analyst")
     expect(analyst.model).toBe("opencode-go/qwen3.8-max")
-    expect(analyst.permission).toEqual({ edit: "deny" })
+    expect(analyst.permission).toMatchObject({ edit: "deny", bash: "deny", task: "deny" })
   })
 
   it("overrides the analyst model from analyst_model", async () => {
@@ -659,7 +644,7 @@ describe("registerVerifier", () => {
     expect(config.agent?.["consultation-verifier"]).toMatchObject({
       mode: "subagent",
       model: "opencode/gemini-3.8-flash",
-      permission: { edit: "deny" },
+      permission: { edit: "deny", bash: "deny", task: "deny" },
     })
   })
 })
@@ -677,7 +662,7 @@ describe("registerWriter", () => {
     expect(config.agent?.["consultation-writer"]).toMatchObject({
       mode: "subagent",
       model: "opencode/claude-sonnet-5-5",
-      permission: { edit: "deny", bash: "deny" },
+      permission: { edit: "deny", bash: "deny", task: "deny" },
     })
   })
 
@@ -716,17 +701,17 @@ describe("registerWriter", () => {
   })
 })
 
-describe("resolveSimpleWorkspaceDir", () => {
+describe("resolveLiteWorkspaceDir", () => {
   it("defaults under XDG data home", () => {
     // given
     const config = makeConfig()
     const env = { HOME: "/home/test-user", XDG_DATA_HOME: "/xdg/data" } as NodeJS.ProcessEnv
 
     // when
-    const dir = resolveSimpleWorkspaceDir(config, env)
+    const dir = resolveLiteWorkspaceDirLocal(config, env)
 
     // then
-    expect(dir).toBe("/xdg/data/consultation-agent/simple")
+    expect(dir).toBe("/xdg/data/janus-agent/lite")
   })
 
   it("falls back to HOME/.local/share when XDG_DATA_HOME is unset", () => {
@@ -735,35 +720,36 @@ describe("resolveSimpleWorkspaceDir", () => {
     const env = { HOME: "/home/test-user" } as NodeJS.ProcessEnv
 
     // when
-    const dir = resolveSimpleWorkspaceDir(config, env)
+    const dir = resolveLiteWorkspaceDirLocal(config, env)
 
     // then
-    expect(dir).toBe("/home/test-user/.local/share/consultation-agent/simple")
+    expect(dir).toBe("/home/test-user/.local/share/janus-agent/lite")
   })
 
-  it("honors simple_workspace_dir when configured", () => {
+  it("honors lite_workspace_dir when configured", () => {
     // given
-    const config = makeConfig({ simple_workspace_dir: "/custom/simple-ws" })
+    const config = makeConfig({ lite_workspace_dir: "/custom/lite-ws" })
 
     // when
-    const dir = resolveSimpleWorkspaceDir(config, { HOME: "/home/test-user" } as NodeJS.ProcessEnv)
+    const dir = resolveLiteWorkspaceDirLocal(config, { HOME: "/home/test-user" } as NodeJS.ProcessEnv)
 
     // then
-    expect(dir).toBe("/custom/simple-ws")
+    expect(dir).toBe("/custom/lite-ws")
   })
 })
 
-describe("buildSimplePermission", () => {
-  it("allows reads and its own workspace, asks for every other write and non-readonly bash", () => {
+describe("buildLitePermission", () => {
+  it("allows reads and its own workspace, asks for every other write and non-readonly bash, denies dispatch", () => {
     // given
-    const workspace = "/xdg/data/consultation-agent/simple"
+    const workspace = "/xdg/data/janus-agent/lite"
 
     // when
-    const permission = buildSimplePermission(workspace)
+    const permission = buildLitePermission(workspace)
 
     // then
     expect(permission.webfetch).toBe("allow")
     expect(permission.websearch).toBe("allow")
+    expect(permission.task).toBe("deny")
     const edit = permission.edit as Record<string, string>
     expect(edit["*"]).toBe("ask")
     expect(edit[`${workspace}/**`]).toBe("allow")
@@ -780,25 +766,26 @@ describe("buildSimplePermission", () => {
   })
 })
 
-describe("buildSimpleRuntimeBindings", () => {
-  it("reports memory, own model, explorer, dispatch discipline, workspace, and namespace", () => {
+describe("buildLiteRuntimeBindings", () => {
+  it("reports memory, own model, escalation targets, workspace, namespace, and leaf rule", () => {
     // given
     const config = makeConfig()
-    const workspace = "/xdg/data/consultation-agent/simple"
+    const workspace = "/xdg/data/janus-agent/lite"
 
     // when
-    const block = buildSimpleRuntimeBindings(config, workspace, "oc-ns")
+    const block = buildLiteRuntimeBindings(config, workspace, "oc-ns")
 
     // then
     expect(block).toContain("## Runtime Bindings (injected by opencode-adapter)")
-    expect(block).toContain("consultation-memory")
-    expect(block).toContain("Simple model: `opencode-go/deepseek-v4.1-flash`")
-    expect(block).toContain("consultation-explorer")
-    expect(block).toContain("consultation_dispatch_wait")
+    expect(block).toContain("janus-memory")
+    expect(block).toContain("Lite model: `opencode-go/deepseek-v4.1-flash`")
+    expect(block).toContain("Consultant:")
+    expect(block).toContain("Coder:")
+    expect(block).toContain("Janus:")
+    expect(block).toContain("You are a leaf: do not dispatch another agent")
     expect(block).toContain(`Your writable workspace: \`${workspace}\``)
     expect(block).toContain("oc-ns")
-    expect(block).toContain("Mechanical coding lane: `build-lite` (`opencode-go/glm-5.3-flash`)")
-    expect(block).toContain("Strong coding lane: role `build` routes to agent `build`")
+    expect(block).not.toContain("Mechanical coding lane")
   })
 
   it("says Memory DISABLED when memory_enabled is false", () => {
@@ -806,57 +793,58 @@ describe("buildSimpleRuntimeBindings", () => {
     const config = makeConfig({ memory_enabled: false })
 
     // when
-    const block = buildSimpleRuntimeBindings(config, "/ws", "oc-ns")
+    const block = buildLiteRuntimeBindings(config, "/ws", "oc-ns")
 
     // then
     expect(block).toContain("Memory: DISABLED by configuration (saving and recall are unavailable)")
   })
 })
 
-describe("registerSimple", () => {
-  // registerSimple always mkdirs its resolved workspace — every test in this
+describe("registerLite", () => {
+  // registerLite always mkdirs its resolved workspace — every test in this
   // describe must point it at a temp dir so nothing lands under the real HOME.
-  function tempWorkspaceConfig(overrides: Partial<ConsultationPluginConfig> = {}): { pluginConfig: ConsultationPluginConfig; cleanup: () => void } {
-    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+  function tempWorkspaceConfig(overrides: Partial<JanusPluginConfig> = {}): { pluginConfig: JanusPluginConfig; cleanup: () => void } {
+    const workspaceParent = mkdtempSync(join(tmpdir(), "lite-ws-"))
     return {
-      pluginConfig: makeConfig({ simple_workspace_dir: join(workspaceParent, "simple"), ...overrides }),
+      pluginConfig: makeConfig({ lite_workspace_dir: join(workspaceParent, "lite"), ...overrides }),
       cleanup: () => rmSync(workspaceParent, { recursive: true, force: true }),
     }
   }
 
-  it("registers mode all with the simple.md body, injected bindings, and patterned permission", async () => {
+  it("registers mode all with the lite.md body, injected bindings, and patterned permission", async () => {
     // given — temp workspace so the test never creates anything under the real HOME
-    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
-    const workspace = join(workspaceParent, "simple")
+    const workspaceParent = mkdtempSync(join(tmpdir(), "lite-ws-"))
+    const workspace = join(workspaceParent, "lite")
     const config: { agent?: Record<string, unknown> } = {}
-    const pluginConfig = makeConfig({ simple_workspace_dir: workspace })
+    const pluginConfig = makeConfig({ lite_workspace_dir: workspace })
 
     try {
       // when
-      await registerSimple(config, pluginConfig, "oc-testns")
+      await registerLite(config, pluginConfig, "oc-testns")
 
       // then
-      const simple = config.agent?.["simple"] as {
+      const lite = config.agent?.["lite"] as {
         mode: string
         description: string
         prompt: string
         model: string
         permission: Record<string, unknown>
       }
-      expect(simple.mode).toBe("all")
-      expect(simple.model).toBe("opencode-go/deepseek-v4.1-flash")
-      expect(simple.description).toContain("Economical daily-consultation agent")
-      expect(simple.prompt).toContain("# Simple")
+      expect(lite.mode).toBe("all")
+      expect(lite.model).toBe("opencode-go/deepseek-v4.1-flash")
+      expect(lite.description).toContain("Economical quick-answer entry")
+      expect(lite.prompt).toContain("# Lite")
       // The default model resolves its shipped slug block, which replaces
       // the placeholder.
-      expect(simple.prompt).toContain("## Driving DeepSeek V4.1-Flash")
-      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
-      expect(simple.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
-      expect(simple.prompt).toContain("oc-testns")
-      expect(simple.prompt).toContain(workspace)
-      expect(simple.prompt).not.toContain("<!-- RUNTIME-BINDINGS")
-      expect(simple.permission.webfetch).toBe("allow")
-      const edit = simple.permission.edit as Record<string, string>
+      expect(lite.prompt).toContain("## Driving DeepSeek V4.1-Flash")
+      expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
+      expect(lite.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+      expect(lite.prompt).toContain("oc-testns")
+      expect(lite.prompt).toContain(workspace)
+      expect(lite.prompt).not.toContain("<!-- RUNTIME-BINDINGS")
+      expect(lite.permission.webfetch).toBe("allow")
+      expect(lite.permission.task).toBe("deny")
+      const edit = lite.permission.edit as Record<string, string>
       expect(edit[`${workspace}/**`]).toBe("allow")
     } finally {
       rmSync(workspaceParent, { recursive: true, force: true })
@@ -865,21 +853,21 @@ describe("registerSimple", () => {
 
   it("skips the default model block when the model is swapped and no user block exists", async () => {
     // given — a swapped model with no user model-prompt entry
-    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const workspaceParent = mkdtempSync(join(tmpdir(), "lite-ws-"))
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
-      simple_workspace_dir: join(workspaceParent, "simple"),
-      simple_model: "my-provider/other-model",
+      lite_workspace_dir: join(workspaceParent, "lite"),
+      lite_model: "my-provider/other-model",
     })
 
     try {
       // when
-      await registerSimple(config, pluginConfig, "oc-ns")
+      await registerLite(config, pluginConfig, "oc-ns")
 
       // then
-      const simple = config.agent?.["simple"] as { prompt: string }
-      expect(simple.prompt).toContain("<!-- MODEL-PROMPT")
-      expect(simple.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
+      const lite = config.agent?.["lite"] as { prompt: string }
+      expect(lite.prompt).toContain("<!-- MODEL-PROMPT")
+      expect(lite.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
     } finally {
       rmSync(workspaceParent, { recursive: true, force: true })
     }
@@ -887,22 +875,22 @@ describe("registerSimple", () => {
 
   it("injects the user model block over the shipped block", async () => {
     // given
-    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const workspaceParent = mkdtempSync(join(tmpdir(), "lite-ws-"))
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig({
-      simple_workspace_dir: join(workspaceParent, "simple"),
+      lite_workspace_dir: join(workspaceParent, "lite"),
       model_prompts: { deepseekv41flash: "user flash block" },
     })
 
     try {
       // when
-      await registerSimple(config, pluginConfig, "oc-ns")
+      await registerLite(config, pluginConfig, "oc-ns")
 
       // then
-      const simple = config.agent?.["simple"] as { prompt: string }
-      expect(simple.prompt).toContain("user flash block")
-      expect(simple.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
-      expect(simple.prompt).not.toContain("<!-- MODEL-PROMPT")
+      const lite = config.agent?.["lite"] as { prompt: string }
+      expect(lite.prompt).toContain("user flash block")
+      expect(lite.prompt).not.toContain("Driving DeepSeek V4.1-Flash")
+      expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
     } finally {
       rmSync(workspaceParent, { recursive: true, force: true })
     }
@@ -910,77 +898,120 @@ describe("registerSimple", () => {
 
   it("creates the workspace directory under the resolved data home", async () => {
     // given
-    const workspaceParent = mkdtempSync(join(tmpdir(), "simple-ws-"))
+    const workspaceParent = mkdtempSync(join(tmpdir(), "lite-ws-"))
     const config: { agent?: Record<string, unknown> } = {}
-    const pluginConfig = makeConfig({ simple_workspace_dir: join(workspaceParent, "simple") })
+    const pluginConfig = makeConfig({ lite_workspace_dir: join(workspaceParent, "lite") })
 
     // when
-    await registerSimple(config, pluginConfig, "oc-ns")
+    await registerLite(config, pluginConfig, "oc-ns")
 
     // then
-    expect(existsSync(join(workspaceParent, "simple"))).toBe(true)
+    expect(existsSync(join(workspaceParent, "lite"))).toBe(true)
     rmSync(workspaceParent, { recursive: true, force: true })
   })
 
-  it("overrides the model from simple_model", async () => {
+  it("overrides the model from lite_model", async () => {
     // given
-    const { pluginConfig, cleanup } = tempWorkspaceConfig({ simple_model: "test/simple-m" })
+    const { pluginConfig, cleanup } = tempWorkspaceConfig({ lite_model: "test/lite-m" })
     const config: { agent?: Record<string, unknown> } = {}
 
     try {
       // when
-      await registerSimple(config, pluginConfig, "oc-ns")
+      await registerLite(config, pluginConfig, "oc-ns")
 
       // then
-      const simple = config.agent?.["simple"] as { model: string }
-      expect(simple.model).toBe("test/simple-m")
+      const lite = config.agent?.["lite"] as { model: string }
+      expect(lite.model).toBe("test/lite-m")
     } finally {
       cleanup()
     }
   })
 
-  it("uses the configured simple_agent name", async () => {
+  it("uses the configured lite_agent name", async () => {
     // given
-    const { pluginConfig, cleanup } = tempWorkspaceConfig({ simple_agent: "my-simple" })
+    const { pluginConfig, cleanup } = tempWorkspaceConfig({ lite_agent: "my-lite" })
     const config: { agent?: Record<string, unknown> } = {}
 
     try {
       // when
-      await registerSimple(config, pluginConfig, "oc-ns")
+      await registerLite(config, pluginConfig, "oc-ns")
 
       // then
-      expect(config.agent?.["my-simple"]).toBeDefined()
-      expect(config.agent?.["simple"]).toBeUndefined()
+      expect(config.agent?.["my-lite"]).toBeDefined()
+      expect(config.agent?.["lite"]).toBeUndefined()
     } finally {
       cleanup()
     }
   })
 
-  it("does NOT clobber a pre-existing user-defined simple agent entry", async () => {
+  it("does NOT clobber a pre-existing user-defined lite agent entry", async () => {
     // given
-    const userPrompt = "user-defined simple prompt"
+    const userPrompt = "user-defined lite prompt"
     const config: { agent?: Record<string, unknown> } = {
-      agent: { simple: { mode: "all", prompt: userPrompt } },
+      agent: { lite: { mode: "all", prompt: userPrompt } },
     }
     const { pluginConfig, cleanup } = tempWorkspaceConfig()
 
     try {
       // when
-      await registerSimple(config, pluginConfig, "oc-ns")
+      await registerLite(config, pluginConfig, "oc-ns")
 
       // then
-      const simple = config.agent?.["simple"] as { prompt: string }
-      expect(simple.prompt).toBe(userPrompt)
+      const lite = config.agent?.["lite"] as { prompt: string }
+      expect(lite.prompt).toBe(userPrompt)
     } finally {
       cleanup()
     }
   })
 })
 
-describe("buildBuildLitePermission", () => {
+describe("registerCoder", () => {
+  it("registers mode all with the coder.md body, model block, and runtime bindings", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig()
+
+    // when
+    await registerCoder(config, pluginConfig)
+
+    // then
+    const coder = config.agent?.["coder"] as {
+      mode: string
+      description: string
+      prompt: string
+      model: string
+      permission: Record<string, unknown>
+    }
+    expect(coder.mode).toBe("all")
+    expect(coder.model).toBe("opencode-go/glm-5.3")
+    expect(coder.description).toContain("Coding entry point")
+    expect(coder.prompt).toContain("# Coder")
+    expect(coder.prompt).toContain("Task triage")
+    expect(coder.prompt).toContain("## Dispatched mode")
+    expect(coder.prompt).toContain("## Driving GLM-5.3")
+    expect(coder.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
+    expect(coder.prompt).toContain("coder-lite")
+    expect(coder.prompt).not.toContain("janus-memory")
+  })
+
+  it("overrides the coder model from coder_model", async () => {
+    // given
+    const config: { agent?: Record<string, unknown> } = {}
+    const pluginConfig = makeConfig({ coder_model: "test/coder-model" })
+
+    // when
+    await registerCoder(config, pluginConfig)
+
+    // then
+    const coder = config.agent?.["coder"] as { model: string }
+    expect(coder.model).toBe("test/coder-model")
+  })
+})
+
+describe("buildCoderLitePermission", () => {
   it("allows workspace edits, asks for external, denies further dispatch", () => {
     // given // when
-    const permission = buildBuildLitePermission()
+    const permission = buildCoderLitePermission()
 
     // then
     const edit = permission.edit as Record<string, string>
@@ -996,17 +1027,17 @@ describe("buildBuildLitePermission", () => {
   })
 })
 
-describe("registerBuildLite", () => {
+describe("registerCoderLite", () => {
   it("registers a leaf subagent with steps 50 and the role body", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
     const pluginConfig = makeConfig()
 
     // when
-    await registerBuildLite(config, pluginConfig)
+    await registerCoderLite(config, pluginConfig)
 
     // then
-    const lite = config.agent?.["build-lite"] as {
+    const lite = config.agent?.["coder-lite"] as {
       mode: string
       description: string
       prompt: string
@@ -1018,7 +1049,7 @@ describe("registerBuildLite", () => {
     expect(lite.model).toBe("opencode-go/glm-5.3-flash")
     expect(lite.steps).toBe(50)
     expect(lite.description).toContain("mechanical coding")
-    expect(lite.prompt).toContain("# Build-Lite")
+    expect(lite.prompt).toContain("# Coder-Lite")
     expect(lite.prompt).toContain("Report-Up discipline")
     // The default model resolves its shipped slug block, which replaces the
     // placeholder.
@@ -1030,14 +1061,14 @@ describe("registerBuildLite", () => {
   it("keeps the asset byte-identical when the model is swapped and no user block exists", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
-    const pluginConfig = makeConfig({ build_lite_model: "my-provider/other-model" })
+    const pluginConfig = makeConfig({ coder_lite_model: "my-provider/other-model" })
 
     // when
-    await registerBuildLite(config, pluginConfig)
+    await registerCoderLite(config, pluginConfig)
 
     // then
-    const lite = config.agent?.["build-lite"] as { prompt: string }
-    const source = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
+    const lite = config.agent?.["coder-lite"] as { prompt: string }
+    const source = await readFile(resolveAsset("agents/coder-lite.md"), "utf8")
     expect(lite.prompt).toBe(source)
   })
 
@@ -1049,47 +1080,47 @@ describe("registerBuildLite", () => {
     })
 
     // when
-    await registerBuildLite(config, pluginConfig)
+    await registerCoderLite(config, pluginConfig)
 
     // then
-    const lite = config.agent?.["build-lite"] as { prompt: string }
+    const lite = config.agent?.["coder-lite"] as { prompt: string }
     expect(lite.prompt).toContain("user glm block")
     expect(lite.prompt).not.toContain("Driving GLM-5.3-Flash")
     expect(lite.prompt).not.toContain("<!-- MODEL-PROMPT")
   })
 
-  it("overrides the model from build_lite_model", async () => {
+  it("overrides the model from coder_lite_model", async () => {
     // given
     const config: { agent?: Record<string, unknown> } = {}
-    const pluginConfig = makeConfig({ build_lite_model: "test/glm-flash" })
+    const pluginConfig = makeConfig({ coder_lite_model: "test/glm-flash" })
 
     // when
-    await registerBuildLite(config, pluginConfig)
+    await registerCoderLite(config, pluginConfig)
 
     // then
-    const lite = config.agent?.["build-lite"] as { model: string }
+    const lite = config.agent?.["coder-lite"] as { model: string }
     expect(lite.model).toBe("test/glm-flash")
   })
 
-  it("uses the configured build_lite_agent name and never clobbers", async () => {
+  it("uses the configured coder_lite_agent name and never clobbers", async () => {
     // given
-    const userPrompt = "user-defined build-lite prompt"
+    const userPrompt = "user-defined coder-lite prompt"
     const config: { agent?: Record<string, unknown> } = {
-      agent: { "build-lite": { mode: "subagent", prompt: userPrompt } },
+      agent: { "coder-lite": { mode: "subagent", prompt: userPrompt } },
     }
     const pluginConfig = makeConfig()
 
     // when
-    await registerBuildLite(config, pluginConfig)
+    await registerCoderLite(config, pluginConfig)
 
     // then
-    const lite = config.agent?.["build-lite"] as { prompt: string }
+    const lite = config.agent?.["coder-lite"] as { prompt: string }
     expect(lite.prompt).toBe(userPrompt)
   })
 })
 
 describe("buildJanusRuntimeBindings", () => {
-  it("reports own model, consultant/explorer/coding-lane/simple routes, and job-tool discipline, with no memory line", () => {
+  it("reports own model, consultant/coder/lite/explorer routes, and job-tool discipline, with no memory line", () => {
     // given
     const config = makeConfig()
 
@@ -1100,26 +1131,24 @@ describe("buildJanusRuntimeBindings", () => {
     expect(block).toContain("## Runtime Bindings (injected by opencode-adapter)")
     expect(block).toContain("Janus model: `opencode-go/glm-5.3`")
     expect(block).toContain("`consultant` (agent `consultant`, `opencode-go/glm-5.3`)")
+    expect(block).toContain("`coder` (agent `coder`, `opencode-go/glm-5.3`)")
+    expect(block).toContain("`lite` (agent `lite`, `opencode-go/deepseek-v4.1-flash`)")
     expect(block).toContain("`explorer` (agent `consultation-explorer`")
-    expect(block).toContain("`build-lite` (agent `build-lite`, `opencode-go/glm-5.3-flash`)")
-    expect(block).toContain("`build` (agent `build`, `host default model`)")
-    expect(block).toContain("`simple` (agent `simple`, `opencode-go/deepseek-v4.1-flash`)")
-    expect(block).toContain("consultation_dispatch_wait")
-    expect(block).not.toContain("consultation-memory")
+    expect(block).toContain("janus_dispatch_wait")
+    expect(block).not.toContain("`build` (agent")
+    expect(block).not.toContain("janus-memory")
     expect(block).not.toContain("Memory namespace")
   })
 
-  it("reports DISABLED variants for the coding lanes and simple", () => {
+  it("reports the DISABLED lite variant", () => {
     // given
-    const config = makeConfig({ build_lite_enabled: false, build_enabled: false, simple_enabled: false })
+    const config = makeConfig({ lite_enabled: false })
 
     // when
     const block = buildJanusRuntimeBindings(config)
 
     // then
-    expect(block).toContain("build-lite DISABLED by configuration")
-    expect(block).toContain("build DISABLED by configuration")
-    expect(block).toContain("simple DISABLED by configuration")
+    expect(block).toContain("lite DISABLED by configuration")
   })
 })
 
@@ -1142,15 +1171,16 @@ describe("registerJanus", () => {
     }
     expect(janus.mode).toBe("all")
     expect(janus.model).toBe("opencode-go/glm-5.3")
-    expect(janus.description).toContain("Daily-driver primary agent")
+    expect(janus.description).toContain("Daily-driver primary")
     expect(janus.prompt).toContain("# Janus")
-    expect(janus.prompt).toContain("Before Implementing")
+    expect(janus.prompt).toContain("## Routing")
+    expect(janus.prompt).toContain("## General work")
     // The default model resolves its shipped slug block, replacing the placeholder.
     expect(janus.prompt).toContain("## Driving GLM-5.3")
     expect(janus.prompt).not.toContain("<!-- MODEL-PROMPT")
     expect(janus.prompt).toContain("## Runtime Bindings (injected by opencode-adapter)")
     expect(janus.prompt).not.toContain("<!-- RUNTIME-BINDINGS")
-    expect(janus.prompt).not.toContain("consultation-memory")
+    expect(janus.prompt).not.toContain("janus-memory")
   })
 
   it("overrides the model from janus_model", async () => {
@@ -1207,8 +1237,9 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
       "agents/consultation-verifier.md",
       "agents/writer.md",
       "agents/janus.md",
-      "agents/simple.md",
-      "agents/build-lite.md",
+      "agents/coder.md",
+      "agents/lite.md",
+      "agents/coder-lite.md",
     ]
 
     // when // then
@@ -1300,8 +1331,6 @@ describe("model-prompt blocks are model-property only", () => {
       /\bpool\b/i,
       /\bdelegate\b/i,
       /\b(writer|critic|verifier|analyst|explorer|consultant|janus)\b/i,
-      /\bbuild-lite\b/i,
-      /\bsimple agent\b/i,
       // runtime/operator controls the agent cannot set — keep them out of the prompt
       /thinking[_ -]?level/i,
       /reasoning[_ -]?effort/i,
@@ -1335,6 +1364,45 @@ describe("model-prompt blocks are model-property only", () => {
     }
   })
 
+  it("coder prompt encodes adaptive process weight and the design gate", async () => {
+    // given
+    const source = await readFile(resolveAsset("agents/coder.md"), "utf8")
+
+    // when // then
+    expect(source).toContain("Task triage")
+    expect(source).toContain("L0 — Direct")
+    expect(source).toContain("L1 — Brief plan")
+    expect(source).toContain("L2 — Design + plan")
+    expect(source).toContain("L3 — Quality gate")
+    expect(source).toContain("Design gate — how to ask")
+    expect(source).toContain("Do not use a heavyweight process for a simple task")
+    expect(source).toContain("Do not skip design for a complex one")
+  })
+
+  it("lite and janus prompts encode the entry/leaf boundaries", async () => {
+    // given
+    const lite = await readFile(resolveAsset("agents/lite.md"), "utf8")
+    const janus = await readFile(resolveAsset("agents/janus.md"), "utf8")
+
+    // when // then
+    expect(lite).toContain("You are a leaf: you never dispatch another agent.")
+    expect(lite).toContain("escalate to `consultant`")
+    expect(lite).toContain("escalate to `coder`")
+    expect(janus).toContain("## Routing")
+    expect(janus).toContain("`coder`")
+    expect(janus).toContain("A 1-2 tool-call task you can do yourself")
+  })
+
+  it("consultant prompt has a dispatched-mode guard and does not implement code", async () => {
+    // given
+    const source = await readFile(resolveAsset("agents/consultant.md"), "utf8")
+
+    // when // then
+    expect(source).toContain("## Dispatched mode")
+    expect(source).toContain("Do not auto-save memory")
+    expect(source).not.toContain("do the coding yourself")
+  })
+
   it("role assets do not hard-code model names or benchmark tokens", async () => {
     // given — role positioning lives here; model properties live in model-prompts
     const roleAssets = [
@@ -1345,8 +1413,9 @@ describe("model-prompt blocks are model-property only", () => {
       "agents/consultation-verifier.md",
       "agents/writer.md",
       "agents/janus.md",
-      "agents/simple.md",
-      "agents/build-lite.md",
+      "agents/coder.md",
+      "agents/lite.md",
+      "agents/coder-lite.md",
       "skills/consultation/SKILL.md",
     ]
     const modelTokens = /(GLM-|DeepSeek|Gemini|Qwen|Claude|Sonnet|Haiku|Kimi|MiMo|Terminal-Bench|GPQA|HLE|IFBench|ARC-AGI|SkillsBench|DeepSWE)/i

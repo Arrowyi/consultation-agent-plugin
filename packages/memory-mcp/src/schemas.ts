@@ -14,7 +14,7 @@ import {
   RevisionStatusSchema,
   SourceGradeSchema,
   SourceMetaSchema,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 
 export const preparedClaimSchema = z.object({
   claimType: ClaimTypeSchema,

@@ -1,7 +1,7 @@
 // Export dumps every canonical table into a MemoryExport; import validates and
 // idempotently uperts every row by primary key. Both are namespace-agnostic.
 
-import { MemoryExportSchema } from "@consultation-agent/memory-core"
+import { MemoryExportSchema } from "@janus-agent/memory-core"
 import type {
   Claim,
   Decision,
@@ -15,7 +15,7 @@ import type {
   TagMembership,
   TaxonomyNode,
   UserPreference,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 import type { SqliteDatabase } from "./driver.ts"
 import { runInTransaction } from "./driver.ts"
 

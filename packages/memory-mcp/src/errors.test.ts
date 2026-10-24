@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { MemoryError } from "@consultation-agent/memory-core"
+import { MemoryError } from "@janus-agent/memory-core"
 import { mapError } from "./errors.ts"
 
 describe("mapError", () => {

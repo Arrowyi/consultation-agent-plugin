@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { basename } from "node:path"
 import { fileURLToPath } from "node:url"
-import type { ConsultationPluginConfig } from "./plugin-config.ts"
+import type { JanusPluginConfig } from "./plugin-config.ts"
 
 interface MutableConfig {
   mcp?: Record<string, unknown>
@@ -40,7 +40,7 @@ export function resolveMemoryMcpServerEntry(moduleUrl: string = import.meta.url)
   if (existsSync(bundled)) return bundled
 
   try {
-    const pkgUrl = import.meta.resolve("@consultation-agent/memory-mcp/package.json")
+    const pkgUrl = import.meta.resolve("@janus-agent/memory-mcp/package.json")
     const fromPackage = fileURLToPath(new URL("src/server.ts", pkgUrl))
     if (existsSync(fromPackage)) return fromPackage
   } catch {
@@ -51,35 +51,35 @@ export function resolveMemoryMcpServerEntry(moduleUrl: string = import.meta.url)
 }
 
 function buildEmbeddingEnv(
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Record<string, string> {
   if (!pluginConfig.embedding) return {}
   return {
-    CONSULTATION_EMBEDDING_BASE_URL: pluginConfig.embedding.base_url,
-    CONSULTATION_EMBEDDING_API_KEY_ENV: pluginConfig.embedding.api_key_env,
-    CONSULTATION_EMBEDDING_MODEL: pluginConfig.embedding.model,
-    CONSULTATION_EMBEDDING_DIMENSIONS: String(pluginConfig.embedding.dimensions),
+    JANUS_EMBEDDING_BASE_URL: pluginConfig.embedding.base_url,
+    JANUS_EMBEDDING_API_KEY_ENV: pluginConfig.embedding.api_key_env,
+    JANUS_EMBEDDING_MODEL: pluginConfig.embedding.model,
+    JANUS_EMBEDDING_DIMENSIONS: String(pluginConfig.embedding.dimensions),
   }
 }
 
 /**
- * Register the `consultation-memory` local MCP server into the OpenCode
+ * Register the `janus-memory` local MCP server into the OpenCode
  * config.
  *
  * The command is `[bunExecutable, serverEntry]`. The environment carries
- * `CONSULTATION_NAMESPACE` and, when the plugin config has an `embedding`
- * block, the four `CONSULTATION_EMBEDDING_*` passthrough variables.
+ * `JANUS_NAMESPACE` and, when the plugin config has an `embedding`
+ * block, the four `JANUS_EMBEDDING_*` passthrough variables.
  */
 export function registerMemoryMcp(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
   namespace: string,
 ): void {
   const bun = resolveBunExecutable()
   const serverEntry = resolveMemoryMcpServerEntry()
 
   const environment: Record<string, string> = {
-    CONSULTATION_NAMESPACE: namespace,
+    JANUS_NAMESPACE: namespace,
     ...buildEmbeddingEnv(pluginConfig),
   }
 
@@ -91,5 +91,5 @@ export function registerMemoryMcp(
   }
 
   if (!config.mcp) config.mcp = {}
-  config.mcp["consultation-memory"] = entry
+  config.mcp["janus-memory"] = entry
 }

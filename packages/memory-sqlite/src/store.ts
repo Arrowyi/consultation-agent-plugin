@@ -5,7 +5,7 @@
 
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
-import { computePreviewToken, containsSecret, MemoryError } from "@consultation-agent/memory-core"
+import { computePreviewToken, containsSecret, MemoryError } from "@janus-agent/memory-core"
 import type {
   CommitInput,
   CommitResult,
@@ -18,7 +18,7 @@ import type {
   PrepareResult,
   RecallQuery,
   RecallResult,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 import { configureConnection, loadSqliteDriver, runInTransaction, type SqliteDatabase } from "./driver.ts"
 import { resolveStoragePaths, type StoragePaths } from "./paths.ts"
 import { runMigrations } from "./migrations.ts"

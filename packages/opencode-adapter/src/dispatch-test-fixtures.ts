@@ -46,8 +46,9 @@ export const validRoleSpecs: Array<{ label: string; role: DispatchRole; record: 
   { label: "writer-bundled", role: "writer", record: makeJobSpec({ role: "writer", agent_name: "consultation-writer", model_chain: ["opencode/claude-sonnet-5-5"] }) },
   { label: "writer-delegate-model", role: "writer", record: makeJobSpec({ role: "writer", agent_name: "host-writer", model_chain: ["custom/model"] }) },
   { label: "writer-delegate-null", role: "writer", record: makeJobSpec({ role: "writer", agent_name: "host-writer", model_chain: [null] }) },
-  { label: "simple", role: "simple", record: makeJobSpec({ role: "simple", agent_name: "simple", model_chain: ["opencode-go/deepseek-v4.1-flash"] }) },
-  { label: "build-lite", role: "build-lite", record: makeJobSpec({ role: "build-lite", agent_name: "build-lite", model_chain: ["opencode-go/glm-5.3-flash"] }) },
+  { label: "lite", role: "lite", record: makeJobSpec({ role: "lite", agent_name: "lite", model_chain: ["opencode-go/deepseek-v4.1-flash"] }) },
+  { label: "coder", role: "coder", record: makeJobSpec({ role: "coder", agent_name: "coder", model_chain: ["opencode-go/glm-5.3"] }) },
+  { label: "coder-lite", role: "coder-lite", record: makeJobSpec({ role: "coder-lite", agent_name: "coder-lite", model_chain: ["opencode-go/glm-5.3-flash"] }) },
   { label: "build-host", role: "build", record: makeJobSpec({ role: "build", agent_name: "build", model_chain: [null] }) },
   { label: "consultant", role: "consultant", record: makeJobSpec({ role: "consultant", agent_name: "consultant", model_chain: ["opencode-go/glm-5.3"] }) },
 ]
@@ -99,7 +100,7 @@ export function makeEnvelope(
     session_id: overrides.session_id ?? FAKE_SESSION_ID,
     waited_ms: overrides.waited_ms ?? 0,
     reason: overrides.reason ?? "waiting for specialist",
-    next: overrides.next ?? "consultation_dispatch_wait",
+    next: overrides.next ?? "janus_dispatch_wait",
   }
 }
 
@@ -113,7 +114,7 @@ export function makeCancelledEnvelope(overrides: Partial<DispatchCancelledEnvelo
     session_id: overrides.session_id ?? FAKE_SESSION_ID,
     waited_ms: overrides.waited_ms ?? 0,
     reason: overrides.reason ?? "cancelled by user",
-    next: overrides.next ?? "consultation_dispatch_wait",
+    next: overrides.next ?? "janus_dispatch_wait",
   }
 }
 

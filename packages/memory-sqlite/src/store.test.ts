@@ -9,7 +9,7 @@ import {
   MemoryError,
   computeFingerprint,
   containsSecret,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 import { type OpenedMemoryStore, openMemoryStore } from "./index.ts"
 
 const directories: string[] = []
@@ -18,7 +18,7 @@ afterEach(async () => {
 })
 
 async function openStore(embedding?: OpenedMemoryStore["embedding"] | null): Promise<OpenedMemoryStore> {
-  const directory = await mkdtemp(join(tmpdir(), "consultation-memory-"))
+  const directory = await mkdtemp(join(tmpdir(), "janus-memory-"))
   directories.push(directory)
   return openMemoryStore({ dataDir: directory, stateDir: directory, cacheDir: directory, embedding: embedding ?? null })
 }

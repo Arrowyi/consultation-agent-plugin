@@ -41,7 +41,10 @@ function assertError(result: { ok: true; value: unknown } | { ok: false; error: 
 
 describe("dispatch role constants", () => {
   it("exports roles, budget and default wait", () => {
-    expect(DISPATCH_ROLES).toEqual(["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build", "consultant"])
+    expect(DISPATCH_ROLES).toEqual([
+      "explorer", "analyst", "critic", "verifier", "writer",
+      "lite", "coder-lite", "coder", "build", "consultant",
+    ])
     expect(PRODUCTION_WAIT_BUDGET_MS).toBe(300_000)
     expect(DEFAULT_WAIT_MS).toBe(PRODUCTION_WAIT_BUDGET_MS)
   })
@@ -125,7 +128,7 @@ describe("envelope parsing and serialization", () => {
     expect(parsedPending.attempt).toEqual({ index: 0, model: "opencode/claude-sonnet-5-5" })
     expect(parsedPending.session_id).toBe(FAKE_SESSION_ID)
     expect(parsedPending.waited_ms).toBe(1_000)
-    expect(parsedPending.next).toBe("consultation_dispatch_wait")
+    expect(parsedPending.next).toBe("janus_dispatch_wait")
 
     const cancelled = makeCancelledEnvelope()
     const parsedCancelled = assertOk(parseOutcomeEnvelope(serializeOutcome({ kind: "cancelled", envelope: cancelled })))

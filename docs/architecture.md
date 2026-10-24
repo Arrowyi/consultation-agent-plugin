@@ -1,12 +1,12 @@
-# Consultation Agent Plugin Architecture
+# Janus Agent Plugin Architecture
 
-The living architecture specification for the consultation-agent plugin, describing the current implementation and mechanism. Harness: OpenCode. The core is harness-neutral; Codex, Senpi, and other hosts plug in through thin adapters. Change history lives in git, not in this document.
+The living architecture specification for the janus-agent plugin, describing the current implementation and mechanism. Harness: OpenCode. The core is harness-neutral; Codex, Senpi, and other hosts plug in through thin adapters. Change history lives in git, not in this document.
 
 ## 1. Executive Decision
 
-Build an independent consultation plugin with a harness-neutral consultation core, a harness-neutral memory core, a local SQLite store, a local MCP interface, and a thin OpenCode adapter.
+Build an independent Janus agent plugin with a harness-neutral consultation core, a harness-neutral memory core, a local SQLite store, a local MCP interface, and a thin OpenCode adapter.
 
-The public experience is a single, concise, evidence-driven `consultant` primary agent with six modes (`select`, `verify`, `plan`, `research`, `guide`, `author`). It answers simple questions briefly, produces a one-screen decision brief for decision questions, an operational playbook for composite end-to-end goals, a readable research report for open-ended understanding questions, and a durable technical document (tutorial, architecture analysis, or technical explanation) behind one outline-approval gate, and distinguishes verified facts from synthesis.
+The public experience is a small agent family with one default entry and three direct-entry shortcuts: `janus` (default general/routing), `consultant` (evidence-driven advice in six modes: `select`, `verify`, `plan`, `research`, `guide`, `author`), `coder` (coding with adaptive L0/L1/L2/L3 process weight), and `lite` (economical quick answers). The consultant leads the research team (`explorer`, `analyst`, `critic`, `verifier`, `writer`); the coder owns the coding lanes (`coder-lite`, optional host `build`). The consultant produces decision briefs, playbooks, research reports, and durable documents behind one outline-approval gate, and distinguishes verified facts from synthesis. The coder discusses design/architecture before editing for multi-file or correctness-critical work and gates that discussion on user approval.
 
 The memory system stores only user-approved experience packages. It does not automatically persist complete conversations. Canonical experience records remain independent of classification schemes, summarization models, embedding models, and storage indexes. Every derived view can be rebuilt.
 
@@ -56,7 +56,7 @@ flowchart TB
 ### 4.1 Proposed Repository Shape
 
 ```text
-consultation-agent-plugin/
+janus-agent-plugin/
 ├── packages/
 │   ├── consultation-core/
 │   ├── memory-core/
@@ -92,7 +92,7 @@ Core packages must not import OpenCode or the MCP SDK. Adapters translate host a
 
 ### 5.1 Consultant Agent
 
-The `consultant` primary agent is the single entry point and owns interaction and final expression. It routes every question to one of six modes — `select`, `verify`, `plan`, `research`, `guide`, or `author` — and a tier (fast, standard, or deep; `author` never uses fast). It:
+The `consultant` primary agent owns the evidence workflow and final expression for consultation requests. `janus` is the default general/routing entry; `coder` owns coding; `lite` is the economical quick-answer leaf. The consultant routes every question to one of six modes — `select`, `verify`, `plan`, `research`, `guide`, or `author` — and a tier (fast, standard, or deep; `author` never uses fast). It:
 
 - detects the mode from intent and chooses the tier;
 - identifies decision-changing missing information;
@@ -170,12 +170,14 @@ The local stdio MCP server exposes a stable cross-harness memory boundary. It re
 
 The first adapter:
 
-- registers the `consultant` primary agent;
+- registers the `janus` default entry, the `consultant` evidence entry, the `coder` coding entry, and the `lite` economical leaf;
+- registers the five research subagents (explorer, analyst, critic, verifier, writer — all read-only, shell-denied, and dispatch-denied; the writer is optional via `writer_enabled`);
+- registers the `coder-lite` mechanical coding lane (leaf, step-capped) and accepts the optional host `build` delegation target;
 - makes the consultation skill available;
 - registers or launches the bundled local memory MCP;
 - maps OpenCode session IDs into namespaced core IDs;
 - exposes model and provider configuration;
-- registers the five read-only team subagents (explorer, analyst, critic, verifier, writer — the writer additionally denies shell execution and is optional via `writer_enabled`) and installs the `consultation-memory` browse command;
+- installs the `janus-memory` browse command;
 - does not contain evidence, recommendation, or persistence logic.
 
 ## 6. Consultation Workflow
@@ -261,7 +263,9 @@ The router evaluates:
 
 ### 6.3 Team Roles and Tier Caps
 
-The consultant leads five specialist subagent roles through `consultation_dispatch`. Its skill is the authoritative task-fit policy: assign bounded work when a role could materially change the result or its relevance cannot yet be ruled out; skip only when a task-specific reason establishes the role is unnecessary. Independent gathering may fan out; analysis follows evidence, critique follows a draft conclusion, and substantive authoring follows outline approval. The consultant retains final synthesis and delivery.
+The consultant leads five research/writing subagent roles through `janus_dispatch`. Its skill is the authoritative task-fit policy: assign bounded work when a role could materially change the result or its relevance cannot yet be ruled out; skip only when a task-specific reason establishes the role is unnecessary. Independent gathering may fan out; analysis follows evidence, critique follows a draft conclusion, and substantive authoring follows outline approval. The consultant retains final synthesis and delivery.
+
+Entry roles and execution delegates are separate from this research roster: `janus` (default general entry), `consultant` (evidence entry), `coder` (coding entry), and `lite` (economical leaf) are user-selectable; `coder` owns the `coder-lite` mechanical lane and the optional host `build` escalation. The tier caps below apply only to the research team.
 
 | Role | Purpose |
 |---|---|
@@ -269,7 +273,7 @@ The consultant leads five specialist subagent roles through `consultation_dispat
 | `analyst` | independent cross-model reasoning over evidence |
 | `critic` | adversarial counter-evidence pass; hard gate over research hypotheses |
 | `verifier` | bounded audit of manipulation or opaque independence in user/third-party/promotional evidence; missing observations produce `unknown` |
-| `writer` | blueprint before approval, usable section/chapter prose after approval, or editorial review for `author` (plugin-owned: edit and shell denied) |
+| `writer` | blueprint before approval, usable section/chapter prose after approval, or editorial review for `author` (plugin-owned: edit, shell, and dispatch denied) |
 
 Per-tier **maximum** instance counts (`TIER_ROLE_CAPS`, mirrored by the adapter's validated `tier_role_caps` config), never minimums or a required team roster:
 
@@ -279,7 +283,7 @@ Per-tier **maximum** instance counts (`TIER_ROLE_CAPS`, mirrored by the adapter'
 | standard | 5 | 1 | 1 | 1 | 1 |
 | deep | 5 | 3 | 2 | 2 | 2 |
 
-`author` never runs at fast tier. The writer is optional (`writer_enabled`, default true); when it is disabled or unavailable, the consultant discloses which writing check is missing and may work inline without implying an independent writer review. A legacy custom cap matrix without `writer` still parses and resolves `writer` to 0. The caps are presently passed to the consultant as configuration, not enforced by a per-turn runtime scheduler; zero means the role is unavailable at that tier and the consultant must disclose a material gap.
+`author` never runs at fast tier. The writer is optional (`writer_enabled`, default true); when it is disabled or unavailable, the consultant discloses which writing check is missing and may work inline without implying an independent writer review. The caps are passed to the consultant as configuration, not enforced by a per-turn runtime scheduler; zero means the role is unavailable at that tier and the consultant must disclose a material gap.
 
 ### 6.4 Recoverable Dispatch API
 
@@ -287,19 +291,19 @@ All roles share the same recoverable dispatch lifecycle; every agent resolves to
 
 | Tool | Arguments | Contract |
 |---|---|---|
-| `consultation_dispatch` | `{role, prompt}`; role is explorer, analyst, critic, verifier or writer | Launch a durable host-session job and observe within a soft wait window |
-| `consultation_dispatch_wait` | `{job_id, wait_ms?}` | Recover/observe the same job; optional integer `wait_ms` is 0..300000, default 300000; zero performs a snapshot |
-| `consultation_dispatch_cancel` | `{job_id}` | Request explicit cancellation and reconcile durable completion/abort evidence |
+| `janus_dispatch` | `{role, prompt}`; role is a configured dispatch role (`consultant`, `coder`, `lite`, the five research roles, `coder-lite`, or optional `build`) | Launch a durable host-session job and observe within a soft wait window |
+| `janus_dispatch_wait` | `{job_id, wait_ms?}` | Recover/observe the same job; optional integer `wait_ms` is 0..300000, default 300000; zero performs a snapshot |
+| `janus_dispatch_cancel` | `{job_id}` | Request explicit cancellation and reconcile durable completion/abort evidence |
 
-Launch uses a 300000 ms soft observation window, not a specialist execution deadline. Completed usable reports remain plain text and confirmed failures use `Error:` text. Nonterminal JSON envelopes identify `job_id`, `session_id`, `role`, `attempt`, `status` (`pending`, `unknown`, or `cancelling`) and `next: "consultation_dispatch_wait"`. A `cancelled` envelope requires confirmed abort evidence; normal completion racing cancellation wins and preserves the original report.
+Launch uses a 300000 ms soft observation window, not a specialist execution deadline. Completed usable reports remain plain text and confirmed failures use `Error:` text. Nonterminal JSON envelopes identify `job_id`, `session_id`, `role`, `attempt`, `status` (`pending`, `unknown`, or `cancelling`) and `next: "janus_dispatch_wait"`. A `cancelled` envelope requires confirmed abort evidence; normal completion racing cancellation wins and preserves the original report.
 
 Expiry or an observation-context abort stops waiting, not the child job. Pending means work remains active; unknown means available host evidence does not establish the outcome, not confirmed failure. Keep the same job ID for later waits, including through a fresh coordinator after restart, without a duplicate generating request. Wait/cancel enforce the caller's parent session and workspace ownership. Only explicit cancellation requests may abort work; cancellation remains `cancelling` until reconciled.
 
-Each job is a durable host session rooted under the caller's session (`[consultation-dispatch:v1] <role>`). The first attempt's generation runs directly in that job session, so the dispatched prompt and the specialist's live messages are visible there; journal records are written as ignored/synthetic user messages and stay out of the conversation. Every job is a single attempt; the child-session advance seam (`[consultation-dispatch:v1] attempt <role>`) is retained for a possible future re-added fallback and is inert while every chain is single-element.
+Each job is a durable host session rooted under the caller's session (`[consultation-dispatch:v1] <role>`). The first attempt's generation runs directly in that job session, so the dispatched prompt and the specialist's live messages are visible there; journal records are written as ignored/synthetic user messages and stay out of the conversation. Every job is a single attempt.
 
 The consultant may do independent preparation within existing permissions and caps while waiting, but must integrate the eventual specialist report before dependent synthesis and cannot silently substitute inline work or claim an independent check that did not return. Execution status comes from host session/message evidence, not from specialist liveness assertions. A verifier's evidence-quality `unknown` is distinct from a dispatch execution `unknown`.
 
-Every role has one configured attempt and every agent resolves to a single model; no failure kind — pending, unknown, non-retryable, or confirmed retryable — triggers a plugin fallback advance (the `writer_fallback_models` chain was removed; the generic chain-walking seam stays inert). A durable job-spec journaled by a pre-upgrade plugin with a multi-element model_chain can still advance on a confirmed retryable failure when waited on post-upgrade — retained deliberately for legacy-job correctness. A delegated writer also has one configured attempt, with either a pinned model or host model selection (`null` in the durable spec), and retains host-defined permissions. This describes plugin model resolution, not the external host's internal retry policy. See [the per-role audit matrix and verification levels](../evals/README.md#per-role-audit-matrix).
+Every role has one configured attempt and every agent resolves to a single model; no failure kind — pending, unknown, non-retryable, or confirmed retryable — triggers a plugin fallback advance. A delegated writer also has one configured attempt, with either a pinned model or host model selection (`null` in the durable spec), and retains host-defined permissions. This describes plugin model resolution, not the external host's internal retry policy. See [the per-role audit matrix and verification levels](../evals/README.md#per-role-audit-matrix).
 
 ## 7. Epistemic Model
 
@@ -557,9 +561,9 @@ The memory server is registered globally on the host config (`config.mcp`), so i
 Use XDG paths with configurable overrides:
 
 ```text
-$XDG_DATA_HOME/consultation-agent/memory.sqlite3
-$XDG_STATE_HOME/consultation-agent/
-$XDG_CACHE_HOME/consultation-agent/
+$XDG_DATA_HOME/janus-agent/memory.sqlite3
+$XDG_STATE_HOME/janus-agent/
+$XDG_CACHE_HOME/janus-agent/
 ```
 
 The database and user-controlled exports belong in data. Locks, pending enrichment state, and operational records belong in state. Rebuildable query caches belong in cache.
@@ -712,7 +716,8 @@ Run a real isolated OpenCode instance and prove:
 The first version includes:
 
 - independent plugin packaging;
-- the `consultant` OpenCode primary agent;
+- the `janus` default entry, `consultant` evidence entry, `coder` coding entry, and `lite` economical leaf;
+- the five research subagents and the `coder-lite` mechanical lane;
 - the reusable consultation skill;
 - consultation and memory core packages;
 - SQLite persistence with FTS;

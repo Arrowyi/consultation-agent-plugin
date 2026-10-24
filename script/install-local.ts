@@ -3,8 +3,8 @@
  * Install a packaged (bundled) build into a stable prefix.
  *
  * Builds `dist/`, stages `dist/` + `assets/` into
- * `$CONSULTATION_INSTALL_DIR` or `$XDG_DATA_HOME/consultation-agent-plugin`
- * (default `~/.local/share/consultation-agent-plugin`), and verifies the
+ * `$JANUS_INSTALL_DIR` or `$XDG_DATA_HOME/janus-agent-plugin`
+ * (default `~/.local/share/janus-agent-plugin`), and verifies the
  * result. The installed bundle is self-contained: it needs neither the repo
  * source nor node_modules at runtime.
  *
@@ -25,13 +25,14 @@ export const REQUIRED_INSTALLED_FILES = [
   "dist/index.js",
   "dist/memory-mcp-server.js",
   "assets/agents/analyst.md",
-  "assets/agents/build-lite.md",
+  "assets/agents/coder.md",
+  "assets/agents/coder-lite.md",
   "assets/agents/consultant.md",
   "assets/agents/consultation-critic.md",
   "assets/agents/consultation-verifier.md",
   "assets/agents/explorer.md",
   "assets/agents/janus.md",
-  "assets/agents/simple.md",
+  "assets/agents/lite.md",
   "assets/agents/writer.md",
   "assets/model-prompts/claudesonnet55.md",
   "assets/model-prompts/gemini38flash.md",
@@ -44,15 +45,15 @@ export const REQUIRED_INSTALLED_FILES = [
 ]
 
 export function resolveInstallRoot(env: NodeJS.ProcessEnv): string {
-  if (env.CONSULTATION_INSTALL_DIR && env.CONSULTATION_INSTALL_DIR.length > 0) {
-    return env.CONSULTATION_INSTALL_DIR
+  if (env.JANUS_INSTALL_DIR && env.JANUS_INSTALL_DIR.length > 0) {
+    return env.JANUS_INSTALL_DIR
   }
   const home = env.HOME && env.HOME.length > 0 ? env.HOME : homedir()
   const dataHome =
     env.XDG_DATA_HOME && env.XDG_DATA_HOME.length > 0
       ? env.XDG_DATA_HOME
       : join(home, ".local", "share")
-  return join(dataHome, "consultation-agent-plugin")
+  return join(dataHome, "janus-agent-plugin")
 }
 
 async function runBuild(): Promise<void> {
@@ -94,7 +95,7 @@ function writeManifests(installRoot: string): void {
     join(installRoot, "package.json"),
     `${JSON.stringify(
       {
-        name: "@consultation-agent/opencode-adapter",
+        name: "@janus-agent/opencode-adapter",
         version,
         type: "module",
         main: "dist/index.js",
@@ -140,7 +141,7 @@ async function main(): Promise<void> {
   console.log(`  "plugin": ["${entry}"]`)
   console.log("")
   console.log("Verify the installed artifact:")
-  console.log(`  CONSULTATION_PLUGIN_ENTRY=${entry} bun run integration`)
+  console.log(`  JANUS_PLUGIN_ENTRY=${entry} bun run integration`)
 }
 
 if (import.meta.main) {

@@ -16,10 +16,10 @@
     "types": ["bun"],
     "baseUrl": ".",
     "paths": {
-      "@consultation-agent/consultation-core": ["packages/consultation-core/src/index.ts"],
-      "@consultation-agent/memory-core": ["packages/memory-core/src/index.ts"],
-      "@consultation-agent/memory-sqlite": ["packages/memory-sqlite/src/index.ts"],
-      "@consultation-agent/memory-mcp": ["packages/memory-mcp/src/index.ts"]
+      "@janus-agent/consultation-core": ["packages/consultation-core/src/index.ts"],
+      "@janus-agent/memory-core": ["packages/memory-core/src/index.ts"],
+      "@janus-agent/memory-sqlite": ["packages/memory-sqlite/src/index.ts"],
+      "@janus-agent/memory-mcp": ["packages/memory-mcp/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/package.json", "evals/**/*.ts", "script/**/*.ts"]

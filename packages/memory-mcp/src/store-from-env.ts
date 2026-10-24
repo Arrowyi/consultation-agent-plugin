@@ -1,18 +1,18 @@
-// Build OpenStoreOptions from CONSULTATION_* env vars and open a MemoryStore.
+// Build OpenStoreOptions from JANUS_* env vars and open a MemoryStore.
 // Embedding provider is created ONLY when all 4 embedding env vars are set.
 
-import type { MemoryStore } from "@consultation-agent/memory-core"
+import type { MemoryStore } from "@janus-agent/memory-core"
 import {
   createOpenAICompatibleEmbeddingProvider,
   openMemoryStore,
   type EmbeddingProvider,
   type OpenStoreOptions,
-} from "@consultation-agent/memory-sqlite"
+} from "@janus-agent/memory-sqlite"
 
 export function storeOptionsFromEnv(env: NodeJS.ProcessEnv): OpenStoreOptions {
-  const dataDir = nonEmpty(env.CONSULTATION_DATA_DIR)
-  const stateDir = nonEmpty(env.CONSULTATION_STATE_DIR)
-  const cacheDir = nonEmpty(env.CONSULTATION_CACHE_DIR)
+  const dataDir = nonEmpty(env.JANUS_DATA_DIR)
+  const stateDir = nonEmpty(env.JANUS_STATE_DIR)
+  const cacheDir = nonEmpty(env.JANUS_CACHE_DIR)
   const embedding = embeddingFromEnv(env)
   return {
     ...(dataDir === undefined ? {} : { dataDir }),
@@ -27,10 +27,10 @@ export async function openStoreFromEnv(env: NodeJS.ProcessEnv): Promise<MemorySt
 }
 
 function embeddingFromEnv(env: NodeJS.ProcessEnv): EmbeddingProvider | undefined {
-  const baseUrl = nonEmpty(env.CONSULTATION_EMBEDDING_BASE_URL)
-  const model = nonEmpty(env.CONSULTATION_EMBEDDING_MODEL)
-  const apiKeyEnv = nonEmpty(env.CONSULTATION_EMBEDDING_API_KEY_ENV)
-  const dimensionsStr = nonEmpty(env.CONSULTATION_EMBEDDING_DIMENSIONS)
+  const baseUrl = nonEmpty(env.JANUS_EMBEDDING_BASE_URL)
+  const model = nonEmpty(env.JANUS_EMBEDDING_MODEL)
+  const apiKeyEnv = nonEmpty(env.JANUS_EMBEDDING_API_KEY_ENV)
+  const dimensionsStr = nonEmpty(env.JANUS_EMBEDDING_DIMENSIONS)
   if (baseUrl === undefined || model === undefined || apiKeyEnv === undefined || dimensionsStr === undefined) {
     return undefined
   }

@@ -3,7 +3,7 @@
 // inside handlers. Uses the low-level Server setRequestHandler API to avoid
 // the zod version mismatch between the project (v3.25.76) and the SDK (v4.1.8).
 
-import { MemoryError } from "@consultation-agent/memory-core"
+import { MemoryError } from "@janus-agent/memory-core"
 import type {
   CommitInput,
   ExpandInput,
@@ -11,7 +11,7 @@ import type {
   MemoryStore,
   PrepareInput,
   RecallQuery,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 import {
   commitInputSchema,
   expandInputSchema,

@@ -1,8 +1,8 @@
 {
-  "name": "@consultation-agent/opencode-adapter",
+  "name": "@janus-agent/opencode-adapter",
   "version": "0.1.0",
   "type": "module",
-  "description": "Thin OpenCode plugin adapter that registers the consultant primary agent, the consultation-memory MCP server, and the consultation skill.",
+  "description": "Thin OpenCode plugin adapter that registers the Janus agent family, the janus-memory MCP server, and the consultation skill.",
   "exports": {
     ".": {
       "types": "./src/index.ts",

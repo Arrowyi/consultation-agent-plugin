@@ -1,5 +1,10 @@
 import { tool, type ToolContext, type ToolDefinition, type PluginInput } from "@opencode-ai/plugin"
-import { loadPluginConfig, resolveRoleModel, resolveRoleModelChain, type ConsultationPluginConfig } from "./plugin-config.ts"
+import {
+  loadPluginConfig,
+  resolveRoleModel,
+  resolveRoleModelChain,
+  type JanusPluginConfig,
+} from "./plugin-config.ts"
 import {
   DISPATCH_ROLES,
   createKeyedMutex,
@@ -16,11 +21,9 @@ import { splitModel, errorText, isRetryableModelError } from "./dispatch-helpers
 export { splitModel, errorText, isRetryableModelError }
 
 /**
- * The eight dispatchable roles (five specialists, the simple generalist, the
- * build-lite mechanical lane, and the build host-routing role). Each maps to
- * one of our own subagents or the host's configured agent; this tool never
- * touches any other agent, the built-in `task` tool, or any other plugin's
- * dispatch mechanism.
+ * The ten dispatch roles: the five research specialists, the two entry
+ * delegates (consultant, coder), the economical leaf (lite), the mechanical
+ * lane (coder-lite), and the optional host build target.
  */
 export { DISPATCH_ROLES }
 export type { DispatchRole }
@@ -31,7 +34,7 @@ export interface RoleTarget {
 }
 
 export function resolveRoleTarget(
-  config: ConsultationPluginConfig,
+  config: JanusPluginConfig,
   role: DispatchRole,
 ): RoleTarget {
   switch (role) {
@@ -48,10 +51,12 @@ export function resolveRoleTarget(
         return { agentName: config.writer_delegate_agent, model: config.writer_delegate_model }
       }
       return { agentName: config.writer_agent, model: resolveRoleModel(config, "writer") }
-    case "simple":
-      return { agentName: config.simple_agent, model: resolveRoleModel(config, "simple") }
-    case "build-lite":
-      return { agentName: config.build_lite_agent, model: resolveRoleModel(config, "build-lite") }
+    case "coder":
+      return { agentName: config.coder_agent, model: resolveRoleModel(config, "coder") }
+    case "lite":
+      return { agentName: config.lite_agent, model: resolveRoleModel(config, "lite") }
+    case "coder-lite":
+      return { agentName: config.coder_lite_agent, model: resolveRoleModel(config, "coder-lite") }
     case "build":
       return { agentName: config.build_agent, model: config.build_model }
     case "consultant":
@@ -68,12 +73,13 @@ export interface DispatchToolDeps {
 /**
  * Build the three consultation job tools with one shared coordinator set.
  *
- * It dispatches ONLY to the consultation team roles (`explorer`, `analyst`,
- * `critic`, `verifier`, `writer`, `simple`, `build-lite`, `build`) using the
- * recoverable lifecycle coordinator. It is additive: it neither shadows nor
- * interferes with the built-in `task` tool or any other plugin's tools.
+ * It dispatches ONLY to the consultation roles (`consultant`, `coder`, `lite`,
+ * `explorer`, `analyst`, `critic`, `verifier`, `writer`, `coder-lite`, `build`)
+ * using the recoverable lifecycle coordinator. It is additive: it neither
+ * shadows nor interferes with the built-in `task` tool or any other plugin's
+ * tools.
  */
-export function createConsultationDispatchTools(
+export function createJanusDispatchTools(
   client: PluginInput["client"],
   deps: DispatchToolDeps = {},
 ) {
@@ -87,7 +93,7 @@ export function createConsultationDispatchTools(
 
   const dispatch = tool({
     description:
-      "Dispatch ONLY to a consultation team role (explorer, analyst, critic, verifier, writer, simple, build-lite, build, consultant). Returns its result or a recoverable job id if still working after a soft wait; call consultation_dispatch_wait with that job id to continue waiting.",
+      "Dispatch ONLY to a consultation role (consultant, coder, lite, explorer, analyst, critic, verifier, writer, coder-lite, build). Returns its result or a recoverable job id if still working after a soft wait; call janus_dispatch_wait with that job id to continue waiting.",
     args: {
       role: tool.schema.enum(DISPATCH_ROLES),
       prompt: tool.schema.string(),
@@ -100,8 +106,9 @@ export function createConsultationDispatchTools(
         critic: config.critic_enabled,
         verifier: config.verifier_enabled,
         writer: config.writer_enabled || config.writer_delegate_agent !== undefined,
-        simple: config.simple_enabled,
-        "build-lite": config.build_lite_enabled,
+        coder: config.coder_enabled,
+        lite: config.lite_enabled,
+        "coder-lite": config.coder_lite_enabled,
         build: config.build_enabled,
         consultant: true,
       }
@@ -147,7 +154,7 @@ export function createConsultationDispatchTools(
 
   const cancel = tool({
     description:
-      "Request cancellation of a pending consultation job. May return a cancelling status if cancellation is not yet confirmed; use consultation_dispatch_wait to reconcile. Already completed results are preserved.",
+      "Request cancellation of a pending consultation job. May return a cancelling status if cancellation is not yet confirmed; use janus_dispatch_wait to reconcile. Already completed results are preserved.",
     args: { job_id: tool.schema.string() },
     async execute(args, context: ToolContext): Promise<string> {
       return cancelHandler.cancel({
@@ -160,15 +167,15 @@ export function createConsultationDispatchTools(
   })
 
   return {
-    consultation_dispatch: dispatch,
-    consultation_dispatch_wait: wait,
-    consultation_dispatch_cancel: cancel,
+    janus_dispatch: dispatch,
+    janus_dispatch_wait: wait,
+    janus_dispatch_cancel: cancel,
   }
 }
 
-export function createConsultationDispatchTool(
+export function createJanusDispatchTool(
   client: PluginInput["client"],
   deps: DispatchToolDeps = {},
 ): ToolDefinition {
-  return createConsultationDispatchTools(client, deps).consultation_dispatch
+  return createJanusDispatchTools(client, deps).janus_dispatch
 }

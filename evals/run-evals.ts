@@ -147,7 +147,7 @@ async function main(): Promise<void> {
   const deterministic = all.filter((c) => c.grading === "deterministic")
   const model = all.filter((c) => c.grading === "model")
 
-  console.log("consultation-agent-plugin evaluation checklist")
+  console.log("janus-agent-plugin evaluation checklist")
   for (const g of loaded) {
     console.log(`  ${g.label}: ${g.cases.length} cases`)
   }

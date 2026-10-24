@@ -6,7 +6,7 @@ import { resolveOpencodeConfigDir } from "./skill-installer.ts"
  * The unified prefix for the memory-browse slash command, matching the CLI
  * binary and the MCP server name so all three surfaces share one name.
  */
-export const MEMORY_COMMAND_PREFIX = "consultation-memory"
+export const MEMORY_COMMAND_PREFIX = "janus-memory"
 
 const USER_MODIFIED_MARKER = "<!-- user-modified -->"
 
@@ -15,7 +15,7 @@ function commandContent(): string {
 description: Browse and manage your saved consultations — list them, view one, or delete/forget one or many at once.
 ---
 
-Help the user browse and manage their saved consultations using the consultation-memory MCP tools (memory_recall / memory_expand / memory_manage). Do NOT run the consultation-memory CLI here: the MCP tools already own this workflow.
+Help the user browse and manage their saved consultations using the janus-memory MCP tools (memory_recall / memory_expand / memory_manage). Do NOT run the janus-memory CLI here: the MCP tools already own this workflow.
 
 1. List them: call \`memory_recall\` with \`tier: "standard"\`, \`limit: 50\`, and \`expandTop: 50\` so each consultation's current conclusion is included. Present the result as a numbered list, ONE line per consultation — the question summary (title), a short conclusion, and the date. Keep it compact. If it is empty, say there are no saved consultations yet and suggest asking the consultant a question first.
 
@@ -39,13 +39,13 @@ Help the user browse and manage their saved consultations using the consultation
 
 4. For any delete/forget/keep command (especially a batch), FIRST show the user exactly which consultations will be affected (their numbers and titles) plus the total count, and ask them to confirm. Only after they confirm, call \`memory_manage\` once per target \`itemId\`, then report the result (e.g., "已删除 5 条：<titles>"). If a position is out of range, say so and do nothing until they give valid ones.
 
-This lists consultations for the current project (memory is per-project). For a cross-project global list, run the consultation-memory CLI when OpenCode is not running.
+This lists consultations for the current project (memory is per-project). For a cross-project global list, run the janus-memory CLI when OpenCode is not running.
 `
 }
 
 /**
  * Install the memory-browse slash command into the opencode config directory.
- * Writes `<configDir>/commands/consultation-memory.md` with the resolved CLI
+ * Writes `<configDir>/commands/janus-memory.md` with the resolved CLI
  * path baked in. Written only when missing or when the content differs; a file
  * whose first line is `<!-- user-modified -->` is never overwritten.
  */

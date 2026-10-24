@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Isolated OpenCode integration proof for the consultation-agent plugin.
+ * Isolated OpenCode integration proof for the janus-agent plugin.
  *
  * Behavior:
  *   (a) If `opencode` is not on PATH, print a clear SKIP message and exit 0.
@@ -10,7 +10,7 @@
  *   (c) Write `<sandbox>/config/opencode/opencode.json` with a `file://`
  *       plugin entry. By default this script builds the bundle and installs it
  *       into a fresh temporary prefix, then points OpenCode at that installed
- *       `dist/index.js`. Override the entry with `CONSULTATION_PLUGIN_ENTRY`
+ *       `dist/index.js`. Override the entry with `JANUS_PLUGIN_ENTRY`
  *       (bare path or `file://` URL) to test another build.
  *   (d) Spawn `opencode serve --port <free>` (a free port is picked via a
  *       short-lived Bun.serve so health polling has a known target; --port 0
@@ -18,7 +18,7 @@
  *       fragile across versions). Wait for readiness via /global/health.
  *   (e) Assert via HTTP: GET /config responds 200 and its JSON contains the
  *       `consultant` agent key, the `consultation-writer` agent key, and the
- *       `consultation-memory` mcp key.
+ *       `janus-memory` mcp key.
  *   (f) Assert the consultation skill file was installed at
  *       `<sandbox>/config/opencode/skills/consultation/SKILL.md` and contains
  *       the `author` mode contract.
@@ -150,7 +150,7 @@ async function main(): Promise<void> {
         if (status === 200) {
           const json: unknown = await resp.json()
           const hasConsultant = hasNestedKey(json, "agent", "consultant")
-          const hasMemoryMcp = hasNestedKey(json, "mcp", "consultation-memory")
+          const hasMemoryMcp = hasNestedKey(json, "mcp", "janus-memory")
           const hasWriter = hasNestedKey(json, "agent", "consultation-writer")
           assertions.push({
             name: "config has consultant agent key",
@@ -158,27 +158,23 @@ async function main(): Promise<void> {
             detail: hasConsultant ? "agent.consultant present" : "agent.consultant MISSING",
           })
           assertions.push({
-            name: "config has consultation-memory mcp key",
+            name: "config has janus-memory mcp key",
             pass: hasMemoryMcp,
-            detail: hasMemoryMcp ? "mcp.consultation-memory present" : "mcp.consultation-memory MISSING",
+            detail: hasMemoryMcp ? "mcp.janus-memory present" : "mcp.janus-memory MISSING",
           })
           assertions.push({
             name: "config has packaged writer agent key",
             pass: hasWriter,
             detail: hasWriter ? "agent.consultation-writer present" : "agent.consultation-writer MISSING",
           })
-          const hasSimple = hasNestedKey(json, "agent", "simple")
-          assertions.push({
-            name: "config has simple agent key",
-            pass: hasSimple,
-            detail: hasSimple ? "agent.simple present" : "agent.simple MISSING",
-          })
-          const hasBuildLite = hasNestedKey(json, "agent", "build-lite")
-          assertions.push({
-            name: "config has build-lite agent key",
-            pass: hasBuildLite,
-            detail: hasBuildLite ? "agent.build-lite present" : "agent.build-lite MISSING",
-          })
+          for (const role of ["coder", "lite", "coder-lite"]) {
+            const present = hasNestedKey(json, "agent", role)
+            assertions.push({
+              name: `config has ${role} agent key`,
+              pass: present,
+              detail: present ? `agent.${role} present` : `agent.${role} MISSING`,
+            })
+          }
           const hasJanus = hasNestedKey(json, "agent", "janus")
           assertions.push({
             name: "config has janus agent key",
@@ -207,16 +203,16 @@ async function main(): Promise<void> {
           pass: hasAuthor,
           detail: hasAuthor ? "skill text contains `author`" : "skill text MISSING `author`",
         })
-        for (const name of ["consultation_dispatch_wait", "consultation_dispatch_cancel"]) {
+        for (const name of ["janus_dispatch_wait", "janus_dispatch_cancel"]) {
           assertions.push({ name: `installed skill names ${name}`, pass: skillText.includes(name), detail: "installed tool-routing token" })
         }
       }
-      const simpleWorkspace = join(sandboxData, "consultation-agent", "simple")
-      const simpleWorkspaceExists = existsSync(simpleWorkspace)
+      const liteWorkspace = join(sandboxData, "janus-agent", "lite")
+      const liteWorkspaceExists = existsSync(liteWorkspace)
       assertions.push({
-        name: "simple workspace directory created",
-        pass: simpleWorkspaceExists,
-        detail: simpleWorkspaceExists ? simpleWorkspace : `NOT FOUND: ${simpleWorkspace}`,
+        name: "lite workspace directory created",
+        pass: liteWorkspaceExists,
+        detail: liteWorkspaceExists ? liteWorkspace : `NOT FOUND: ${liteWorkspace}`,
       })
       assertions.push(...await proveDispatchPrimitives(async (path, body) => {
         const response = await fetch(`${baseUrl}${path}?directory=${encodeURIComponent(sandboxProj)}`, {

@@ -2,7 +2,7 @@
 // Honors planRetrieval caps (limit/expandTop/tokenBudget/includeStatuses) and
 // returns memoriesUsedDisclosure (item titles + preference keys that matched).
 
-import { estimateTokens, planRetrieval } from "@consultation-agent/memory-core"
+import { estimateTokens, planRetrieval } from "@janus-agent/memory-core"
 import type {
   Applicability,
   ClaimType,
@@ -12,7 +12,7 @@ import type {
   RecallResult,
   RecommendationStability,
   RevisionStatus,
-} from "@consultation-agent/memory-core"
+} from "@janus-agent/memory-core"
 import type { SqliteDatabase } from "./driver.ts"
 import { blobToFloat32Array, cosineSimilarity, type EmbeddingProvider } from "./embedding.ts"
 

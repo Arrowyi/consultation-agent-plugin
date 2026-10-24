@@ -5,9 +5,9 @@ describe("storeOptionsFromEnv", () => {
   test("passes through data/state/cache dirs when set", () => {
     // given
     const env = {
-      CONSULTATION_DATA_DIR: "/tmp/data",
-      CONSULTATION_STATE_DIR: "/tmp/state",
-      CONSULTATION_CACHE_DIR: "/tmp/cache",
+      JANUS_DATA_DIR: "/tmp/data",
+      JANUS_STATE_DIR: "/tmp/state",
+      JANUS_CACHE_DIR: "/tmp/cache",
     }
 
     // when
@@ -34,7 +34,7 @@ describe("storeOptionsFromEnv", () => {
 
   test("treats empty-string env vars as unset", () => {
     // given
-    const env = { CONSULTATION_DATA_DIR: "", CONSULTATION_STATE_DIR: "", CONSULTATION_CACHE_DIR: "" }
+    const env = { JANUS_DATA_DIR: "", JANUS_STATE_DIR: "", JANUS_CACHE_DIR: "" }
 
     // when
     const options = storeOptionsFromEnv(env)
@@ -48,10 +48,10 @@ describe("storeOptionsFromEnv", () => {
   test("creates embedding provider when all 4 embedding env vars are set", () => {
     // given
     const env = {
-      CONSULTATION_EMBEDDING_BASE_URL: "https://api.example.com/v1",
-      CONSULTATION_EMBEDDING_MODEL: "text-embedding-3-small",
-      CONSULTATION_EMBEDDING_API_KEY_ENV: "OPENAI_API_KEY",
-      CONSULTATION_EMBEDDING_DIMENSIONS: "1536",
+      JANUS_EMBEDDING_BASE_URL: "https://api.example.com/v1",
+      JANUS_EMBEDDING_MODEL: "text-embedding-3-small",
+      JANUS_EMBEDDING_API_KEY_ENV: "OPENAI_API_KEY",
+      JANUS_EMBEDDING_DIMENSIONS: "1536",
     }
 
     // when
@@ -66,9 +66,9 @@ describe("storeOptionsFromEnv", () => {
   test("leaves embedding null when any of the 4 env vars is missing", () => {
     // given
     const env = {
-      CONSULTATION_EMBEDDING_BASE_URL: "https://api.example.com/v1",
-      CONSULTATION_EMBEDDING_MODEL: "text-embedding-3-small",
-      CONSULTATION_EMBEDDING_API_KEY_ENV: "OPENAI_API_KEY",
+      JANUS_EMBEDDING_BASE_URL: "https://api.example.com/v1",
+      JANUS_EMBEDDING_MODEL: "text-embedding-3-small",
+      JANUS_EMBEDDING_API_KEY_ENV: "OPENAI_API_KEY",
     }
 
     // when
@@ -81,10 +81,10 @@ describe("storeOptionsFromEnv", () => {
   test("leaves embedding null when dimensions is not a positive integer", () => {
     // given
     const env = {
-      CONSULTATION_EMBEDDING_BASE_URL: "https://api.example.com/v1",
-      CONSULTATION_EMBEDDING_MODEL: "text-embedding-3-small",
-      CONSULTATION_EMBEDDING_API_KEY_ENV: "OPENAI_API_KEY",
-      CONSULTATION_EMBEDDING_DIMENSIONS: "not-a-number",
+      JANUS_EMBEDDING_BASE_URL: "https://api.example.com/v1",
+      JANUS_EMBEDDING_MODEL: "text-embedding-3-small",
+      JANUS_EMBEDDING_API_KEY_ENV: "OPENAI_API_KEY",
+      JANUS_EMBEDDING_DIMENSIONS: "not-a-number",
     }
 
     // when

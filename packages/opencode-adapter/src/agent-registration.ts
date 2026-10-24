@@ -6,10 +6,9 @@ import { resolveAsset } from "./asset-paths.ts"
 import {
   resolveCostGuardUsd,
   resolveRoleModel,
-  resolveRoleModelChain,
   resolveTeamCaps,
   resolveTierRoleCaps,
-  type ConsultationPluginConfig,
+  type JanusPluginConfig,
 } from "./plugin-config.ts"
 
 interface MutableConfig {
@@ -49,16 +48,19 @@ const VERIFIER_DESCRIPTION =
 const WRITER_DESCRIPTION =
   "Read-only writing specialist for author consultations. Produces a blueprint before outline approval, or a substantive section/chapter draft from the approved map and evidence packet after approval; never researches missing facts, executes commands, or writes files."
 
-const SIMPLE_DESCRIPTION =
-  "Economical daily-consultation agent (DeepSeek V4.1-Flash by default) for lightweight Q&A, fact and concept lookups, and simple how-to finding. Full read access and web search; escalates complex, high-risk, or evidence-heavy questions to the consultant. Also dispatchable by the consultant for bounded simple-consultation and search subtasks."
+const LITE_DESCRIPTION =
+  "Economical quick-answer entry (DeepSeek V4.1-Flash by default) for low-risk facts, concepts, and simple how-to. A leaf: never dispatches; escalates multi-source/contested questions to the consultant, coding to the coder, and general questions to janus."
 
-const BUILD_LITE_DESCRIPTION =
+const CODER_DESCRIPTION =
+  "Coding entry point and execution specialist. Owns coding, debugging, refactoring, tests, and repository work; selects a direct, brief-plan, design-gate, or quality-gate process by task weight; dispatches coder-lite for mechanical work and build for an optional stronger model."
+
+const CODER_LITE_DESCRIPTION =
   "Cheap mechanical coding executor (GLM-5.3-Flash by default) for fully specified, decision-free, mechanically repeatable coding tasks: batch renames/moves, copy-adapt from existing in-repo patterns, formatting and lint fixes, boilerplate from explicit templates, simple tests following existing patterns, spec-complete CRUD glue. Stops and reports up on anything ambiguous, judgment-heavy, debugging, protocol-precision, cross-module, or security-sensitive — never attempts them."
 
 const JANUS_DESCRIPTION =
-  "Daily-driver primary agent (GLM-5.3 by default) and default entry point. Takes on and finishes most work itself — multi-file refactors, long tool-loops, whole-repo reading, build/test cycles — discussing design/config/coding direction with the user before implementing and escalating only on its confirmed weak spots. Dispatches consultant for evidence-graded research, and build-lite/build for mechanical vs judgment-heavy coding."
+  "Daily-driver primary and default entry point. Handles general questions, light tasks, and routing: dispatches consultant for evidence work, coder for coding, and lite for quick answers. Does not do deep research or heavy coding itself."
 
-interface BuildLiteAgentEntry {
+interface CodingLaneEntry {
   mode: "subagent"
   description: string
   prompt: string
@@ -67,7 +69,7 @@ interface BuildLiteAgentEntry {
   permission: Record<string, unknown>
 }
 
-export const SIMPLE_BASH_READONLY_RULES: Record<string, "allow"> = {
+export const READONLY_BASH_RULES: Record<string, "allow"> = {
   ls: "allow",
   "ls *": "allow",
   pwd: "allow",
@@ -108,123 +110,163 @@ interface AllModeAgentEntry {
 }
 
 /**
- * Resolve simple's pre-approved writable workspace directory:
- * `simple_workspace_dir` config > `$XDG_DATA_HOME/consultation-agent/simple`
- * > `$HOME/.local/share/consultation-agent/simple`.
+ * Resolve lite's pre-approved writable workspace directory:
+ * `lite_workspace_dir` > `$XDG_DATA_HOME/janus-agent/lite` >
+ * `$HOME/.local/share/janus-agent/lite`.
  */
-export function resolveSimpleWorkspaceDir(
-  pluginConfig: ConsultationPluginConfig,
+export function resolveLiteWorkspaceDir(
+  pluginConfig: JanusPluginConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  if (pluginConfig.simple_workspace_dir !== undefined) return pluginConfig.simple_workspace_dir
+  if (pluginConfig.lite_workspace_dir !== undefined) return pluginConfig.lite_workspace_dir
   const home = env.HOME !== undefined && env.HOME.length > 0 ? env.HOME : homedir()
   const dataHome =
     env.XDG_DATA_HOME !== undefined && env.XDG_DATA_HOME.length > 0
       ? env.XDG_DATA_HOME
       : join(home, ".local", "share")
-  return join(dataHome, "consultation-agent", "simple")
+  return join(dataHome, "janus-agent", "lite")
 }
 
 /**
- * simple's permissions: read tools allowed, its own workspace writable
- * without asking, everything else asks. Pattern objects put the `"*"`
- * catch-all first (last matching rule wins).
+ * lite's permissions: read tools allowed, its own workspace writable
+ * without asking, everything else asks, and dispatch denied (leaf node).
+ * Pattern objects put the `"*"` catch-all first (last matching rule wins).
  */
-export function buildSimplePermission(workspaceDir: string): Record<string, unknown> {
+export function buildLitePermission(workspaceDir: string): Record<string, unknown> {
   return {
     webfetch: "allow",
     websearch: "allow",
     edit: { "*": "ask", [`${workspaceDir}/**`]: "allow" },
-    bash: { "*": "ask", ...SIMPLE_BASH_READONLY_RULES },
+    bash: { "*": "ask", ...READONLY_BASH_RULES },
     external_directory: { [`${workspaceDir}/**`]: "allow" },
+    task: "deny",
   }
 }
 
 /**
- * Build the runtime bindings block injected into the simple agent prompt.
- * Reports the memory MCP server, simple's model, the explorer binding,
- * the dispatch job-tool discipline, the pre-approved workspace, and the
- * memory namespace.
+ * Build the runtime bindings block injected into the lite agent prompt.
+ * Reports the memory MCP server, lite's model, the escalation targets, the
+ * pre-approved workspace, the memory namespace, and the leaf rule.
  */
-export function buildSimpleRuntimeBindings(
-  pluginConfig: ConsultationPluginConfig,
+export function buildLiteRuntimeBindings(
+  pluginConfig: JanusPluginConfig,
   workspaceDir: string,
   namespace: string,
 ): string {
   const memoryLine = pluginConfig.memory_enabled
-    ? "- Memory MCP server name: `consultation-memory` (tools: memory_recall, memory_expand, memory_prepare, memory_commit, memory_manage)"
+    ? "- Memory MCP server name: `janus-memory` (tools: memory_recall, memory_expand, memory_prepare, memory_commit, memory_manage)"
     : "- Memory: DISABLED by configuration (saving and recall are unavailable)"
 
-  const modelLine = `- Simple model: \`${resolveRoleModel(pluginConfig, "simple")}\``
+  const modelLine = `- Lite model: \`${resolveRoleModel(pluginConfig, "lite")}\``
 
-  const explorerLine = `- Explorer: \`${pluginConfig.explorer_agent}\` (\`${resolveRoleModel(pluginConfig, "explorer")}\`) — dispatch via \`consultation_dispatch\` (role="explorer", prompt) for multi-source graded retrieval`
-
-  const buildLiteLine = pluginConfig.build_lite_enabled
-    ? `- Mechanical coding lane: \`${pluginConfig.build_lite_agent}\` (\`${resolveRoleModel(pluginConfig, "build-lite")}\`) for fully specified mechanical coding and file tasks`
-    : "- Mechanical coding lane: build-lite DISABLED by configuration"
-  const buildLine = pluginConfig.build_enabled
-    ? `- Strong coding lane: role \`build\` routes to agent \`${pluginConfig.build_agent}\` (\`${pluginConfig.build_model ?? "host default model"}\`) for judgment-heavy coding`
-    : "- Strong coding lane: build DISABLED by configuration"
-
-  const dispatchLine =
-    "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
+  const consultantLine = `- Consultant: \`consultant\` (\`${resolveRoleModel(pluginConfig, "consultant")}\`) — escalate multi-source evidence, decisions, and documents`
+  const coderLine = `- Coder: \`${pluginConfig.coder_agent}\` (\`${resolveRoleModel(pluginConfig, "coder")}\`) — escalate coding and repository work`
+  const janusLine = `- Janus: \`${pluginConfig.janus_agent}\` (\`${resolveRoleModel(pluginConfig, "janus")}\`) — escalate general questions that need more context`
 
   const workspaceLine = `- Your writable workspace: \`${workspaceDir}\` — the only location where creating files is pre-approved; every other write asks first`
 
   const namespaceLine = `- Memory namespace: \`${namespace}\``
 
-  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${modelLine}\n${explorerLine}\n${buildLiteLine}\n${buildLine}\n${dispatchLine}\n${workspaceLine}\n${namespaceLine}`
+  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${modelLine}\n${consultantLine}\n${coderLine}\n${janusLine}\n- You are a leaf: do not dispatch another agent; escalate instead.\n${workspaceLine}\n${namespaceLine}`
 }
 
 /**
- * Register the `simple` agent (mode "all": user-selectable primary AND
- * dispatchable subagent). Reads `assets/agents/simple.md`, injects the
- * runtime bindings block, attempts to create the workspace directory
- * (non-fatal), and never clobbers a pre-existing user-defined entry.
+ * Register the `lite` agent (mode "all": user-selectable entry, but a leaf
+ * that never dispatches). Reads `assets/agents/lite.md`, injects the runtime
+ * bindings block, attempts to create the workspace directory (non-fatal), and
+ * never clobbers a pre-existing user-defined entry.
  */
-export async function registerSimple(
+export async function registerLite(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
   namespace: string,
 ): Promise<void> {
-  if (config.agent?.[pluginConfig.simple_agent]) return
+  const agentName = pluginConfig.lite_agent
+  if (config.agent?.[agentName]) return
 
-  const workspaceDir = resolveSimpleWorkspaceDir(pluginConfig)
+  const workspaceDir = resolveLiteWorkspaceDir(pluginConfig)
   try {
     mkdirSync(workspaceDir, { recursive: true })
   } catch {
     // Non-fatal: the permission pattern still ships; writes there may fail.
   }
 
-  const body = await readFile(resolveAsset("agents/simple.md"), "utf8")
-  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "simple"))
+  const body = await readFile(resolveAsset("agents/lite.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "lite"))
   const withModelPrompt = injectModelPrompt(body, modelBlock)
-  const runtimeBlock = buildSimpleRuntimeBindings(pluginConfig, workspaceDir, namespace)
+  const runtimeBlock = buildLiteRuntimeBindings(pluginConfig, workspaceDir, namespace)
   const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
 
   const entry: AllModeAgentEntry = {
     mode: "all",
-    description: SIMPLE_DESCRIPTION,
+    description: LITE_DESCRIPTION,
     prompt: assembledPrompt,
-    model: resolveRoleModel(pluginConfig, "simple"),
-    permission: buildSimplePermission(workspaceDir),
+    model: resolveRoleModel(pluginConfig, "lite"),
+    permission: buildLitePermission(workspaceDir),
   }
 
   if (!config.agent) config.agent = {}
-  config.agent[pluginConfig.simple_agent] = entry
+  config.agent[agentName] = entry
 }
 
 /**
- * build-lite's permissions: workspace edits allowed without asking (the edit
+ * coder's runtime bindings: its own model, the coding lanes it may dispatch,
+ * and the job-tool discipline. No memory namespace (coding sessions use the
+ * repo's AGENTS.md, not consultation memory).
+ */
+export function buildCoderRuntimeBindings(pluginConfig: JanusPluginConfig): string {
+  const modelLine = `- Coder model: \`${resolveRoleModel(pluginConfig, "coder")}\``
+  const coderLiteLine = pluginConfig.coder_lite_enabled
+    ? `- Mechanical lane: \`${pluginConfig.coder_lite_agent}\` (\`${resolveRoleModel(pluginConfig, "coder-lite")}\`) for fully specified mechanical coding and file tasks`
+    : "- Mechanical lane: coder-lite DISABLED by configuration"
+  const buildLine = pluginConfig.build_enabled
+    ? `- Optional stronger-model lane: role \`build\` routes to agent \`${pluginConfig.build_agent}\` (\`${pluginConfig.build_model ?? "host default model"}\`)`
+    : "- Optional stronger-model lane: build DISABLED by configuration"
+  const dispatchLine =
+    "- Job tools: `janus_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `janus_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `janus_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
+  return `## Runtime Bindings (injected by opencode-adapter)\n${modelLine}\n${coderLiteLine}\n${buildLine}\n${dispatchLine}`
+}
+
+/**
+ * Register the `coder` coding entry (mode "all": user-selectable primary and
+ * dispatchable subagent). Full host permissions; it is a primary execution
+ * seat, not a read-only specialist.
+ */
+export async function registerCoder(
+  config: MutableConfig,
+  pluginConfig: JanusPluginConfig,
+): Promise<void> {
+  if (config.agent?.[pluginConfig.coder_agent]) return
+
+  const body = await readFile(resolveAsset("agents/coder.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "coder"))
+  const withModelPrompt = injectModelPrompt(body, modelBlock)
+  const runtimeBlock = buildCoderRuntimeBindings(pluginConfig)
+  const assembledPrompt = injectRuntimeBindings(withModelPrompt, runtimeBlock)
+
+  const entry: AllModeAgentEntry = {
+    mode: "all",
+    description: CODER_DESCRIPTION,
+    prompt: assembledPrompt,
+    model: resolveRoleModel(pluginConfig, "coder"),
+    permission: {},
+  }
+
+  if (!config.agent) config.agent = {}
+  config.agent[pluginConfig.coder_agent] = entry
+}
+
+/**
+ * coder-lite's permissions: workspace edits allowed without asking (the edit
  * resource is location-relative for workspace paths, so "*" matches them and
  * the later "/*" rule only matches external absolute paths), external edits
  * ask, read-only bash allowed, everything else asks, and further subagent
  * dispatch is denied (leaf node).
  */
-export function buildBuildLitePermission(): Record<string, unknown> {
+export function buildCoderLitePermission(): Record<string, unknown> {
   return {
     edit: { "*": "allow", "/*": "ask" },
-    bash: { "*": "ask", ...SIMPLE_BASH_READONLY_RULES },
+    bash: { "*": "ask", ...READONLY_BASH_RULES },
     webfetch: "allow",
     websearch: "allow",
     task: "deny",
@@ -232,32 +274,33 @@ export function buildBuildLitePermission(): Record<string, unknown> {
 }
 
 /**
- * Register the `build-lite` mechanical coding lane: mode "subagent", a static
+ * Register the `coder-lite` mechanical coding lane: mode "subagent", a static
  * prompt (leaf node — never dispatches, so no runtime bindings block), a
  * step cap of 50 with report-up, and the workspace-allow permission set.
  * A pre-existing user-defined entry under the same name is left untouched.
  */
-export async function registerBuildLite(
+export async function registerCoderLite(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
-  if (config.agent?.[pluginConfig.build_lite_agent]) return
+  const agentName = pluginConfig.coder_lite_agent
+  if (config.agent?.[agentName]) return
 
-  const body = await readFile(resolveAsset("agents/build-lite.md"), "utf8")
-  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "build-lite"))
+  const body = await readFile(resolveAsset("agents/coder-lite.md"), "utf8")
+  const modelBlock = await resolveModelPrompt(pluginConfig, resolveRoleModel(pluginConfig, "coder-lite"))
   const prompt = injectModelPrompt(body, modelBlock)
 
-  const entry: BuildLiteAgentEntry = {
+  const entry: CodingLaneEntry = {
     mode: "subagent",
-    description: BUILD_LITE_DESCRIPTION,
+    description: CODER_LITE_DESCRIPTION,
     prompt,
-    model: resolveRoleModel(pluginConfig, "build-lite"),
+    model: resolveRoleModel(pluginConfig, "coder-lite"),
     steps: 50,
-    permission: buildBuildLitePermission(),
+    permission: buildCoderLitePermission(),
   }
 
   if (!config.agent) config.agent = {}
-  config.agent[pluginConfig.build_lite_agent] = entry
+  config.agent[agentName] = entry
 }
 
 /**
@@ -265,30 +308,22 @@ export async function registerBuildLite(
  *
  * Janus is the daily-driver primary and does not attach to memory, so its
  * block reports only what it needs to orchestrate: its own model, the
- * dispatchable family members it routes to (consultant, explorer, the
- * coding lanes, simple), and the dispatch job-tool discipline. No memory
- * namespace, no workspace.
+ * entry/specialist targets it routes to (consultant, coder, lite, explorer),
+ * and the dispatch job-tool discipline. No memory namespace, no workspace.
  */
-export function buildJanusRuntimeBindings(pluginConfig: ConsultationPluginConfig): string {
+export function buildJanusRuntimeBindings(pluginConfig: JanusPluginConfig): string {
   const modelLine = `- Janus model: \`${resolveRoleModel(pluginConfig, "janus")}\``
 
-  const consultantLine = `- \`consultant\` (agent \`consultant\`, \`${resolveRoleModel(pluginConfig, "consultant")}\`) — evidence-graded research, decisions, durable documents; dispatch via \`consultation_dispatch\` (role="consultant")`
+  const consultantLine = `- \`consultant\` (agent \`consultant\`, \`${resolveRoleModel(pluginConfig, "consultant")}\`) — evidence-graded research, decisions, durable documents; dispatch via \`janus_dispatch\` (role="consultant")`
+  const coderLine = `- \`coder\` (agent \`${pluginConfig.coder_agent}\`, \`${resolveRoleModel(pluginConfig, "coder")}\`) — coding, debugging, refactoring, tests, repo work; dispatch via \`janus_dispatch\` (role="coder")`
+  const liteLine = pluginConfig.lite_enabled
+    ? `- \`lite\` (agent \`${pluginConfig.lite_agent}\`, \`${resolveRoleModel(pluginConfig, "lite")}\`) — quick facts, concepts, simple how-to`
+    : "- Economical entry: lite DISABLED by configuration"
+  const explorerLine = `- \`explorer\` (agent \`${pluginConfig.explorer_agent}\`, \`${resolveRoleModel(pluginConfig, "explorer")}\`) — bulk retrieval only`
 
-  const explorerLine = `- \`explorer\` (agent \`${pluginConfig.explorer_agent}\`, \`${resolveRoleModel(pluginConfig, "explorer")}\`) — bulk parallel retrieval`
+  const dispatchLine = "- Job tools: `janus_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `janus_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `janus_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
 
-  const buildLiteLine = pluginConfig.build_lite_enabled
-    ? `- \`build-lite\` (agent \`${pluginConfig.build_lite_agent}\`, \`${resolveRoleModel(pluginConfig, "build-lite")}\`) — fully specified mechanical coding`
-    : "- Mechanical coding lane: build-lite DISABLED by configuration"
-  const buildLine = pluginConfig.build_enabled
-    ? `- \`build\` (agent \`${pluginConfig.build_agent}\`, \`${pluginConfig.build_model ?? "host default model"}\`) — judgment-heavy coding`
-    : "- Strong coding lane: build DISABLED by configuration"
-  const simpleLine = pluginConfig.simple_enabled
-    ? `- \`simple\` (agent \`${pluginConfig.simple_agent}\`, \`${resolveRoleModel(pluginConfig, "simple")}\`) — lightweight Q&A and lookup`
-    : "- Economical generalist: simple DISABLED by configuration"
-
-  const dispatchLine = "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
-
-  return `## Runtime Bindings (injected by opencode-adapter)\n${modelLine}\n${consultantLine}\n${explorerLine}\n${buildLiteLine}\n${buildLine}\n${simpleLine}\n${dispatchLine}`
+  return `## Runtime Bindings (injected by opencode-adapter)\n${modelLine}\n${consultantLine}\n${coderLine}\n${liteLine}\n${explorerLine}\n${dispatchLine}`
 }
 
 /**
@@ -300,7 +335,7 @@ export function buildJanusRuntimeBindings(pluginConfig: ConsultationPluginConfig
  */
 export async function registerJanus(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
   if (config.agent?.[pluginConfig.janus_agent]) return
 
@@ -330,11 +365,11 @@ export async function registerJanus(
  * team subagents with their models, and the memory namespace.
  */
 export function buildRuntimeBindings(
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
   namespace: string,
 ): string {
   const memoryLine = pluginConfig.memory_enabled
-    ? "- Memory MCP server name: `consultation-memory` (tools: memory_recall, memory_expand, memory_prepare, memory_commit, memory_manage)"
+    ? "- Memory MCP server name: `janus-memory` (tools: memory_recall, memory_expand, memory_prepare, memory_commit, memory_manage)"
     : "- Memory: DISABLED by configuration (saving and recall are unavailable)"
 
   const consultantModelLine = `- Consultant model: \`${resolveRoleModel(pluginConfig, "consultant")}\``
@@ -353,30 +388,21 @@ export function buildRuntimeBindings(
       ? `verifier \`${pluginConfig.verifier_agent}\` (${resolveRoleModel(pluginConfig, "verifier")})`
       : "verifier DISABLED by configuration",
   )
-  const writerChain = resolveRoleModelChain(pluginConfig, "writer")
-  const writerModelLabel =
-    writerChain.length > 1
-      ? `${writerChain[0]}, fallback: ${writerChain.slice(1).join(", ")}`
-      : `${writerChain[0]}`
   roleParts.push(
     pluginConfig.writer_delegate_agent !== undefined
       ? `writer delegated to \`${pluginConfig.writer_delegate_agent}\``
       : pluginConfig.writer_enabled
-        ? `writer \`${pluginConfig.writer_agent}\` (${writerModelLabel})`
+        ? `writer \`${pluginConfig.writer_agent}\` (${resolveRoleModel(pluginConfig, "writer")})`
         : "writer DISABLED by configuration",
   )
   const teamLine = `- Team subagents: ${roleParts.join(", ")}`
 
-  const simpleLine = pluginConfig.simple_enabled
-    ? `- Economical generalist: \`${pluginConfig.simple_agent}\` (\`${resolveRoleModel(pluginConfig, "simple")}\`) for bounded simple-consultation and search tasks`
-    : "- Economical generalist: simple DISABLED by configuration"
-
-  const buildLiteLine = pluginConfig.build_lite_enabled
-    ? `- Mechanical coding lane: \`${pluginConfig.build_lite_agent}\` (\`${resolveRoleModel(pluginConfig, "build-lite")}\`) for fully specified mechanical coding and file tasks`
-    : "- Mechanical coding lane: build-lite DISABLED by configuration"
-  const buildLine = pluginConfig.build_enabled
-    ? `- Strong coding lane: role \`build\` routes to agent \`${pluginConfig.build_agent}\` (\`${pluginConfig.build_model ?? "host default model"}\`) for judgment-heavy coding`
-    : "- Strong coding lane: build DISABLED by configuration"
+  const liteLine = pluginConfig.lite_enabled
+    ? `- Economical leaf: \`${pluginConfig.lite_agent}\` (\`${resolveRoleModel(pluginConfig, "lite")}\`) for bounded quick-answer tasks`
+    : "- Economical leaf: lite DISABLED by configuration"
+  const coderLine = pluginConfig.coder_enabled
+    ? `- Coding delegate: \`${pluginConfig.coder_agent}\` (\`${resolveRoleModel(pluginConfig, "coder")}\`) for code examples and bounded code tasks; it owns the coding lanes`
+    : "- Coding delegate: coder DISABLED by configuration"
 
   const caps = resolveTeamCaps(pluginConfig)
   const tiers = resolveTierRoleCaps(pluginConfig)
@@ -387,9 +413,9 @@ export function buildRuntimeBindings(
   const costLine = `- Cost guard: ~$${costGuard} per provider (advisory, converge when approaching)`
 
   const namespaceLine = `- Memory namespace: \`${namespace}\``
-  const dispatchLine = "- Job tools: `consultation_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `consultation_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `consultation_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
+  const dispatchLine = "- Job tools: `janus_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `janus_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `janus_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
 
-  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${consultantModelLine}\n${teamLine}\n${simpleLine}\n${buildLiteLine}\n${buildLine}\n${dispatchLine}\n${capsLine}\n${tierMatrixLine}\n${costLine}\n${namespaceLine}`
+  return `## Runtime Bindings (injected by opencode-adapter)\n${memoryLine}\n${consultantModelLine}\n${teamLine}\n${liteLine}\n${coderLine}\n${dispatchLine}\n${capsLine}\n${tierMatrixLine}\n${costLine}\n${namespaceLine}`
 }
 
 /**
@@ -432,7 +458,7 @@ export function normalizeModelKey(modelId: string): string {
  * empty.
  */
 export async function resolveModelPrompt(
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
   resolvedModel: string,
 ): Promise<string> {
   const key = normalizeModelKey(resolvedModel)
@@ -468,7 +494,7 @@ export function injectModelPrompt(body: string, block: string): string {
  */
 export async function registerConsultantAgent(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
   namespace: string,
 ): Promise<void> {
   if (config.agent?.["consultant"]) return
@@ -504,8 +530,7 @@ async function registerReadOnlySubagent(
     description: string
     assetFile: string
     model: string
-    denyBash?: boolean
-    pluginConfig: ConsultationPluginConfig
+    pluginConfig: JanusPluginConfig
   },
 ): Promise<void> {
   if (config.agent?.[options.name]) return
@@ -518,7 +543,7 @@ async function registerReadOnlySubagent(
     description: options.description,
     prompt: body,
     model: options.model,
-    permission: options.denyBash ? { edit: "deny", bash: "deny" } : { edit: "deny" },
+    permission: { edit: "deny", bash: "deny", task: "deny" },
   }
 
   if (!config.agent) config.agent = {}
@@ -527,7 +552,7 @@ async function registerReadOnlySubagent(
 
 export async function registerExplorer(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
   await registerReadOnlySubagent(config, {
     name: pluginConfig.explorer_agent,
@@ -540,7 +565,7 @@ export async function registerExplorer(
 
 export async function registerAnalyst(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
   await registerReadOnlySubagent(config, {
     name: pluginConfig.analyst_agent,
@@ -553,7 +578,7 @@ export async function registerAnalyst(
 
 export async function registerConsultationCritic(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
   await registerReadOnlySubagent(config, {
     name: pluginConfig.critic_agent,
@@ -566,7 +591,7 @@ export async function registerConsultationCritic(
 
 export async function registerVerifier(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
   await registerReadOnlySubagent(config, {
     name: pluginConfig.verifier_agent,
@@ -579,7 +604,7 @@ export async function registerVerifier(
 
 export async function registerWriter(
   config: MutableConfig,
-  pluginConfig: ConsultationPluginConfig,
+  pluginConfig: JanusPluginConfig,
 ): Promise<void> {
   if (pluginConfig.writer_delegate_agent !== undefined) return
   await registerReadOnlySubagent(config, {
@@ -587,7 +612,6 @@ export async function registerWriter(
     description: WRITER_DESCRIPTION,
     assetFile: "agents/writer.md",
     model: resolveRoleModel(pluginConfig, "writer"),
-    denyBash: true,
     pluginConfig,
   })
 }

@@ -3,19 +3,19 @@ import { computeInstallMetadata, resolvePluginEntry, toFileUrl, writerAssetPathF
 
 describe("writerAssetPathForEntry", () => {
   test("resolves the writer asset for an installed bundle entry", () => {
-    const entry = "/tmp/stage/consultation-agent-plugin/dist/index.js"
+    const entry = "/tmp/stage/janus-agent-plugin/dist/index.js"
 
     const assetPath = writerAssetPathForEntry(entry)
 
-    expect(assetPath).toBe("/tmp/stage/consultation-agent-plugin/assets/agents/writer.md")
+    expect(assetPath).toBe("/tmp/stage/janus-agent-plugin/assets/agents/writer.md")
   })
 
   test("resolves the writer asset from a file:// URL", () => {
-    const entry = "file:///tmp/stage/consultation-agent-plugin/dist/index.js"
+    const entry = "file:///tmp/stage/janus-agent-plugin/dist/index.js"
 
     const assetPath = writerAssetPathForEntry(entry)
 
-    expect(assetPath).toBe("/tmp/stage/consultation-agent-plugin/assets/agents/writer.md")
+    expect(assetPath).toBe("/tmp/stage/janus-agent-plugin/assets/agents/writer.md")
   })
 
   test("returns undefined for a source-mode entry", () => {
@@ -27,11 +27,11 @@ describe("writerAssetPathForEntry", () => {
   })
 
   test("decodes a file:// URL with encoded spaces", () => {
-    const entry = "file:///tmp/my%20dir/consultation-agent-plugin/dist/index.js"
+    const entry = "file:///tmp/my%20dir/janus-agent-plugin/dist/index.js"
 
     const assetPath = writerAssetPathForEntry(entry)
 
-    expect(assetPath).toBe("/tmp/my dir/consultation-agent-plugin/assets/agents/writer.md")
+    expect(assetPath).toBe("/tmp/my dir/janus-agent-plugin/assets/agents/writer.md")
   })
 })
 
@@ -54,15 +54,15 @@ describe("computeInstallMetadata", () => {
     const metadata = computeInstallMetadata("/tmp/consult-install-abc")
 
     expect(metadata.prefix).toBe("/tmp/consult-install-abc")
-    expect(metadata.installRoot).toBe("/tmp/consult-install-abc/consultation-agent-plugin")
-    expect(metadata.entry).toBe("/tmp/consult-install-abc/consultation-agent-plugin/dist/index.js")
+    expect(metadata.installRoot).toBe("/tmp/consult-install-abc/janus-agent-plugin")
+    expect(metadata.entry).toBe("/tmp/consult-install-abc/janus-agent-plugin/dist/index.js")
   })
 })
 
 describe("resolvePluginEntry", () => {
-  test("returns an override kind when CONSULTATION_PLUGIN_ENTRY is set", async () => {
-    const original = process.env.CONSULTATION_PLUGIN_ENTRY
-    process.env.CONSULTATION_PLUGIN_ENTRY = "file:///tmp/stage/dist/index.js"
+  test("returns an override kind when JANUS_PLUGIN_ENTRY is set", async () => {
+    const original = process.env.JANUS_PLUGIN_ENTRY
+    process.env.JANUS_PLUGIN_ENTRY = "file:///tmp/stage/dist/index.js"
     try {
       const result = await resolvePluginEntry()
 
@@ -70,9 +70,9 @@ describe("resolvePluginEntry", () => {
       expect(result.entry).toBe("file:///tmp/stage/dist/index.js")
     } finally {
       if (original === undefined) {
-        delete process.env.CONSULTATION_PLUGIN_ENTRY
+        delete process.env.JANUS_PLUGIN_ENTRY
       } else {
-        process.env.CONSULTATION_PLUGIN_ENTRY = original
+        process.env.JANUS_PLUGIN_ENTRY = original
       }
     }
   })

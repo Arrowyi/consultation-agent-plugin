@@ -30,18 +30,20 @@ describe("modelFailureHint", () => {
     const hint = modelFailureHint("explorer", "opencode-go/deepseek-v4.1-flash")
     expect(hint).toContain("(model: opencode-go/deepseek-v4.1-flash)")
     expect(hint).toContain('set "explorer_model"')
-    expect(hint).toContain("~/.config/consultation-agent/config.jsonc")
-    expect(hint).toContain("$CONSULTATION_CONFIG")
+    expect(hint).toContain("~/.config/janus-agent/config.jsonc")
+    expect(hint).toContain("$JANUS_CONFIG")
   })
 
   it("maps hyphenated roles to their underscored config fields", () => {
-    expect(modelFailureHint("build-lite", "opencode-go/glm-5.3-flash")).toContain('set "build_lite_model"')
+    expect(modelFailureHint("coder-lite", "opencode-go/glm-5.3-flash")).toContain('set "coder_lite_model"')
+    expect(modelFailureHint("coder", "opencode-go/glm-5.3")).toContain('set "coder_model"')
+    expect(modelFailureHint("lite", null)).toContain('set "lite_model"')
     expect(modelFailureHint("build", null)).toContain('set "build_model"')
     expect(modelFailureHint("consultant", null)).toContain('set "agent_model"')
   })
 
   it("omits the model label when the model is null", () => {
-    expect(modelFailureHint("simple", null)).not.toContain("(model:")
+    expect(modelFailureHint("lite", null)).not.toContain("(model:")
   })
 })
 

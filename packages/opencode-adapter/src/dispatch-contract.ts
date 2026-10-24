@@ -1,6 +1,17 @@
 import { z } from "zod"
 
-export const DISPATCH_ROLES = ["explorer", "analyst", "critic", "verifier", "writer", "simple", "build-lite", "build", "consultant"] as const
+export const DISPATCH_ROLES = [
+  "explorer",
+  "analyst",
+  "critic",
+  "verifier",
+  "writer",
+  "lite",
+  "coder-lite",
+  "coder",
+  "build",
+  "consultant",
+] as const
 export type DispatchRole = (typeof DISPATCH_ROLES)[number]
 
 export const PRODUCTION_WAIT_BUDGET_MS = 300_000
@@ -109,7 +120,7 @@ const envelopeBaseSchema = z
     session_id: sessionIdSchema,
     waited_ms: z.number().int().nonnegative(),
     reason: z.string(),
-    next: z.enum(["consultation_dispatch_wait", "consultation_dispatch_cancel"]),
+    next: z.enum(["janus_dispatch_wait", "janus_dispatch_cancel"]),
   })
   .strict()
 

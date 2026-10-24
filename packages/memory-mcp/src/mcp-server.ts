@@ -8,11 +8,11 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
-import type { MemoryStore } from "@consultation-agent/memory-core"
+import type { MemoryStore } from "@janus-agent/memory-core"
 import { MEMORY_TOOL_DEFINITIONS, handleToolCall } from "./tools.ts"
 import { openStoreFromEnv } from "./store-from-env.ts"
 
-const SERVER_NAME = "consultation-memory"
+const SERVER_NAME = "janus-memory"
 const SERVER_VERSION = "0.1.0"
 const DEFAULT_NAMESPACE = "default"
 
@@ -86,7 +86,7 @@ export async function startMemoryMcpServer(options: StartMcpServerOptions = {}):
 }
 
 export function resolveNamespace(env: NodeJS.ProcessEnv): string {
-  const ns = env.CONSULTATION_NAMESPACE
+  const ns = env.JANUS_NAMESPACE
   if (ns !== undefined && ns.length > 0) return ns
   return DEFAULT_NAMESPACE
 }
