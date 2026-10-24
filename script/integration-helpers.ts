@@ -117,7 +117,10 @@ export async function waitForHealth(url: string, auth: string, timeoutMs: number
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
-      const resp = await fetch(url, { headers: { Authorization: auth } })
+      const resp = await fetch(url, {
+        headers: { Authorization: auth },
+        signal: AbortSignal.timeout(5000),
+      })
       if (resp.ok) return true
     } catch (error) {
       if (!(error instanceof Error)) throw error

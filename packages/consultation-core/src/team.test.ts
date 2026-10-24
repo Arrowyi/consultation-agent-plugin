@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
 import {
+  AnalysisDraftSchema,
   DEFAULT_TEAM_CAPS,
   TeamRoleSchema,
   initialState,
@@ -31,8 +32,31 @@ function crit(resolved: boolean, round: number): CritiqueDraft {
     confidenceAdjustment: "keep",
     whatWouldChangeTheRecommendation: [],
     resolved,
+    unresolvedGaps: [],
   }
 }
+
+describe("AnalysisDraftSchema", () => {
+  it("requires a basis for inferred and unverifiable analysis", () => {
+    expect(() =>
+      AnalysisDraftSchema.parse({
+        claimId: "c1",
+        status: "inferred",
+        finding: "the mechanism is likely X",
+        confidence: "low",
+      }),
+    ).toThrow()
+
+    const parsed = AnalysisDraftSchema.parse({
+      claimId: "c1",
+      status: "inferred",
+      finding: "the mechanism is likely X",
+      confidence: "low",
+      basis: "inferred X from two independent reports plus the documented mechanism",
+    })
+    expect(parsed.basis).toContain("inferred X")
+  })
+})
 
 describe("initialState", () => {
   it("starts at phase explore, round 0, empty artifacts", () => {

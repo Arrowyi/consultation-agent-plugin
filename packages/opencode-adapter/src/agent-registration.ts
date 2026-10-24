@@ -319,7 +319,7 @@ export function buildJanusRuntimeBindings(pluginConfig: JanusPluginConfig): stri
   const liteLine = pluginConfig.lite_enabled
     ? `- \`lite\` (agent \`${pluginConfig.lite_agent}\`, \`${resolveRoleModel(pluginConfig, "lite")}\`) — quick facts, concepts, simple how-to`
     : "- Economical entry: lite DISABLED by configuration"
-  const explorerLine = `- \`explorer\` (agent \`${pluginConfig.explorer_agent}\`, \`${resolveRoleModel(pluginConfig, "explorer")}\`) — bulk retrieval only`
+  const explorerLine = `- \`explorer\` (agent \`${pluginConfig.explorer_agent}\`, \`${resolveRoleModel(pluginConfig, "explorer")}\`) — bounded evidence gathering with a specific claim list and search plan`
 
   const dispatchLine = "- Job tools: `janus_dispatch` (role, prompt) uses a soft wait; pending/unknown is not failure. Continue the same job with `janus_dispatch_wait` (job_id, wait_ms?; integer 0..300000, default 300000; 0 snapshots). Only `janus_dispatch_cancel` (job_id) requests cancellation; cancelling is not confirmed cancellation."
 

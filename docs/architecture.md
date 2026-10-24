@@ -237,8 +237,8 @@ Use for comparisons, recommendations, personalization, or moderate inference.
 - Check source independence and provenance.
 - Search for counter-evidence.
 - Retrieve relevant experience and preferences progressively.
-- Dispatch a plausible specialist when its check might materially affect the answer or its relevance cannot be ruled out. Skip only with a task-specific reason; standard tier does not prescribe a roster.
-- Return a one-screen decision brief.
+- Dispatch a specialist when its check could materially affect the answer and you can name the decision it could change and the specific failure it would catch. Skip only with that reason; standard tier does not prescribe a roster.
+- Return a mode-specific deliverable with the conclusion and next action in the first screen.
 
 #### Deep
 
@@ -263,7 +263,7 @@ The router evaluates:
 
 ### 6.3 Team Roles and Tier Caps
 
-The consultant leads five research/writing subagent roles through `janus_dispatch`. Its skill is the authoritative task-fit policy: assign bounded work when a role could materially change the result or its relevance cannot yet be ruled out; skip only when a task-specific reason establishes the role is unnecessary. Independent gathering may fan out; analysis follows evidence, critique follows a draft conclusion, and substantive authoring follows outline approval. The consultant retains final synthesis and delivery.
+The consultant leads five research/writing subagent roles through `janus_dispatch`. Its skill is the authoritative task-fit policy: assign bounded work when a role could materially change the result and the consultant can name the decision it could change and the specific failure it would catch; skip only with that reason. Independent gathering may fan out; analysis follows evidence, critique follows a draft conclusion, and substantive authoring follows outline approval. The consultant retains final synthesis and delivery.
 
 Entry roles and execution delegates are separate from this research roster: `janus` (default general entry), `consultant` (evidence entry), `coder` (coding entry), and `lite` (economical leaf) are user-selectable; `coder` owns the `coder-lite` mechanical lane and the optional host `build` escalation. The tier caps below apply only to the research team.
 
@@ -393,10 +393,10 @@ Deep, understanding-oriented investigation is a `research` mode of the consultan
 - gather missing or uncertain evidence with independent explorers, parallelizing only independent searches;
 - compare consensus, disagreements, and gaps;
 - form multiple hypotheses with confidence, actively seeking counterexamples;
-- challenge consequential hypotheses with a critic pass when independent counter-evidence could matter or that possibility cannot be ruled out;
-- synthesize a readable report (bottom line up front, plain language, evidence and disagreements folded behind a disclosure).
+- challenge consequential hypotheses with a critic pass when you can name a counterexample or alternative that would change the report;
+- synthesize a readable report (bottom line up front, plain language, evidence and disagreements under `证据与来源（可跳过）`).
 
-The research report is a validated contract (`ResearchBriefSchema`): a one-line bottom line, plain-language key points, an implications line, and confidence, with hypotheses, disagreements, residual uncertainty, and sources as folded detail. There is no separate deep-research provider or `research-director` agent.
+The research report is a validated contract (`ResearchBriefSchema`): a one-line bottom line, plain-language key points, an implications line, and confidence, with hypotheses, disagreements, residual uncertainty, and sources under `证据与来源（可跳过）`. There is no separate deep-research provider or `research-director` agent.
 
 ## 9. Canonical Memory Model
 
@@ -644,24 +644,30 @@ The system must:
 
 ## 16. User-Facing Output Contract
 
-Output length adapts to difficulty.
+The output is terminal-first and length adapts to decision complexity, not tier alone.
 
-### Simple Question
+### Double anchor
 
-One to several sentences with the answer and a source when needed.
+Full answers start with `结论 / 理由 / 下一步` and end with `一句话 / 下一步` as the last two lines. The mode body sits between them. Evidence, grades, disagreements, and confidence rationale go under `证据与来源（可跳过）` before the bottom anchor, so a reader who jumps to the end still lands on the conclusion. Short answers use the top anchor only.
 
-### Complex Consultation
+### Confidence and alternatives
 
-The deliverable depends on the detected mode (the exact templates live in the `consultation` skill):
+Use `把握：高 / 中 / 低 — why` when confidence is not high or the top alternatives are close. Never present medium/low confidence as certain. `select` and `guide` may say "没有明显赢家" and give a tie-break instead of forcing a winner. `plan` starts with `可行 / 有条件可行 / 不建议` and names the condition and failure mode. `verify` may conclude `无法核实` and name the missing evidence.
 
-- **select** — a candidate list: top pick or "no reliable unique winner", per-candidate evidence grade + contamination note + suits + trial advice, confidence, stability, switch conditions, and a trial next step.
-- **verify** — a true / false / unverifiable verdict, a per-claim verdict table (claim, status, evidence, basis), supporting vs opposing evidence, a contamination note if any, confidence, stability, and the next evidence-settling step.
-- **plan** — a goal + suitability, a step table (step, support, confidence, basis, risk, alternatives), a robustness-review note, an assumption list, a health note only on a threshold trigger, residual uncertainty, alternatives + switch conditions, confidence, stability, and the first concrete action.
-- **research** — a readable report: bottom line first (one plain sentence), plain-language key points, what it means for the user, and a confidence line, with evidence, disagreements, residual uncertainty, and sources folded behind a disclosure.
-- **guide** — a composite operational playbook: bottom line first, suitability and prerequisites, a recommendation table (option, evidence grade, contamination note, suits, trial advice), a procedure table (step, support, confidence, basis, risk, alternatives), background and pitfalls, a completion check, confidence, stability, evidence and disagreements folded behind a disclosure, and the first concrete action. Carries at least a recommendation or a procedure.
-- **author** — a durable document delivery: audience, scope, delivery (`inline` / `single_file` / `multi_file`), and verification (`light` / `targeted` / `strict`) header; the approved document map (file/section, purpose, prerequisites, verification target); the artifact result (inline content or approved relative paths); a verification summary of what was actually checked plus residual uncertainty; and the first reading or review action. One primary profile (`tutorial`, `architecture`, `explanation`) controls the outline and quality checks, and large documents are delivered behind one outline-approval gate. AuthorBrief is the validation/memory unit; authored files are caller-approved side products referenced by the brief, not stored in memory.
+### Mode bodies
 
-Every mode ends with the next useful action, even when abstaining. The agent may state that no reliable unique winner exists.
+- **select** — selection criteria → candidate short reviews → trial/switch. Short: conclusion + 2–3 reasons + one trial.
+- **verify** — key reasons → what would change the verdict → contested-claim details. Short: verdict + 2 reasons + what would settle it.
+- **plan** — feasibility → constraints/risks → steps → stop/rollback → alternative. Short: feasibility + 3–5 steps + stop condition.
+- **research** — bottom line → 3–5 key points → what it means → disagreements/uncertainty. No forced recommendation.
+- **guide** — shortest path → suitability/prerequisites → recommendation (when real choices) → steps → pitfalls → completion check. Carries at least a recommendation or a procedure.
+- **author** — status/location → scope → document map → verification → next action. The chat output is a delivery brief, not the document body.
+
+### Terminal conventions
+
+Paragraphs are 1–3 sentences; bullet depth is at most 2; headings are at most 3. Tables are at most 3–4 columns with short cells; wider or sentence-heavy tables become `label: value` lines. 100–120 characters is a comfort zone, not a hard limit. No academic filler or method narration before the answer. Every answer ends with an action, even when abstaining.
+
+The exact templates live in the `consultation` skill. `AuthorBrief` remains the validation/memory unit; authored files are caller-approved side products referenced by the brief, not stored in memory.
 
 ## 17. Verification Strategy
 

@@ -13,6 +13,12 @@ export const SourceGradeSchema = z.enum(["high", "medium", "low", "lead_only"])
 export const ConfidenceSchema = z.enum(["high", "medium", "low"])
 export const StabilitySchema = z.enum(["stable", "conditional", "provisional"])
 
+/** What the source is, independent of its reliability grade. */
+export const SourceTypeSchema = z.enum(["primary", "secondary", "analysis", "experience", "lead"])
+
+/** How the source bears on the assigned claim. */
+export const SourceStanceSchema = z.enum(["supports", "contradicts", "qualifies", "unclear"])
+
 /**
  * Decision type the consultation is answering. Orthogonal to Tier (depth).
  * - select: choose among candidates (shopping, comparisons, picking a tool).
@@ -47,6 +53,8 @@ export type Tier = z.infer<typeof TierSchema>
 export type SourceGrade = z.infer<typeof SourceGradeSchema>
 export type Confidence = z.infer<typeof ConfidenceSchema>
 export type Stability = z.infer<typeof StabilitySchema>
+export type SourceType = z.infer<typeof SourceTypeSchema>
+export type SourceStance = z.infer<typeof SourceStanceSchema>
 export type ConsultationMode = z.infer<typeof ConsultationModeSchema>
 export type EpistemicStatus = z.infer<typeof EpistemicStatusSchema>
 export type SourceIntent = z.infer<typeof SourceIntentSchema>

@@ -1134,6 +1134,7 @@ describe("buildJanusRuntimeBindings", () => {
     expect(block).toContain("`coder` (agent `coder`, `opencode-go/glm-5.3`)")
     expect(block).toContain("`lite` (agent `lite`, `opencode-go/deepseek-v4.1-flash`)")
     expect(block).toContain("`explorer` (agent `consultation-explorer`")
+    expect(block).toContain("bounded evidence gathering")
     expect(block).toContain("janus_dispatch_wait")
     expect(block).not.toContain("`build` (agent")
     expect(block).not.toContain("janus-memory")

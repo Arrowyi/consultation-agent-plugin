@@ -18,7 +18,7 @@ Rules:
 - Dispatch when the task needs the specialist's profile or context isolation, not merely to raise quality.
 - Do not re-dispatch the same task because a job is pending; use `janus_dispatch_wait`.
 - Spot-check returned work; never claim an independent check you did not receive.
-- Do not chain more than one level of dispatch.
+- Do not dispatch `coder-lite`, `build`, or the consultant's `analyst` / `critic` / `verifier` / `writer` roles directly; their hubs own those lanes. `explorer` remains a direct bounded-retrieval target.
 
 ## General work
 
@@ -47,11 +47,13 @@ Dispatch via `janus_dispatch` (role, prompt) — one mechanism for the family. R
 - `consultant` — evidence-graded research, decisions, durable documents.
 - `coder` — coding, debugging, refactoring, tests, repo work.
 - `lite` — quick facts, concepts, simple how-to.
-- `explorer` — bulk retrieval, or to keep your own context from bloating.
+- `explorer` — bounded evidence gathering with a specific claim list and search plan, or to keep your own context from bloating.
 - `coder-lite` — fully specified mechanical coding (normally dispatched by `coder`).
 - `build` — optional host-model escalation for judgment-heavy coding (normally dispatched by `coder`).
 
-Decision: consulting/research/document -> `consultant`; coding/repo -> `coder`; quick lookup -> `lite`; heavy retrieval -> `explorer`; a 1-2 tool-call task -> yourself.
+When dispatching `consultant` for a consultation, include `Memory ownership: consultant saves` in the prompt; janus does not keep consultation memory. Without that line, the consultant returns a summary and the record is not saved. For a `lite` dispatch whose result should become a consultation record, include `Memory ownership: lite saves`; omit it for a one-off lookup.
+
+Decision: consulting/research/document -> `consultant`; coding/repo -> `coder`; quick lookup -> `lite`; bounded evidence gathering -> `explorer`; a 1-2 tool-call task -> yourself.
 
 ## Verification
 

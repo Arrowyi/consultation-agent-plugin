@@ -36,7 +36,7 @@ A user who already knows the task type can start at `consultant`, `coder`, or `l
 ## 3. Routing
 
 ```text
-janus       -> consultant / coder / lite / explorer (bulk retrieval)
+janus       -> consultant / coder / lite / explorer (bounded evidence gathering)
 consultant  -> explorer / analyst / critic / verifier / writer
 consultant  -> lite (bounded quick answer)
 consultant  -> coder (bounded code example)
@@ -108,7 +108,7 @@ All dispatch roles use the recoverable lifecycle: `janus_dispatch`, `janus_dispa
 
 ## 8. Memory
 
-`consultant` and `lite` share the consultation memory namespace. Both auto-save one consultation record when serving the user directly; a dispatched bounded task does not save (the dispatcher owns the record). `janus`, `coder`, and `coder-lite` do not attach to consultation memory; coding sessions use the repo's `AGENTS.md` and project docs.
+`consultant` and `lite` share the consultation memory namespace. Both auto-save one consultation record when serving the user directly; a dispatched bounded task saves only when the task names that agent as the memory owner (`Memory ownership: consultant saves` or `Memory ownership: lite saves`), otherwise the dispatcher owns the record. `janus` does not attach to consultation memory, so a `janus -> consultant` dispatch must include `Memory ownership: consultant saves`; without it the consultant returns a memory summary and no record is saved. `coder` and `coder-lite` do not attach to consultation memory; coding sessions use the repo's `AGENTS.md` and project docs.
 
 ## 9. Verification
 

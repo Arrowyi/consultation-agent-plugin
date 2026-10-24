@@ -334,11 +334,20 @@
   },
   {
     "id": "C38",
-    "title": "Dispatched consultant does not ask the user or save memory",
-    "given": "Janus dispatches consultant with a bounded research question.",
+    "title": "Dispatched consultant follows the memory-ownership handoff",
+    "given": "Janus dispatches consultant with a bounded research question and the prompt line `Memory ownership: consultant saves`.",
     "when": "The consultant handles the dispatched task",
-    "then": "It makes and lists assumptions instead of asking the user, returns a structured report, and does not auto-save a memory record.",
+    "then": "It makes and lists assumptions instead of asking the user, returns a structured report, and saves one consultation record because the task assigned ownership.",
     "grading": "model",
-    "notes": "Rubric: Reject a user-facing greeting, clarifying questions to the end user, or a memory save from a dispatched consultant."
+    "notes": "Rubric: Reject a user-facing greeting or clarifying questions to the end user; reject failing to save when the task assigned `Memory ownership: consultant saves`, and reject saving when the task left ownership with the dispatcher."
+  },
+  {
+    "id": "C39",
+    "title": "A close select answer leads with the decision and offers a tie-break",
+    "given": "The user asks which of two similarly good options to choose; neither is a clear winner.",
+    "when": "The consultant answers in select mode",
+    "then": "It opens with 结论/理由/下一步, says there is no clear winner, gives a tie-break based on the user's priorities, includes 把握 with a reason, puts evidence after the decision, and ends with a next action.",
+    "grading": "model",
+    "notes": "Rubric: Reject a forced single winner when the top two are close, a candidate/evidence table before the conclusion, and an answer that ends without a next action."
   }
 ]

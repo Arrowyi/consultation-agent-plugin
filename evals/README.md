@@ -19,7 +19,7 @@ Every case is marked with one of two grading tiers:
 
 ## Files
 
-- `fixtures/consultation-cases.json` - 14 cases from architecture 17.1, C15-C25 task-fit routing scenarios, C26-C30 recoverable lifecycle cases, and C31-C38 Role Family B routing/process cases.
+- `fixtures/consultation-cases.json` - 14 cases from architecture 17.1, C15-C25 task-fit routing scenarios, C26-C30 recoverable lifecycle cases, and C31-C39 Role Family B routing/process plus terminal-output usability cases.
 - `fixtures/memory-cases.json` - 12 cases from architecture 17.2.
 - `run-evals.ts` - The runner script.
 
@@ -90,7 +90,7 @@ id encodes the scenario, and the test file encodes the function under test.
 | M11 | packages/memory-sqlite/src/store.test.ts |
 | M12 | packages/memory-sqlite/src/multi-instance.test.ts |
 
-Model-graded cases (C3, C4, C5, C6, C7, C8, C10, C11, C12, C13, C14, C15-C25, C31-C38, M3, M5) have no test-file
+Model-graded cases (C3, C4, C5, C6, C7, C8, C10, C11, C12, C13, C14, C15-C25, C31-C39, M3, M5) have no test-file
 mapping by design.
 
 ## Recoverable lifecycle evaluation (C26-C30)
@@ -143,7 +143,7 @@ Exercise pending/unknown/recovery/cancel for each role and both delegate model
 forms. Check configured-attempt routing separately from host-internal provider
 retries; the plugin cannot claim control of an external delegate's internals.
 
-## Role Family B evaluation (C31-C38)
+## Role Family B evaluation (C31-C39)
 
 These cases check the entry layout and the coder's adaptive process, not model
 quality. Run them with a live model and record the observed tool trace:
@@ -151,7 +151,8 @@ quality. Run them with a live model and record the observed tool trace:
 - **C31/C32** — bounded work goes to `lite`; mechanical code goes to `coder-lite`; judgment code stays with `coder`/`build`; the consultant does not implement code.
 - **C33/C34** — `janus` routes consulting/coding/quick answers; direct entry to `consultant`/`coder`/`lite` does not bounce back.
 - **C35/C36/C37** — coder L0 skips the plan; L2 presents the design gate and waits; L3 runs the quality gate.
-- **C38** — a dispatched consultant does not ask the end user or auto-save memory.
+- **C38** — a dispatched consultant does not ask the end user; it saves only when the task assigns `Memory ownership: consultant saves`, otherwise it returns a summary and the dispatcher owns the record.
+- **C39** — a close `select` answer opens with 结论/理由/下一步, says there is no clear winner, gives a tie-break and `把握`, puts evidence after the decision, and ends with a next action.
 
 Reject a run that uses the same process weight for every task. The expected
 failure modes are process theater on L0 and skipped design on L2/L3.

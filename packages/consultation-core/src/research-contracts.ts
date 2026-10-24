@@ -1,6 +1,12 @@
 import { z } from "zod"
 
-import { ClaimKindSchema, SourceGradeSchema, SourceIntentSchema } from "./enums.ts"
+import {
+  ClaimKindSchema,
+  SourceGradeSchema,
+  SourceIntentSchema,
+  SourceStanceSchema,
+  SourceTypeSchema,
+} from "./enums.ts"
 import { IntentSignalsSchema, SourceInputSchema } from "./source-grading.ts"
 
 export const DecomposedClaimSchema = z.object({
@@ -14,8 +20,14 @@ export type DecomposedClaim = z.infer<typeof DecomposedClaimSchema>
 
 export const GradedSourceSchema = SourceInputSchema.extend({
   grade: SourceGradeSchema,
+  gradeBasis: z.string().optional(),
   url: z.string().optional(),
+  publisher: z.string().optional(),
+  publishedAt: z.string().optional(),
+  sourceType: SourceTypeSchema.optional(),
+  stance: SourceStanceSchema.optional(),
   accessedAt: z.string(),
+  excerpt: z.string().optional(),
   intent: SourceIntentSchema.optional(),
   intentSignals: IntentSignalsSchema.optional(),
 })

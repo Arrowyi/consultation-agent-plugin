@@ -63,18 +63,18 @@ Restart OpenCode. The plugin registers the agents, the memory MCP, the `consulta
 
 ## Usage
 
-**Ask the consultant.** It detects the mode, tells you which one it picked and why (e.g. “这是个购买决策 → select”), then delivers:
+**Ask the consultant.** It detects the mode and delivers the matching answer. For non-trivial answers it may add a one-line mode note after the conclusion (e.g. “模式：select（购买决策）”), never before it:
 
 | Mode | Triggers on | You get |
 |------|--------------|---------|
-| `select` | choosing among candidates — 买哪个、选课、选工具 | a candidate list with per-candidate evidence grade, contamination note, and trial advice |
-| `verify` | checking a claim or rumor — 这说法是不是真的 | a true / false / unverifiable verdict with a per-claim reasoning chain |
-| `plan` | an actionable plan — 健身、保养、学习路线 | a step plan with support level, basis, risk, alternatives, and a robustness review |
-| `guide` | a composite end-to-end package — 攻略、X入门 | an operational playbook: bottom line, recommendation table, procedure, pitfalls, completion check |
-| `research` | understanding a topic deeply — 深度研究、调查一下 | a readable report: bottom line first, plain-language key points, evidence and disagreements folded away |
-| `author` | a durable document to keep or share — 教程、架构分析文档、write-up | a tutorial / architecture analysis behind one outline approval, with proportionate verification |
+| `select` | choosing among candidates — 买哪个、选课、选工具 | the pick (or "no clear winner" with a tie-break), 2–3 reasons, and a trial/switch action; evidence is folded away |
+| `verify` | checking a claim or rumor — 这说法是不是真的 | true / false / unverifiable first, then the key reasons, what would change the verdict, and the next evidence step |
+| `plan` | an actionable plan — 健身、保养、学习路线 | feasibility first (可行 / 有条件可行 / 不建议), then constraints, steps, stop/rollback, and an alternative |
+| `guide` | a composite end-to-end package — 攻略、X入门 | the shortest path, steps, pitfalls, completion check, and a recommendation/alternative only when there are real choices |
+| `research` | understanding a topic deeply — 深度研究、调查一下 | a bottom line, 3–5 plain-language points, what it means for you, and what is still uncertain; no forced recommendation |
+| `author` | a durable document to keep or share — 教程、架构分析文档、write-up | a document delivery brief (status, location, scope, verification, next action); the document itself is the artifact |
 
-Simple questions get a one-line answer; complex ones get the mode's brief. Facts are separated from inference and labeled with an epistemic status.
+Answers are terminal-first: a full answer opens with `结论 / 理由 / 下一步`, ends with `一句话 / 下一步`, and puts evidence under `证据与来源（可跳过）`. Short answers skip the repetition. Facts are separated from inference and labeled with an epistemic status.
 
 **Daily questions go to `lite`.** Select the `lite` agent for quick lookups and explanations at a fraction of the cost; it escalates to `consultant` (one line, with a reason) when a question needs multi-source adversarial verification or is high-stakes. **Coding goes to `coder`**, which picks the lightest process that fits: a direct fix for a one-line change, a brief plan for a small feature, and a design gate plus quality gate for multi-file or correctness-critical work.
 

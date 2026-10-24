@@ -1,7 +1,13 @@
 import { z } from "zod"
 
 import { ResearchBudgetSchema } from "./budget.ts"
-import { ConfidenceSchema, SourceGradeSchema, TierSchema, type Tier } from "./enums.ts"
+import {
+  ConfidenceSchema,
+  EpistemicStatusSchema,
+  SourceGradeSchema,
+  TierSchema,
+  type Tier,
+} from "./enums.ts"
 import { DecomposedClaimSchema } from "./research-contracts.ts"
 import { GradedSourceSchema } from "./research-contracts.ts"
 
@@ -52,6 +58,13 @@ export const ExplorerReportSchema = z.object({
         claimId: z.string(),
         findings: z.string(),
         sources: z.array(GradedSourceSchema),
+        coverage: z
+          .object({
+            queries: z.array(z.string()).default([]),
+            channels: z.array(z.string()).default([]),
+            blocked: z.array(z.string()).default([]),
+          })
+          .optional(),
         gaps: z.array(z.string()).default([]),
       }),
     )
@@ -59,13 +72,27 @@ export const ExplorerReportSchema = z.object({
 })
 export type ExplorerReport = z.infer<typeof ExplorerReportSchema>
 
-export const AnalysisDraftSchema = z.object({
+export const AnalysisDraftBaseSchema = z.object({
   claimId: z.string(),
+  status: EpistemicStatusSchema,
   finding: z.string(),
   confidence: ConfidenceSchema,
+  basis: z.string().optional(),
   synthesisNote: z.string().optional(),
+  whatWouldChange: z.array(z.string()).default([]),
+  qualityFlags: z.array(z.string()).default([]),
   gaps: z.array(z.string()).default([]),
 })
+
+export const AnalysisDraftSchema = AnalysisDraftBaseSchema.refine(
+  (value) =>
+    !(value.status === "inferred" || value.status === "unverifiable") ||
+    (value.basis !== undefined && value.basis.length > 0),
+  {
+    message: "inferred/unverifiable analysis must carry a basis",
+    path: ["basis"],
+  },
+)
 export type AnalysisDraft = z.infer<typeof AnalysisDraftSchema>
 
 export const ConfidenceAdjustmentSchema = z.enum(["raise", "keep", "lower", "reject"])
@@ -105,6 +132,7 @@ export const CritiqueDraftSchema = z.object({
   confidenceAdjustment: ConfidenceAdjustmentSchema,
   whatWouldChangeTheRecommendation: z.array(z.string()),
   resolved: z.boolean(),
+  unresolvedGaps: z.array(z.string()).default([]),
 })
 export type CritiqueDraft = z.infer<typeof CritiqueDraftSchema>
 
