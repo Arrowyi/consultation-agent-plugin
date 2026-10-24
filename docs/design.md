@@ -32,7 +32,7 @@ Prompt philosophy: **a runway, not a cage** — maximize the model's capability 
 | 14 | Complex coding routes to a new `build` dispatch role targeting the host's native build agent (config `build_agent` default `"build"`, optional `build_model`); on dispatch failure the primary asks the user for a usable agent (or a `build_agent`/`build_model` config override); if the user provides none, the primary modifies the code itself with disclosure |
 | 15 | Every agent's model is user-configurable (pre-existing: all `*_model` fields override `MODEL_DEFAULTS`) — confirmed, no new work |
 | 16 | Prompts are layered: `role asset + model-adaptation block + runtime bindings`. v2: the model block is keyed by model, decoupled from the agent, and matched provider-agnostically — resolved from the user's global `model_prompts` map keyed by the normalized model key (`normalizeModelKey`: provider prefix dropped, lowercased, alphanumerics only; `""` disables), else the shipped `assets/model-prompts/<key>.md` block (model-keyed, no default-model gate), else empty. `build` role and delegated writers are excluded (host-owned prompts). Supersedes the v1 per-agent `*_model_prompts` maps (§15) |
-| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<key>.md` (key = normalized model name), six default-model blocks plus a `deepseekflash.md` direct-provider alias, content strictly model-trait (never role references), extensible by dropping a single file |
+| 17 | The model-prompt library is model-keyed: `assets/model-prompts/<key>.md` (key = normalized model name), six default-model blocks plus a `deepseekflash.md` direct-provider alias, content model-property only (profile plus model-specific operating constraints; no role name, role assignment, role rule, price/pool positioning, or generic output/workflow rule), extensible by dropping a single file |
 | 18 | Fallback chains removed: `writer_fallback_models` and its default are deleted, every agent resolves to a single model; the generic `model_chain` walking seam is kept so re-adding automatic allowance-exhaustion fallback later stays a localized change |
 | 19 | Writer default model changed `opencode/claude-sonnet-5` → `opencode/claude-sonnet-5-5` (live-endpoint verified 2026-10-23; claude-sonnet-5's reputation collapsed) |
 | 20 | `MODEL_DEFAULTS` synced to the maintainer's verified set (§16): consultant → `opencode-go/glm-5.3`, critic/verifier → `opencode/gemini-3.8-flash` (restores the cross-family audit structure: challenger ≠ consultant ≠ analyst), writer → `opencode/claude-sonnet-5-5`; fallback removed |
@@ -202,7 +202,7 @@ Shared namespace with consultant (same `computeNamespace(project.id, directory)`
 |---|---|
 | plugin-config.ts | build_lite_* and build_* schema defaults + compat (old config parses); MODEL_DEFAULTS for both roles |
 | agent-registration.ts | `registerBuildLite` describe: mode "subagent", steps 50, permission object (workspace-allow edit pattern, task deny, read-only bash), model default/override, no-clobber, disabled skip via plugin.test.ts |
-| model-prompt mechanism | `resolveModelPrompt` (user map → shipped default only on the default model → empty; `""` disables), `injectModelPrompt` (empty block → byte-identical passthrough; placeholder replaced; fallback append section), all 8 assets carry the placeholder, consultant + specialists assembled unchanged when no block resolves |
+| model-prompt mechanism | `resolveModelPrompt` (user map by normalized key → shipped block by normalized key → empty; `""` disables), `injectModelPrompt` (empty block → byte-identical passthrough; placeholder replaced; fallback append section), all 8 assets carry the placeholder, consultant + specialists assembled unchanged when no block resolves |
 | dispatch-tool.ts / dispatch-contract.ts | DISPATCH_ROLES equality (8 roles); resolveRoleTarget for both new roles (build routes to `build_agent` with optional model); disabled rejections; tool description |
 | dispatch-test-fixtures.ts | build-lite and build job-spec fixtures |
 | agent-registration.test.ts / plugin.test.ts | consultant and simple runtime bindings carry the coding-lane lines and their DISABLED variants |
@@ -246,7 +246,7 @@ A user who keeps an older installed bundle or an older config must keep working:
 
 A second shipped agent: `build-lite`, the cheap mechanical coding executor carried by `opencode-go/glm-5.3-flash`, adapted from the maintainer's battle-tested personal lane (规格全明确才动手 / 上报优先于做完 / 叶子节点) with GLM-5.3-Flash-specific mitigations from research (2026-10-23: live endpoint verified; Z.ai official blog; Vals/benchlm/BenchmarkList independent data; family-level cautions from the maintainer's cross-checked GLM discipline notes).
 
-Model rationale: agentic execution is the lane's core (Terminal-Bench 2.1 84.3%, Toolathlon 78.4%, official DeepSWE 63.4 vs GLM-5.2's 46.2), at half of V4.1-Flash's peak price ($0.15/$0.50 vs $0.30/$1.20). Its known weakness — underspecified long-horizon vibe coding (Vals Vibe Code 16-31%) — is excluded by the lane's scope rules, not mitigated by capability. Family cautions encoded in the prompt: no protocol/wire-format byte-precision tasks (family protocol-conformance weakness), bounded steps (50) with stop-and-report (long-session drift), zero unrelated changes (verbosity ~1.5x).
+Model rationale: agentic execution is the lane's core (Terminal-Bench 2.1 84.3%, Toolathlon 78.4%, official DeepSWE 63.4 vs GLM-5.2's 46.2), at half of V4.1-Flash's peak price ($0.15/$0.50 vs $0.30/$1.20). Its known weakness — underspecified long-horizon vibe coding (Vals Vibe Code 16-31%) — is excluded by the lane's scope rules, not mitigated by capability. Role rules encoded in `build-lite.md`: no protocol/wire-format byte-precision tasks (family protocol-conformance weakness), bounded steps (50) with stop-and-report (long-session drift), zero unrelated changes. The model-level verbosity/over-abstraction tendency lives in `glm53flash.md`, not in the role prompt.
 
 ### Config
 
@@ -300,13 +300,13 @@ Layered prompt assembly for every plugin-owned agent: `role asset + model-adapta
 ### Library (shipped defaults)
 
 - `assets/model-prompts/<key>.md`, one file per model, where `key = normalizeModelKey(model id)`: drop the provider prefix (everything up to and including the last `/`), lowercase, keep only letters and digits (strip `-`, `.`, etc.). So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both normalize to `deepseekv4pro`. Six default-model blocks ship, plus one direct-provider alias:
-  - `glm53.md` — consultant
-  - `deepseekv41flash.md` — simple + explorer
+  - `glm53.md` — GLM-5.3 (default for consultant and janus)
+  - `deepseekv41flash.md` — DeepSeek V4.1-Flash (default for simple and explorer)
   - `deepseekflash.md` — direct-provider alias for `deepseek/deepseek-flash` (same V4.1-Flash model; its id normalizes differently, so it needs its own key)
-  - `qwen38max.md` — analyst
-  - `gemini38flash.md` — critic + verifier
-  - `glm53flash.md` — build-lite
-  - `claudesonnet55.md` — writer (default changed from `claude-sonnet-5`)
+  - `qwen38max.md` — Qwen3.8-Max (default for analyst)
+  - `gemini38flash.md` — Gemini 3.8-Flash (default for critic and verifier)
+  - `glm53flash.md` — GLM-5.3-Flash (default for build-lite)
+  - `claudesonnet55.md` — Claude Sonnet 5.5 (default for writer)
 - Adding a block later = dropping one `.md` file named by the model's normalized key; `assets/` stages wholesale at install and the resolver discovers blocks by key, so no code or install-list logic changes — only a one-line `REQUIRED_INSTALLED_FILES` entry per new file. This is the "easy to extend" property.
 
 ### Resolution
@@ -317,7 +317,7 @@ Layered prompt assembly for every plugin-owned agent: `role asset + model-adapta
 2. else `assets/model-prompts/<key>.md` if present
 3. else empty (injected as nothing — the placeholder comment stays inert; the role asset runs standalone)
 
-No "only on the default model" gate. Block content must be **model-trait only** — the model's known habits (formatting tendency, verbosity, speed, protocol precision, long-session drift, agentic strengths) — never a role rule ("answer first", "report up", etc.), because one block drives any agent running that model (e.g. `deepseek-v4.1-flash` drives both simple and explorer). The two role-specific phrases that leaked into the v1 blocks are removed in the rewrite. Note normalization is lossy: two distinct model ids that differ only in stripped punctuation (e.g. `deepseek-v4.1-flash` vs `deepseek-v4-1-flash`) would collide on one key — none of the shipped models do.
+No "only on the default model" gate. Block content is **model-property only** — the model's capability profile, documented failure tendencies (agentic strength, reasoning/knowledge balance, calibration, verbosity, long-context steering, protocol precision), and model-specific operating constraints that leverage its strengths or control its weaknesses (when to stop, how to verify, how to re-anchor context, how to control output). Runtime controls — thinking level, reasoning effort, temperature, max tokens, model selection — are deployment settings, not prompt content. It carries no role name, no role assignment ("best for …"), no role rule ("answer first", "report up", "one question per reply"), no price/pool positioning ("cheap", "at flash cost"), and no generic output/workflow rule. Those belong in the agent asset, because one block drives every agent running that model (e.g. `deepseek-v4.1-flash` drives both `simple` and `explorer`; `glm-5.3` drives `consultant` and `janus`). The test is: a constraint is model-specific only if it targets a documented tendency of this model; if it would apply equally to every model, it belongs in the agent asset. Note normalization is lossy: two distinct model ids that differ only in stripped punctuation (e.g. `deepseek-v4.1-flash` vs `deepseek-v4-1-flash`) would collide on one key — none of the shipped models do.
 
 ### Config surface
 
@@ -363,7 +363,7 @@ janus finishes most work itself — multi-file refactors, long tool-loop session
 
 ### Model-prompt separation
 
-janus.md carries only role content; its GLM-5.3 traits were merged into `assets/model-prompts/glm53.md`. The merged block adds: overthinking (stop when the answer is trustworthy; doubt is not evidence), performative caution (don't revise a correct conclusion just to look careful), language/thread drift handling, novel-abstract-reasoning caution, and the slow-decode (~70 tok/s) economy note — all model-trait only, no role rules, so the block stays valid for any agent running GLM-5.3.
+janus.md carries only role content; model traits and operating notes live in `assets/model-prompts/glm53.md`. The block pairs the model profile (strong open-weight agentic/terminal work, generation stronger than verification, verbosity, over-thinking/over-correction, long tool-heavy session drift) with agent-actionable operating notes (executable verification, context re-anchoring, stopping discipline, output control). It no longer carries role rules, the unconfirmed novel-abstract-reasoning caution, or the provider-specific decode-speed note. janus.md refers to the driving-model notes for its model's weaknesses instead of hard-coding a weakness list.
 
 ### Registration
 

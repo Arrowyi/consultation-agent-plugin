@@ -299,11 +299,14 @@ So `deepseek/deepseek-v4-pro` and `opencode-go/deepseek-v4-pro` both resolve to
 3. else empty — the role asset runs standalone.
 
 Seven blocks ship, each file named by its normalized key: six for the shipped
-default models — `glm53.md` (consultant), `deepseekv41flash.md` (simple,
-explorer), `qwen38max.md` (analyst), `gemini38flash.md` (critic, verifier),
-`glm53flash.md` (build-lite), and `claudesonnet55.md` (writer) — plus
-`deepseekflash.md` for the direct-provider id `deepseek/deepseek-flash` (the
-same V4.1-Flash model, but a different normalized key).
+default models — `glm53.md` (GLM-5.3; default for consultant and janus),
+`deepseekv41flash.md` (DeepSeek V4.1-Flash; default for simple and explorer),
+`qwen38max.md` (Qwen3.8-Max; default for analyst), `gemini38flash.md` (Gemini
+3.8-Flash; default for critic and verifier), `glm53flash.md` (GLM-5.3-Flash;
+default for build-lite), and `claudesonnet55.md` (Claude Sonnet 5.5; default
+for writer) — plus `deepseekflash.md` for the direct-provider id
+`deepseek/deepseek-flash` (the same V4.1-Flash model, but a different
+normalized key).
 
 To add a block for a model that has none: name the file after the model's
 normalized key — the same rule above applied to the model id — drop it at
@@ -313,11 +316,17 @@ custom model `acme/deepseek-v4-pro` gets the key `deepseekv4pro` and file
 `assets/model-prompts/deepseekv4pro.md`. On an installed plugin you cannot drop
 files: point `model_prompts` at your own block text for that key instead.
 
-Block content is model-trait only — the model's known habits (formatting
-tendency, verbosity, speed, protocol precision, long-session drift, agentic
-strengths) — never a role rule ("answer first", "report up", …), because one
-block drives every agent running that model. The `build` role and delegated
-writers target host-owned agents and take no model prompts.
+Block content is model-property only — the model's capability profile,
+documented failure tendencies (agentic strength, reasoning/knowledge balance,
+calibration, verbosity, long-context steering, protocol precision), and
+agent-actionable operating constraints that leverage strengths or control
+weaknesses (when to stop, how to verify, how to re-anchor context, how to
+control output). Runtime controls — thinking level, reasoning effort,
+temperature, max tokens, model selection — are deployment settings, not prompt
+content. It carries no role name, role assignment, role rule, price/pool
+positioning, or generic output/workflow rule; those live in the agent asset,
+because one block drives every agent running that model. The `build` role and delegated writers
+target host-owned agents and take no model prompts.
 
 ## Data, State, and Cache Paths
 

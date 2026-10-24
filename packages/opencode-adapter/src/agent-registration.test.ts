@@ -1207,6 +1207,8 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
       "agents/consultation-verifier.md",
       "agents/writer.md",
       "agents/janus.md",
+      "agents/simple.md",
+      "agents/build-lite.md",
     ]
 
     // when // then
@@ -1266,20 +1268,93 @@ describe("existing agents carry the inert MODEL-PROMPT placeholder", () => {
   })
 })
 
-describe("model-prompt blocks are trait-only", () => {
-  it("contains no role-rule tokens", async () => {
+describe("model-prompt blocks are model-property only", () => {
+  it("contains no role name, role rule, or price/pool positioning", async () => {
     // given
     const dir = resolveAsset("model-prompts")
     const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
     expect(files.length).toBeGreaterThan(0)
-    const forbidden = ["report up", "report-up", "stop-and-report", "step cap", "doubly binding", "approved outline", "evidence packet", "answer first", "Answer Format"]
+    const forbidden = [
+      /report[- ]up/i,
+      /stop-and-report/i,
+      /step cap/i,
+      /doubly binding/i,
+      /approved outline/i,
+      /evidence packet/i,
+      /answer first/i,
+      /answer format/i,
+      /best for/i,
+      /provided source material/i,
+      /one question per reply/i,
+      /source-intent/i,
+      /evidence interpretation/i,
+      /mechanism analysis/i,
+      /trade-off resolution/i,
+      /critique,? verification/i,
+      /\bcheap\b/i,
+      /\bat flash cost\b/i,
+      /cost-sensitive/i,
+      /\bprice\b/i,
+      /\bbudget\b/i,
+      /\bsubscription\b/i,
+      /\bpool\b/i,
+      /\bdelegate\b/i,
+      /\b(writer|critic|verifier|analyst|explorer|consultant|janus)\b/i,
+      /\bbuild-lite\b/i,
+      /\bsimple agent\b/i,
+      // runtime/operator controls the agent cannot set — keep them out of the prompt
+      /thinking[_ -]?level/i,
+      /reasoning[_ -]?effort/i,
+      /thinking[_ -]?budget/i,
+      /\btemperature\b/i,
+      /\btop[_-]?p\b/i,
+      /\bmax[_-]?tokens\b/i,
+      /\bxhigh\b/i,
+    ]
 
     // when // then
     for (const file of files) {
       const source = await readFile(join(dir, file), "utf8")
-      for (const token of forbidden) {
-        expect(source.toLowerCase().includes(token.toLowerCase())).toBe(false)
+      for (const pattern of forbidden) {
+        expect(source).not.toMatch(pattern)
       }
+    }
+  })
+
+  it("each block carries a model profile and agent-actionable operating notes", async () => {
+    // given
+    const dir = resolveAsset("model-prompts")
+    const files = readdirSync(dir).filter((f) => f.endsWith(".md"))
+
+    // when // then
+    for (const file of files) {
+      const source = await readFile(join(dir, file), "utf8")
+      expect(source).toMatch(/^## Driving /m)
+      expect(source).toContain("Profile")
+      expect(source).toContain("Operating notes:")
+    }
+  })
+
+  it("role assets do not hard-code model names or benchmark tokens", async () => {
+    // given — role positioning lives here; model properties live in model-prompts
+    const roleAssets = [
+      "agents/consultant.md",
+      "agents/explorer.md",
+      "agents/analyst.md",
+      "agents/consultation-critic.md",
+      "agents/consultation-verifier.md",
+      "agents/writer.md",
+      "agents/janus.md",
+      "agents/simple.md",
+      "agents/build-lite.md",
+      "skills/consultation/SKILL.md",
+    ]
+    const modelTokens = /(GLM-|DeepSeek|Gemini|Qwen|Claude|Sonnet|Haiku|Kimi|MiMo|Terminal-Bench|GPQA|HLE|IFBench|ARC-AGI|SkillsBench|DeepSWE)/i
+
+    // when // then
+    for (const asset of roleAssets) {
+      const source = await readFile(resolveAsset(asset), "utf8")
+      expect(source).not.toMatch(modelTokens)
     }
   })
 })

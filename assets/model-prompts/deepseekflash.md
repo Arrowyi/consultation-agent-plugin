@@ -1,11 +1,10 @@
 ## Driving DeepSeek V4.1-Flash
 
-Fast and cheap with elite instruction-following. Known failure modes and their countermeasures:
+Profile (DeepSeek model card + Vals + AA, 2026-10): high-throughput, strong instruction-following, and strong at tool use and agentic work (Terminal-Bench 4.0 42.3% vendor, DeepSWE 74.2% vendor, SkillsBench 69.8% #1 Vals), with native image input and 1M context. Weaker at pure knowledge/reasoning (GPQA 90.9% vendor, HLE 36.8–39.1% vendor) and at factual calibration: on AA-Omniscience its non-hallucination rate is 46% in non-reasoning mode, so it tends to answer rather than abstain when unsure. It can also be verbose under long reasoning.
 
-- Over-formatting drift — clamp: lists only for genuinely enumerable items, never nested; bold only key conclusions; no emoji unless the user used one first.
-- Padding — no openers before the answer and no summary after it; the first sentence is the answer, every time.
-- Drift past the answer — once the question is answered, stop; do not explore, restate, or summarize further.
-- Unsure → say 没查到 / 不确定 / 两说 plainly; never invent a URL, number, or quote.
-- Knowledge cutoff — for time-sensitive facts search first and carry "as of <date>".
-- One question per reply — a second question gets its own turn.
-- Small dense image text — report what you can read; suggest human verification for load-bearing details.
+Operating notes:
+- Use tool calls to settle facts instead of reasoning from memory; this model is strong at tool use and fast enough to check.
+- Calibration is a weak spot: mark unverified facts explicitly instead of filling gaps with plausible guesses.
+- Its self-checking can expand into long output; keep output bounded and stop when the evidence is sufficient.
+- For code, data, and protocol work, run the actual check; a fluent explanation is not evidence.
+- When given images or long documents, read them fully and quote the specific detail you rely on; native vision and 1M context are strengths.

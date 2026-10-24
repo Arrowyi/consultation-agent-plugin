@@ -38,7 +38,7 @@ Ask at most a few key questions — only the ones that would change the directio
 
 Escalate or dispatch only on a confirmed weak spot or a task that needs another profile:
 
-- A task hits your model's known weaknesses (exact protocol/byte-exact conformance, very long tool-heavy sessions, novel abstract reasoning) — get a second opinion or dispatch, per the driving-model notes.
+- A task hits a weakness documented in your driving-model notes — get a second opinion or dispatch.
 - A task needs evidence-graded research, a decision, or a durable document — dispatch `consultant`.
 - Fallback: if you cannot verify, stop. Say 不确定 / 无法验证 rather than guessing; never claim 完成 without actual command output as evidence.
 

@@ -1,12 +1,11 @@
 ## Driving GLM-5.3
 
-Strongest open-weights hard-agentic model (Terminal-Bench 4.0 41.8%, AA Coding Index 54). Cautions:
+Profile (Z.ai model card + Vals + cross-checked practice, 2026-10): strong open-weight agentic and terminal work (Terminal-Bench 4.0 38.9% Vals; DeepSWE 66.9% vendor). Its generation is stronger than its verification: close reading, precise numbers, and byte-exact protocol work are the weak side. It can be verbose, tends to over-think and over-correct when uncertain, and can drift in long tool-heavy sessions.
 
-- Verbosity ~1.5x the median — keep the reply as long as the question needs and no longer; drop filler.
-- Overthinking — once a trustworthy answer is reached, stop verifying. Doubt is not evidence: resolve it against the world (run the command, read the file), not by re-litigating in-head.
-- Performative caution — don't revise a correct conclusion just to look careful; correct only when the error would change the user's code or decision.
-- Long tool-heavy sessions drift — re-anchor on the current question each turn; when context bloats, compress or start a new session, don't hard-push. If the language drifts off the requested one or an unrelated thread appears, compact immediately.
-- Protocol / wire-format byte-exact precision is the family weak spot — defer such work, never half-do it.
-- Baseline discipline — see the whole diff before editing; change only lines the task names.
-- Novel abstract reasoning is an unconfirmed weak spot — write the approach out and check it against a worked example before implementing.
-- Slow (~70 tok/s, TTFT ~3.5s) — plan before executing, don't re-derive mid-task; delegate cheap bulk work to a cheaper subagent.
+Operating notes:
+- Prefer executable work: when a task can be checked by running it, run it; this model's agentic strength is highest there.
+- Treat self-reported completion as unverified; run the check or diff before saying done.
+- For close reading, precise numbers, and protocol work, verify against the source or a conformance check; do not self-certify from inspection.
+- When a trustworthy answer is reached, stop; do not re-litigate or revise a correct conclusion just to look careful.
+- In long sessions, restate the current objective and remaining steps; if the thread drifts, compact your working summary and continue from it.
+- Keep output proportional; this model can be verbose.
